@@ -426,3 +426,25 @@ FodyWeavers.xsd
 
 # Official VS Code C# Dev Kit Extension exclusion
 #*.lscache
+
+##
+## Eggs App
+##
+
+# Frontend
+node_modules/
+dist/
+
+# React build output served by the API
+src/EggsApp.Api/wwwroot/
+
+# Local data: real user data must never be committed
+*.db
+*.db-shm
+*.db-wal
+backups/
+*.backup.json
+
+# Environment files
+.env
+.env.*
