@@ -1,0 +1,44 @@
+name: Backend CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths: &backend-paths
+      - src/EggsApp.Api/**
+      - src/EggsApp.Desktop/**
+      - tests/**
+      - Directory.Build.props
+      - global.json
+      - EggsApp.sln
+      - .github/workflows/backend-ci.yml
+  push:
+    branches: [main]
+    paths: *backend-paths
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-and-test:
+    # EggsApp.Desktop targets net10.0-windows, so the build requires Windows.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - run: dotnet restore
+
+      - run: dotnet build --no-restore -warnaserror
+
+      - run: dotnet test --no-build

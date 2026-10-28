@@ -1,0 +1,46 @@
+name: Frontend CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths: &frontend-paths
+      - src/web/**
+      - .github/workflows/frontend-ci.yml
+  push:
+    branches: [main]
+    paths: *frontend-paths
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: src/web
+
+jobs:
+  lint-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # pnpm must be installed before setup-node so its pnpm cache works.
+      # The version comes from "packageManager" in src/web/package.json.
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: src/web/package.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: src/web/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm lint
+
+      - run: pnpm build
