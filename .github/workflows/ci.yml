@@ -1,0 +1,72 @@
+name: CI
+
+# Single entry point for pull requests. Backend and frontend jobs run only when
+# their files change; ci-gate always reports, so it can be the one required check.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Concurrency lives here only: inside a called workflow, github.workflow is this
+# caller's name, so groups defined there would make backend and frontend cancel each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      # On pull_request, paths-filter lists changed files via the API; no checkout needed.
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            backend:
+              - src/EggsApp.Api/**
+              - src/EggsApp.Desktop/**
+              - tests/**
+              - Directory.Build.props
+              - global.json
+              - EggsApp.sln
+              - .github/workflows/backend-ci.yml
+              - .github/workflows/ci.yml
+            frontend:
+              - src/web/**
+              - .github/workflows/frontend-ci.yml
+              - .github/workflows/ci.yml
+
+  backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    uses: ./.github/workflows/backend-ci.yml
+
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    uses: ./.github/workflows/frontend-ci.yml
+
+  ci-gate:
+    needs: [changes, backend, frontend]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      # Skipped jobs pass; any failed or cancelled job fails the gate.
+      - name: Check job results
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+              exit 1
+            fi
+          done

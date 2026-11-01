@@ -1,9 +1,12 @@
 name: Backend CI
 
+# Pull requests run this through ci.yml (workflow_call), which owns the path
+# filters and concurrency. Keep these paths in sync with the "backend" filter there.
 on:
-  pull_request:
+  workflow_call:
+  push:
     branches: [main]
-    paths: &backend-paths
+    paths:
       - src/EggsApp.Api/**
       - src/EggsApp.Desktop/**
       - tests/**
@@ -11,16 +14,9 @@ on:
       - global.json
       - EggsApp.sln
       - .github/workflows/backend-ci.yml
-  push:
-    branches: [main]
-    paths: *backend-paths
 
 permissions:
   contents: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 env:
   DOTNET_NOLOGO: true

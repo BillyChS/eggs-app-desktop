@@ -1,21 +1,17 @@
 name: Frontend CI
 
+# Pull requests run this through ci.yml (workflow_call), which owns the path
+# filters and concurrency. Keep these paths in sync with the "frontend" filter there.
 on:
-  pull_request:
-    branches: [main]
-    paths: &frontend-paths
-      - src/web/**
-      - .github/workflows/frontend-ci.yml
+  workflow_call:
   push:
     branches: [main]
-    paths: *frontend-paths
+    paths:
+      - src/web/**
+      - .github/workflows/frontend-ci.yml
 
 permissions:
   contents: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 defaults:
   run:

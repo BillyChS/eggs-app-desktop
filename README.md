@@ -1,10 +1,13 @@
 # eggs-app-desktop
-Offline desktop app (WPF + WebView2 + React + SQLite) to track sales, credit, and expenses for a small egg business.
 
-Work tracking: Azure Boards.
+[![Backend CI](https://github.com/BillyChS/eggs-app-desktop/actions/workflows/backend-ci.yml/badge.svg?branch=main)](https://github.com/BillyChS/eggs-app-desktop/actions/workflows/backend-ci.yml)
+[![Frontend CI](https://github.com/BillyChS/eggs-app-desktop/actions/workflows/frontend-ci.yml/badge.svg?branch=main)](https://github.com/BillyChS/eggs-app-desktop/actions/workflows/frontend-ci.yml)
+[![CodeQL](https://github.com/BillyChS/eggs-app-desktop/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/BillyChS/eggs-app-desktop/actions/workflows/github-code-scanning/codeql)
 
-It tracks cash sales, credit sales, partial payments (abonos), expenses, and summaries in Costa Rican colones.
-It runs entirely on the local machine: no cloud, no accounts.
+Offline Windows desktop app (WPF + WebView2 + React + SQLite) for a small egg business, built to track cash sales,
+credit sales, partial payments (abonos), expenses, and summaries in Costa Rican colones. It runs entirely on the local
+machine, with no cloud and no accounts. The project is at the scaffold stage: the desktop shell, the API host with a
+health endpoint, the React UI, tests, and CI are in place; the business features are not built yet.
 
 ## Architecture
 
@@ -60,3 +63,13 @@ dotnet build
 dotnet test
 cd src/web && pnpm build
 ```
+
+## CI
+
+Pull requests run `.github/workflows/ci.yml`. It detects which parts changed and calls Backend CI
+(Windows: restore, build with `-warnaserror`, test) and/or Frontend CI (Ubuntu: pnpm install, lint, build).
+The `ci-gate` job always reports: it passes when every job that ran passed (skipped jobs are fine) and fails
+otherwise, so it is the single status check to require on `main`. Pushes to `main` run Backend CI and Frontend CI
+directly. CodeQL uses GitHub's default code scanning setup. Dependabot opens weekly grouped updates.
+
+Work tracking: Azure Boards.
