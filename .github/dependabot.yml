@@ -11,6 +11,10 @@ updates:
     groups:
       nuget-minor-patch:
         update-types: [minor, patch]
+    # Paused until after the Nov 20 delivery; remove after.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # Dependabot uses the npm ecosystem for pnpm and reads src/web/pnpm-lock.yaml.
   - package-ecosystem: npm
@@ -23,6 +27,13 @@ updates:
     groups:
       npm-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      # Keep in sync with the Node version in CI.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # Paused until after the Nov 20 delivery; remove after.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
@@ -34,3 +45,7 @@ updates:
     groups:
       actions-minor-patch:
         update-types: [minor, patch]
+    # Paused until after the Nov 20 delivery; remove after.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
