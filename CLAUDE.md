@@ -41,7 +41,8 @@ dotnet build                               # must produce zero warnings
 dotnet test
 dotnet run --project src/EggsApp.Api       # Swagger: http://localhost:5080/swagger
 dotnet run --project src/EggsApp.Desktop
-cd src/web && pnpm dev | pnpm build | pnpm lint
+cd src/web && pnpm dev | pnpm build | pnpm lint   # pnpm build writes to src/EggsApp.Api/wwwroot
+dotnet publish src/EggsApp.Api -c Release  # also builds the UI; -p:SkipFrontendBuild=true publishes wwwroot as is
 ```
 
 ## Rules

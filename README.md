@@ -56,12 +56,27 @@ pnpm dev
 dotnet run --project src/EggsApp.Desktop
 ```
 
+For day-to-day UI work, run the API and `pnpm dev` together and open the Vite URL: changes hot-reload without a build.
+
 **Build and test**:
 
 ```sh
 dotnet build
 dotnet test
 cd src/web && pnpm build
+```
+
+## Serving the UI from the API
+
+`pnpm build` writes the UI to `src/EggsApp.Api/wwwroot` (git-ignored, emptied on every build, so nothing hand-written
+belongs there). The API then serves it at `/`, with unknown non-`/api` routes falling back to `index.html`. Start or
+restart the API after the first `pnpm build`: it only picks up `wwwroot` if the folder exists at startup.
+
+`dotnet build` and `dotnet test` never run pnpm and don't need a built UI. `dotnet publish src/EggsApp.Api` builds the UI
+and includes it in the output, which requires Node.js and pnpm. To publish the existing `wwwroot` without rebuilding it:
+
+```sh
+dotnet publish src/EggsApp.Api -c Release -p:SkipFrontendBuild=true
 ```
 
 ## CI

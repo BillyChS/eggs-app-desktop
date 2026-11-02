@@ -7,6 +7,11 @@ const apiDevUrl = 'http://localhost:5080'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  build: {
+    // The API serves these files. Vite only empties a folder outside its root when told to.
+    outDir: '../EggsApp.Api/wwwroot',
+    emptyOutDir: true,
+  },
   server: {
     proxy: {
       '/api': apiDevUrl,
