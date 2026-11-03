@@ -88,10 +88,13 @@ WebView2 runtime, which Windows 11 includes. Publishing builds the UI, which req
 
 Everything goes under `%LocalAppData%\EggsApp`, never next to the exe:
 
-| Folder     | Contents                                                                                   |
-| ---------- | ------------------------------------------------------------------------------------------ |
-| `WebView2` | WebView2 user data                                                                         |
-| `logs`     | One line per startup (version and port) and clean shutdown, plus startup failures and unhandled exceptions. One file per day, kept for 7 days. The Spanish error messages show this path. |
+| Path          | Contents                                                                                |
+| ------------- | --------------------------------------------------------------------------------------- |
+| `eggs.db`     | The app's data. While the app runs, SQLite also keeps `eggs.db-wal` and `eggs.db-shm` next to it. |
+| `eggs.dev.db` | Development data, used by the standalone API and the `dotnet ef` tools                  |
+| `backups`     | A copy of the database made before each migration. Not pruned yet, and not the backup feature. |
+| `WebView2`    | WebView2 user data                                                                      |
+| `logs`        | One line per startup (version and port) and clean shutdown, plus startup failures and unhandled exceptions. One file per day, kept for 7 days. The Spanish error messages show this path. |
 
 ## CI
 

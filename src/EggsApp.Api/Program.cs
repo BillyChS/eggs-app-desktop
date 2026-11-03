@@ -7,6 +7,8 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+await app.MigrateDatabaseAsync();
+
 // Swagger is only for standalone development; the desktop host never enables it.
 if (app.Environment.IsDevelopment())
 {

@@ -1,4 +1,6 @@
+using EggsApp.Api.Data;
 using EggsApp.Api.Features.Health;
+using EggsApp.Api.Hosting;
 
 namespace EggsApp.Api;
 
@@ -7,12 +9,31 @@ namespace EggsApp.Api;
 /// </summary>
 public static class EggsAppHostExtensions
 {
+    public const string DatabasePathKey = "Database:Path";
+
     /// <summary>
     /// Registers the application services.
     /// </summary>
     public static WebApplicationBuilder AddEggsApp(this WebApplicationBuilder builder)
     {
+        // Read when the context is created: WebApplicationFactory adds its settings only when the host is built.
+        builder.Services.AddDbContext<AppDbContext>((services, options) => AppDbContext.Configure(
+            options,
+            services.GetRequiredService<IConfiguration>()[DatabasePathKey] ?? AppDataPaths.DevDatabase));
+
         return builder;
+    }
+
+    /// <summary>
+    /// Brings the database up to date. Run this before the host starts, so no request can reach an old schema.
+    /// </summary>
+    /// <exception cref="DatabaseMigrationException">The app must not start.</exception>
+    public static async Task<DatabaseMigrationResult> MigrateDatabaseAsync(this WebApplication app)
+    {
+        await using var scope = app.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        return await DatabaseMigrator.MigrateAsync(db);
     }
 
     /// <summary>

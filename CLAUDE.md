@@ -19,6 +19,8 @@ src/
     EggsAppHostExtensions.cs   AddEggsApp() / UseEggsApp(): host setup shared by standalone and desktop
     Program.cs                 Standalone dev host (Swagger in Development only)
     Hosting/                   EmbeddedApiHost (in-process host), FailureLog, AppDataPaths
+    Data/                      AppDbContext, BaseEntity, DatabaseMigrator (startup migration)
+    Data/Migrations/           EF Core migrations
     Features/<Feature>/        Vertical slices (e.g. Features/Health/HealthEndpoint.cs)
     wwwroot/                   React build output (git-ignored)
   EggsApp.Desktop/             WPF shell (net10.0-windows); hosts the API in-process + WebView2
@@ -56,6 +58,19 @@ dotnet publish src/EggsApp.Desktop -p:PublishProfile=win-x64   # the shipped app
 Publishing builds the UI; `-p:SkipFrontendBuild=true` publishes `wwwroot` as is. In Debug, the desktop app uses
 `src/EggsApp.Api/wwwroot`, so run `pnpm build` first.
 
+### Migrations
+
+```sh
+dotnet tool restore                        # once per clone; installs the pinned dotnet-ef
+dotnet ef migrations add <Name> --project src/EggsApp.Api --output-dir Data/Migrations
+```
+
+Migrations apply automatically at startup, before the host listens, so there's no `database update` step. If the
+database has data and migrations are pending, it's first copied to `backups\`. A failure stops the app.
+
+The desktop app uses `eggs.db`. The standalone API and the `dotnet ef` tools use `eggs.dev.db`, so development can't
+touch the real data; set `Database:Path` to override it for the standalone API.
+
 ## Rules
 
 - **Language:** UI text in Spanish. Code, comments, commits, and docs in English.
@@ -63,8 +78,14 @@ Publishing builds the UI; `-p:SkipFrontendBuild=true` publishes `wwwroot` as is.
 - **Dates:** use `DateTime.Now` (local Costa Rica time), never `UtcNow`. The frontend sends dates as local
   `YYYY-MM-DD` strings, never `toISOString()`.
 - **Money:** stored as `long` (whole colones). Never `decimal` in entities, because SQLite cannot aggregate decimal.
+  `AppDbContext` throws if an entity has a `decimal` property.
 - **Primary keys:** `Guid`, generated in code.
-- **Entities:** every entity has `CreatedAt`, `UpdatedAt`, `IsDeleted`. Deletes are soft deletes.
+- **Entities:** every entity inherits `BaseEntity` (`CreatedAt`, `UpdatedAt`, `IsDeleted`). Deletes are soft deletes:
+  `Remove` sets `IsDeleted`, and a global query filter hides the row. `ExecuteUpdate` and `ExecuteDelete` skip the
+  timestamps and soft delete, so don't use them on entities without handling both.
+- **Soft delete limits, to decide per entity when Customers and Sales arrive:** soft delete doesn't cascade to related
+  rows that aren't loaded, and a unique index still counts soft-deleted rows, so it must either include `IsDeleted` or
+  filter on it.
 - **Backend:** Vertical Slice Architecture. Build order: Command → Validator → Handler → Entity → Endpoint → Migration.
 - **Frontend:** build order: Screen → Service/Hook → State.
 - **UI state:** anything that must survive a restart goes through the API to SQLite. Never use `localStorage`,
