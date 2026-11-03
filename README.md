@@ -50,7 +50,7 @@ pnpm install
 pnpm dev
 ```
 
-**Desktop**:
+**Desktop** (shows the last `pnpm build`, so run that first):
 
 ```sh
 dotnet run --project src/EggsApp.Desktop
@@ -72,12 +72,26 @@ cd src/web && pnpm build
 belongs there). The API then serves it at `/`, with unknown non-`/api` routes falling back to `index.html`. Start or
 restart the API after the first `pnpm build`: it only picks up `wwwroot` if the folder exists at startup.
 
-`dotnet build` and `dotnet test` never run pnpm and don't need a built UI. `dotnet publish src/EggsApp.Api` builds the UI
-and includes it in the output, which requires Node.js and pnpm. To publish the existing `wwwroot` without rebuilding it:
+`dotnet build` and `dotnet test` never run pnpm and don't need a built UI.
+
+## Publishing the desktop app
 
 ```sh
-dotnet publish src/EggsApp.Api -c Release -p:SkipFrontendBuild=true
+dotnet publish src/EggsApp.Desktop -p:PublishProfile=win-x64
 ```
+
+The output in `src/EggsApp.Desktop/bin/publish/win-x64` is self-contained: the target PC needs no .NET runtime, only the
+WebView2 runtime, which Windows 11 includes. Publishing builds the UI, which requires Node.js and pnpm. Add
+`-p:SkipFrontendBuild=true` to publish the existing `wwwroot` without rebuilding it.
+
+## Where the app writes
+
+Everything goes under `%LocalAppData%\EggsApp`, never next to the exe:
+
+| Folder     | Contents                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------ |
+| `WebView2` | WebView2 user data                                                                         |
+| `logs`     | One line per startup (version and port) and clean shutdown, plus startup failures and unhandled exceptions. One file per day, kept for 7 days. The Spanish error messages show this path. |
 
 ## CI
 

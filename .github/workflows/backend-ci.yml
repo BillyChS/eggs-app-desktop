@@ -9,6 +9,7 @@ on:
     paths:
       - src/EggsApp.Api/**
       - src/EggsApp.Desktop/**
+      - src/Frontend.targets
       - tests/**
       - Directory.Build.props
       - global.json

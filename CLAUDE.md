@@ -9,6 +9,8 @@ There is no cloud and no authentication.
 WPF window → WebView2 → React UI. An ASP.NET Core API runs in-process on `127.0.0.1` and serves both
 `/api/*` and the built React files from `wwwroot`. Data lives in a local SQLite file.
 
+The port is chosen by the OS at each startup, so the page's origin changes on every launch.
+
 ## Project map
 
 ```
@@ -16,10 +18,16 @@ src/
   EggsApp.Api/                 ASP.NET Core minimal API (.NET 10)
     EggsAppHostExtensions.cs   AddEggsApp() / UseEggsApp(): host setup shared by standalone and desktop
     Program.cs                 Standalone dev host (Swagger in Development only)
+    Hosting/                   EmbeddedApiHost (in-process host), FailureLog, AppDataPaths
     Features/<Feature>/        Vertical slices (e.g. Features/Health/HealthEndpoint.cs)
     wwwroot/                   React build output (git-ignored)
   EggsApp.Desktop/             WPF shell (net10.0-windows); hosts the API in-process + WebView2
+    App.xaml.cs                Startup order, shutdown, failure handling
+    MainWindow.xaml.cs         WebView2 setup and navigation rules
+    SingleInstance.cs          One running copy; a second launch focuses it
+    UiText.cs                  Spanish text of the desktop shell
     Assets/app.ico             Application and window icon
+  Frontend.targets             Builds the UI and adds it to the publish output of the API and Desktop
   web/                         React + Vite + TypeScript (pnpm)
     src/services/              API calls
     vite.config.ts             Dev proxy: /api → http://localhost:5080
@@ -42,8 +50,11 @@ dotnet test
 dotnet run --project src/EggsApp.Api       # Swagger: http://localhost:5080/swagger
 dotnet run --project src/EggsApp.Desktop
 cd src/web && pnpm dev | pnpm build | pnpm lint   # pnpm build writes to src/EggsApp.Api/wwwroot
-dotnet publish src/EggsApp.Api -c Release  # also builds the UI; -p:SkipFrontendBuild=true publishes wwwroot as is
+dotnet publish src/EggsApp.Desktop -p:PublishProfile=win-x64   # the shipped app: self-contained, includes the UI
 ```
+
+Publishing builds the UI; `-p:SkipFrontendBuild=true` publishes `wwwroot` as is. In Debug, the desktop app uses
+`src/EggsApp.Api/wwwroot`, so run `pnpm build` first.
 
 ## Rules
 
@@ -56,6 +67,9 @@ dotnet publish src/EggsApp.Api -c Release  # also builds the UI; -p:SkipFrontend
 - **Entities:** every entity has `CreatedAt`, `UpdatedAt`, `IsDeleted`. Deletes are soft deletes.
 - **Backend:** Vertical Slice Architecture. Build order: Command → Validator → Handler → Entity → Endpoint → Migration.
 - **Frontend:** build order: Screen → Service/Hook → State.
+- **UI state:** anything that must survive a restart goes through the API to SQLite. Never use `localStorage`,
+  `sessionStorage`, IndexedDB, or cookies: the origin changes on every launch, so they start empty each time.
+- **User data on disk:** only under `%LocalAppData%\EggsApp` (see `AppDataPaths`), never next to the exe.
 - **UX for an elderly user:** large targets, 18px+ text, at most 2–3 actions per screen, confirmation dialogs.
 - **Commits:** Conventional Commits with a footer `Refs: AB#<id>` (Azure Boards).
 - **Data safety:** never commit `.db` files or backup JSON files.
