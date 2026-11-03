@@ -40,6 +40,33 @@ public sealed class SpaHostingTests(WebApplicationFactory<Program> factory)
         Assert.Equal(IndexHtml, await response.Content.ReadAsStringAsync());
     }
 
+    [Theory]
+    [InlineData("/")]
+    [InlineData("/index.html")]
+    [InlineData("/ventas")]
+    public async Task IndexHtml_MustBeRevalidated(string path)
+    {
+        var client = CreateClientWithIndexHtml();
+
+        var response = await client.GetAsync(path);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoCache);
+    }
+
+    [Fact]
+    public async Task HashedAsset_IsNotMarkedNoCache()
+    {
+        var assets = Directory.CreateDirectory(Path.Combine(_webRoot, "assets"));
+        File.WriteAllText(Path.Combine(assets.FullName, "index-abc123.js"), "console.log('app')");
+        var client = CreateClient();
+
+        var response = await client.GetAsync("/assets/index-abc123.js");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotEqual(true, response.Headers.CacheControl?.NoCache);
+    }
+
     [Fact]
     public async Task MissingAsset_ReturnsNotFound()
     {

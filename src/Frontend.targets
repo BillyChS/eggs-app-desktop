@@ -1,0 +1,26 @@
+<Project>
+
+  <!-- Imported by every project that gets published with the UI. The target only fires for the project being
+       published, so a Desktop publish would not run the one in the API project.
+
+       Runs only when publishing, so dotnet build and dotnet test need neither Node nor a built frontend.
+       Pass -p:SkipFrontendBuild=true to publish the existing wwwroot as it is. -->
+  <Target Name="IncludeFrontendInPublish" AfterTargets="ComputeFilesToPublish">
+    <PropertyGroup>
+      <_WebProjectDir>$(MSBuildThisFileDirectory)web</_WebProjectDir>
+      <_ApiWebRoot>$(MSBuildThisFileDirectory)EggsApp.Api\wwwroot\</_ApiWebRoot>
+    </PropertyGroup>
+
+    <Exec Condition="'$(SkipFrontendBuild)' != 'true'" Command="pnpm install --frozen-lockfile" WorkingDirectory="$(_WebProjectDir)" />
+    <Exec Condition="'$(SkipFrontendBuild)' != 'true'" Command="pnpm build" WorkingDirectory="$(_WebProjectDir)" />
+
+    <ItemGroup>
+      <_WebRootFile Include="$(_ApiWebRoot)**" />
+      <ResolvedFileToPublish Include="@(_WebRootFile->'%(FullPath)')">
+        <RelativePath>wwwroot\%(RecursiveDir)%(Filename)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
+</Project>

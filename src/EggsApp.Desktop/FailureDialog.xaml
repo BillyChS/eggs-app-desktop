@@ -1,0 +1,45 @@
+<Window x:Class="EggsApp.Desktop.FailureDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Eggs App"
+        Icon="Assets/app.ico"
+        Width="680"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen">
+  <StackPanel Margin="32">
+    <TextBlock x:Name="MessageText"
+               FontSize="24"
+               TextWrapping="Wrap" />
+
+    <TextBlock x:Name="HintText"
+               FontSize="18"
+               Margin="0,28,0,8"
+               TextWrapping="Wrap" />
+
+    <!-- Read-only text box, so the path can be selected and copied. -->
+    <TextBox x:Name="LogFolderText"
+             FontSize="18"
+             Padding="6"
+             IsReadOnly="True"
+             TextWrapping="Wrap" />
+
+    <StackPanel Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Margin="0,32,0,0">
+      <Button x:Name="PrimaryButton"
+              FontSize="22"
+              MinWidth="150"
+              MinHeight="60"
+              IsDefault="True"
+              Click="OnPrimaryClick" />
+      <Button x:Name="SecondaryButton"
+              FontSize="22"
+              MinWidth="150"
+              MinHeight="60"
+              Margin="16,0,0,0"
+              IsCancel="True"
+              Visibility="Collapsed" />
+    </StackPanel>
+  </StackPanel>
+</Window>

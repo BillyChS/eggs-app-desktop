@@ -438,6 +438,9 @@ dist/
 # React build output served by the API
 src/EggsApp.Api/wwwroot/
 
+# The Desktop publish profile holds no secrets and defines how the app ships
+!src/EggsApp.Desktop/Properties/PublishProfiles/win-x64.pubxml
+
 # Local data: real user data must never be committed
 *.db
 *.db-shm
