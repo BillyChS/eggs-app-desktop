@@ -4,7 +4,8 @@ using System.Text;
 namespace EggsApp.Api.Hosting;
 
 /// <summary>
-/// Writes failures to one text file per day and keeps the last <see cref="DaysToKeep"/> days.
+/// Writes failures, plus one line each for startup and clean shutdown, to one text file per day and keeps the
+/// last <see cref="DaysToKeep"/> days.
 /// Writing never throws: a logging problem must not take the app down or hide the original failure.
 /// </summary>
 public sealed class FailureLog(string directory, Func<DateTime>? now = null)

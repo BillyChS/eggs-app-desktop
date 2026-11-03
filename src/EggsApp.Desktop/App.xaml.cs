@@ -1,4 +1,5 @@
-﻿using System.Windows;
+﻿using System.Reflection;
+using System.Windows;
 using System.Windows.Threading;
 using EggsApp.Api.Hosting;
 using Microsoft.Web.WebView2.Core;
@@ -10,6 +11,9 @@ public partial class App : Application
     private const string LogSource = "Desktop";
 
     private static readonly TimeSpan HostStopTimeout = TimeSpan.FromSeconds(6);
+
+    private static readonly string? AppVersion = typeof(App).Assembly
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
 
     private readonly FailureLog _log = FailureLog.Default;
     private SingleInstance? _singleInstance;
@@ -44,7 +48,7 @@ public partial class App : Application
             // Throws if the runtime is missing, before any work that would only have to be undone.
             CoreWebView2Environment.GetAvailableBrowserVersionString();
 
-            _hostStart = Task.Run(() => EmbeddedApiHost.StartAsync(AppPaths.ContentRoot, AppPaths.WebRoot, _log));
+            _hostStart = Task.Run(StartHostAsync);
             var host = await _hostStart;
 
             if (!_windowClosed)
@@ -77,16 +81,32 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        StopHost();
+        // Failures exit with code 1, and a second launch never starts a host, so neither logs this line.
+        if (StopHost() && e.ApplicationExitCode == 0)
+        {
+            _log.Write(LogSource, "Closed cleanly.");
+        }
+
         _singleInstance?.Dispose();
         base.OnExit(e);
     }
 
-    private void StopHost()
+    private async Task<EmbeddedApiHost> StartHostAsync()
+    {
+        var host = await EmbeddedApiHost.StartAsync(AppPaths.ContentRoot, AppPaths.WebRoot, _log);
+
+        // Here, not after the await in OnStartup: that continuation never runs if the window closes during startup.
+        _log.Write(LogSource, $"Started. Version {AppVersion}, port {host.Url.Port}.");
+
+        return host;
+    }
+
+    /// <returns>Whether a running host stopped within the time limit.</returns>
+    private bool StopHost()
     {
         if (_hostStart is not { } hostStart)
         {
-            return;
+            return false;
         }
 
         try
@@ -103,14 +123,18 @@ public partial class App : Application
             {
                 _log.Write(LogSource, "The API did not stop in time.");
             }
+
+            return stopped;
         }
         catch (Exception exception) when (!hostStart.IsFaulted)
         {
             _log.Write(LogSource, "The API failed while stopping.", exception);
+            return false;
         }
         catch (Exception)
         {
             // It never started. That failure has already been logged and shown.
+            return false;
         }
     }
 

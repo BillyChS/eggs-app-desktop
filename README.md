@@ -91,7 +91,7 @@ Everything goes under `%LocalAppData%\EggsApp`, never next to the exe:
 | Folder     | Contents                                                                                   |
 | ---------- | ------------------------------------------------------------------------------------------ |
 | `WebView2` | WebView2 user data                                                                         |
-| `logs`     | Startup failures and unhandled exceptions, one file per day, kept for 7 days. The Spanish error messages show this path. |
+| `logs`     | One line per startup (version and port) and clean shutdown, plus startup failures and unhandled exceptions. One file per day, kept for 7 days. The Spanish error messages show this path. |
 
 ## CI
 
