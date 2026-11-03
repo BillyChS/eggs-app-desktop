@@ -1,6 +1,8 @@
 using System.Net;
+using EggsApp.Api.Data;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.Data.Sqlite;
 
 namespace EggsApp.Api.Hosting;
 
@@ -11,6 +13,8 @@ public sealed class EmbeddedApiHost : IAsyncDisposable
 {
     // Blocks DNS rebinding: a website that resolves its own name to 127.0.0.1 is rejected by its Host header.
     private const string AllowedHosts = "127.0.0.1;localhost";
+
+    private const string LogSource = "API";
 
     private static readonly TimeSpan ShutdownTimeout = TimeSpan.FromSeconds(5);
 
@@ -26,7 +30,12 @@ public sealed class EmbeddedApiHost : IAsyncDisposable
     public Uri Url { get; }
 
     /// <exception cref="FrontendNotFoundException">The web root has no index.html.</exception>
-    public static async Task<EmbeddedApiHost> StartAsync(string contentRoot, string webRoot, FailureLog log)
+    /// <exception cref="DatabaseMigrationException">The database could not be brought up to date.</exception>
+    public static async Task<EmbeddedApiHost> StartAsync(
+        string contentRoot,
+        string webRoot,
+        string databasePath,
+        FailureLog log)
     {
         if (!File.Exists(Path.Combine(webRoot, "index.html")))
         {
@@ -43,6 +52,7 @@ public sealed class EmbeddedApiHost : IAsyncDisposable
 
         builder.AddEggsApp();
         builder.Configuration["AllowedHosts"] = AllowedHosts;
+        builder.Configuration[EggsAppHostExtensions.DatabasePathKey] = databasePath;
         builder.Logging.AddProvider(new FailureLogLoggerProvider(log));
         builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = ShutdownTimeout);
 
@@ -53,6 +63,16 @@ public sealed class EmbeddedApiHost : IAsyncDisposable
 
         try
         {
+            var migration = await app.MigrateDatabaseAsync();
+
+            if (migration.AppliedMigrations.Count > 0)
+            {
+                log.Write(
+                    LogSource,
+                    $"Applied migrations: {string.Join(", ", migration.AppliedMigrations)}. "
+                    + $"Copy made before migrating: {migration.BackupPath ?? "none, the database was new"}.");
+            }
+
             app.UseEggsApp();
             await app.StartAsync();
 
@@ -79,5 +99,8 @@ public sealed class EmbeddedApiHost : IAsyncDisposable
         _stopped = true;
         await _app.StopAsync();
         await _app.DisposeAsync();
+
+        // Closing the last connection moves everything from eggs.db-wal into eggs.db.
+        SqliteConnection.ClearAllPools();
     }
 }

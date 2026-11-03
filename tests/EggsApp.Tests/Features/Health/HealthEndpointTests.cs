@@ -1,12 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using EggsApp.Api.Features.Health;
-using Microsoft.AspNetCore.Mvc.Testing;
+using EggsApp.Tests.Infrastructure;
 
 namespace EggsApp.Tests.Features.Health;
 
-public sealed class HealthEndpointTests(WebApplicationFactory<Program> factory)
-    : IClassFixture<WebApplicationFactory<Program>>
+public sealed class HealthEndpointTests(EggsAppFactory factory)
+    : IClassFixture<EggsAppFactory>
 {
     [Fact]
     public async Task GetHealth_ReturnsOk()

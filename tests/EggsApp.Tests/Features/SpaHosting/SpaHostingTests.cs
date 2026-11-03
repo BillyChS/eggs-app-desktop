@@ -1,4 +1,5 @@
 using System.Net;
+using EggsApp.Tests.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 
@@ -7,8 +8,8 @@ namespace EggsApp.Tests.Features.SpaHosting;
 /// <summary>
 /// Each test uses its own temporary web root, so results never depend on a local "pnpm build".
 /// </summary>
-public sealed class SpaHostingTests(WebApplicationFactory<Program> factory)
-    : IClassFixture<WebApplicationFactory<Program>>, IDisposable
+public sealed class SpaHostingTests(EggsAppFactory factory)
+    : IClassFixture<EggsAppFactory>, IDisposable
 {
     private const string IndexHtml = "<!doctype html><title>spa-hosting-test</title>";
 

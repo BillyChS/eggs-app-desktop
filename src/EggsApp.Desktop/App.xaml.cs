@@ -1,6 +1,7 @@
 ﻿using System.Reflection;
 using System.Windows;
 using System.Windows.Threading;
+using EggsApp.Api.Data;
 using EggsApp.Api.Hosting;
 using Microsoft.Web.WebView2.Core;
 
@@ -64,6 +65,10 @@ public partial class App : Application
             ExitWithFailure(UiText.FrontendMissing, exception);
 #endif
         }
+        catch (DatabaseMigrationException exception)
+        {
+            ExitWithFailure(UiText.DatabaseFailed, exception);
+        }
         catch (WebView2RuntimeNotFoundException exception)
         {
             ExitWithFailure(UiText.WebView2Missing, exception);
@@ -93,7 +98,11 @@ public partial class App : Application
 
     private async Task<EmbeddedApiHost> StartHostAsync()
     {
-        var host = await EmbeddedApiHost.StartAsync(AppPaths.ContentRoot, AppPaths.WebRoot, _log);
+        var host = await EmbeddedApiHost.StartAsync(
+            AppPaths.ContentRoot,
+            AppPaths.WebRoot,
+            AppDataPaths.Database,
+            _log);
 
         // Here, not after the await in OnStartup: that continuation never runs if the window closes during startup.
         _log.Write(LogSource, $"Started. Version {AppVersion}, port {host.Url.Port}.");

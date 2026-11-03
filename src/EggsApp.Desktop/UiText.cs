@@ -14,6 +14,9 @@ internal static class UiText
     public const string FrontendMissingInDebug =
         "Falta la interfaz compilada.\n\nEjecute \"pnpm build\" en src/web y vuelva a abrir la aplicación.";
 
+    public const string DatabaseFailed =
+        "Eggs App no se abrió para proteger sus datos, porque no se pudo preparar la base de datos.";
+
     public const string WebView2Missing =
         "No se pudo abrir Eggs App porque falta un componente de Windows: Microsoft Edge WebView2 Runtime.\n\n"
         + "Hay que instalarlo para poder usar la aplicación.";

@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Sockets;
+using EggsApp.Api.Data;
 using EggsApp.Api.Hosting;
+using Microsoft.Data.Sqlite;
 
 namespace EggsApp.Tests.Hosting;
 
@@ -17,9 +19,17 @@ public sealed class EmbeddedApiHostTests : IDisposable
         File.WriteAllText(Path.Combine(_webRoot, "index.html"), "<!doctype html>");
     }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    public void Dispose()
+    {
+        SqliteConnection.ClearAllPools();
+        Directory.Delete(_root, recursive: true);
+    }
 
-    private Task<EmbeddedApiHost> StartHostAsync() => EmbeddedApiHost.StartAsync(_root, _webRoot, _log);
+    private string DatabasePath => Path.Combine(_root, "eggs.db");
+
+    private Task<EmbeddedApiHost> StartHostAsync() => EmbeddedApiHost.StartAsync(_root, _webRoot, DatabasePath, _log);
+
+    private string ReadLog() => string.Concat(Directory.GetFiles(_log.Directory).Select(File.ReadAllText));
 
     [Fact]
     public async Task Start_ListensOnLoopbackOnAPortChosenByTheOs()
@@ -62,6 +72,37 @@ public sealed class EmbeddedApiHostTests : IDisposable
         File.Delete(Path.Combine(_webRoot, "index.html"));
 
         await Assert.ThrowsAsync<FrontendNotFoundException>(StartHostAsync);
+    }
+
+    [Fact]
+    public async Task Start_MigratesTheGivenDatabaseAndLogsIt()
+    {
+        await using var host = await StartHostAsync();
+
+        Assert.True(File.Exists(DatabasePath));
+        Assert.Contains("Applied migrations:", ReadLog());
+    }
+
+    [Fact]
+    public async Task Start_WhenTheDatabaseCantBePrepared_ThrowsAndNeverListens()
+    {
+        var garbage = new byte[8192];
+        Array.Fill(garbage, (byte)'x');
+        await File.WriteAllBytesAsync(DatabasePath, garbage);
+
+        await Assert.ThrowsAsync<DatabaseMigrationException>(StartHostAsync);
+    }
+
+    [Fact]
+    public async Task Dispose_LeavesAllDataInTheDatabaseFile()
+    {
+        var host = await StartHostAsync();
+        Assert.True(File.Exists(DatabasePath));
+
+        await host.DisposeAsync();
+
+        Assert.False(File.Exists(DatabasePath + "-wal"));
+        Assert.False(File.Exists(DatabasePath + "-shm"));
     }
 
     [Fact]
