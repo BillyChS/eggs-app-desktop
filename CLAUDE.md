@@ -71,6 +71,6 @@ Publishing builds the UI; `-p:SkipFrontendBuild=true` publishes `wwwroot` as is.
   `sessionStorage`, IndexedDB, or cookies: the origin changes on every launch, so they start empty each time.
 - **User data on disk:** only under `%LocalAppData%\EggsApp` (see `AppDataPaths`), never next to the exe.
 - **UX for an elderly user:** large targets, 18px+ text, at most 2–3 actions per screen, confirmation dialogs.
-- **Commits:** Conventional Commits with a footer `Refs: AB#<id>` (Azure Boards).
 - **Data safety:** never commit `.db` files or backup JSON files.
-- **Commits:** no co-author or attribution trailers; commits are authored solely by the user.
+- **Commits:** Conventional Commits with a footer `Refs: AB#<id>` (Azure Boards) when a ticket exists. No co-author or attribution trailers; commits are authored solely by the user.
+- **Screenshots:** never capture the full screen; only capture the app's own windows.
