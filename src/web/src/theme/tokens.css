@@ -1,0 +1,51 @@
+/*
+ * Design tokens. Sized for an elderly user on a normal monitor; light theme only.
+ * Text and button colors are at least 7:1 (WCAG AAA) against the background they sit on.
+ * The blue and the page colors come from the old mobile app; its green, red and muted gray were below 7:1.
+ */
+:root {
+  /* Colors */
+  --color-primary: #1e40af; /* white text: 8.7:1 */
+  --color-primary-hover: #1e3a8a;
+  --color-on-primary: #ffffff;
+  --color-back: #dbeafe; /* "‹ Volver" on the header; primary text: 7.2:1 */
+  --color-back-hover: #ffffff;
+  --color-background: #f8fafc;
+  --color-surface: #ffffff;
+  --color-text: #0f172a; /* on background: 17:1 */
+  --color-text-muted: #475569; /* on background: 7.2:1 */
+  --color-border: #475569; /* input and secondary button edges */
+  --color-divider: #e2e8f0; /* decoration only, it carries no meaning */
+  --color-success: #14632b; /* white text: 7.4:1 */
+  --color-success-hover: #0f4d21;
+  --color-danger: #a31515; /* white text: 7.8:1 */
+  --color-danger-hover: #821010;
+  --color-backdrop: rgb(0 0 0 / 55%);
+
+  /* Spacing */
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+
+  /* Radii */
+  --radius-md: 12px;
+  --radius-lg: 22px;
+
+  /* Font sizes: nothing below 18px */
+  --font-size-small: 18px;
+  --font-size-body: 20px;
+  --font-size-input: 24px;
+  --font-size-button: 24px;
+  --font-size-title: 32px;
+  --font-size-tile: 36px;
+
+  /* Sizes */
+  --size-button: 64px;
+  --size-input: 64px;
+  --size-dialog-icon: 72px;
+
+  /* Visible on both light surfaces (dark ring) and the blue header (white ring). */
+  --focus-ring: 0 0 0 3px #ffffff, 0 0 0 7px var(--color-text);
+}

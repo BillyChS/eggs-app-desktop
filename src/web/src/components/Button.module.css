@@ -1,0 +1,55 @@
+.button {
+  min-width: 160px;
+  min-height: var(--size-button);
+  padding: var(--space-sm) var(--space-lg);
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-button);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary {
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.primary:hover:enabled {
+  background-color: var(--color-primary-hover);
+}
+
+.secondary {
+  background-color: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.secondary:hover:enabled {
+  background-color: var(--color-back);
+}
+
+.danger {
+  background-color: var(--color-danger);
+  color: var(--color-on-primary);
+}
+
+.danger:hover:enabled {
+  background-color: var(--color-danger-hover);
+}
+
+.success {
+  background-color: var(--color-success);
+  color: var(--color-on-primary);
+}
+
+.success:hover:enabled {
+  background-color: var(--color-success-hover);
+}
+
+/* Last, to win over the variants. Different in shape as well as color. */
+.button:disabled {
+  border: 2px dashed var(--color-border);
+  background-color: var(--color-divider);
+  color: var(--color-text);
+  cursor: not-allowed;
+}

@@ -31,8 +31,14 @@ src/
     Assets/app.ico             Application and window icon
   Frontend.targets             Builds the UI and adds it to the publish output of the API and Desktop
   web/                         React + Vite + TypeScript (pnpm)
+    src/routes.tsx             All screens and their addresses
+    src/theme/tokens.css       Design tokens: colors, spacing, radii, font sizes
+    src/components/            Button, inputs, ConfirmDialog, useMessages (success and error messages)
+    src/layout/                AppLayout (status footer), Screen (header with "‹ Volver")
+    src/lib/                   Money and date helpers
+    src/screens/               Screens; dev/ is a components page that exists only in pnpm dev
     src/services/              API calls
-    vite.config.ts             Dev proxy: /api → http://localhost:5080
+    vite.config.ts             Dev proxy: /api → http://localhost:5080; Vitest settings
 tests/
   EggsApp.Tests/               xUnit; integration tests via WebApplicationFactory<Program>
 Directory.Build.props          Nullable, ImplicitUsings, TreatWarningsAsErrors
@@ -51,11 +57,11 @@ dotnet build                               # must produce zero warnings
 dotnet test
 dotnet run --project src/EggsApp.Api       # Swagger: http://localhost:5080/swagger
 dotnet run --project src/EggsApp.Desktop
-cd src/web && pnpm dev | pnpm build | pnpm lint   # pnpm build writes to src/EggsApp.Api/wwwroot
+cd src/web && pnpm dev | pnpm build | pnpm lint | pnpm test   # pnpm build writes to src/EggsApp.Api/wwwroot
 dotnet publish src/EggsApp.Desktop -p:PublishProfile=win-x64   # the shipped app: self-contained, includes the UI
 ```
 
-Publishing builds the UI; `-p:SkipFrontendBuild=true` publishes `wwwroot` as is. In Debug, the desktop app uses
+`pnpm dev` also serves the base components at `/dev/componentes`. Publishing builds the UI; `-p:SkipFrontendBuild=true` publishes `wwwroot` as is. In Debug, the desktop app uses
 `src/EggsApp.Api/wwwroot`, so run `pnpm build` first.
 
 ### Migrations
@@ -91,7 +97,11 @@ touch the real data; set `Database:Path` to override it for the standalone API.
 - **UI state:** anything that must survive a restart goes through the API to SQLite. Never use `localStorage`,
   `sessionStorage`, IndexedDB, or cookies: the origin changes on every launch, so they start empty each time.
 - **User data on disk:** only under `%LocalAppData%\EggsApp` (see `AppDataPaths`), never next to the exe.
-- **UX for an elderly user:** large targets, 18px+ text, at most 2–3 actions per screen, confirmation dialogs.
+- **UX for an elderly user:** large targets, 18px+ text, at most 2–3 actions per screen, confirmation dialogs. Inicio
+  is the one exception to the action limit: it has a button per module. Tokens keep text and buttons at 7:1 contrast.
+- **Dates and money in the UI:** use `lib/dates.ts` and `lib/money.ts`. `new Date("YYYY-MM-DD")` means UTC and shows
+  the day before in Costa Rica; `Intl` doesn't give `₡12.500` for `es-CR`.
+- **Navigation:** "‹ Volver" goes to the parent screen, never browser history, so it still works after a reload.
 - **Data safety:** never commit `.db` files or backup JSON files.
 - **Commits:** Conventional Commits with a footer `Refs: AB#<id>` (Azure Boards) when a ticket exists. No co-author or attribution trailers; commits are authored solely by the user.
 - **Screenshots:** never capture the full screen; only capture the app's own windows.
