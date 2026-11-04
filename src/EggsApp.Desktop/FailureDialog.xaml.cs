@@ -43,6 +43,10 @@ public partial class FailureDialog : Window
         dialog.SecondaryButton.Content = UiText.No;
         dialog.SecondaryButton.Visibility = Visibility.Visible;
 
+        // A question to answer, not a failure to report: the log folder would only get in the way.
+        dialog.HintText.Visibility = Visibility.Collapsed;
+        dialog.LogFolderText.Visibility = Visibility.Collapsed;
+
         return dialog.ShowWithOwner() == true;
     }
 

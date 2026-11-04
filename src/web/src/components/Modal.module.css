@@ -1,0 +1,57 @@
+.dialog {
+  width: min(680px, calc(100vw - 2 * var(--space-xl)));
+  padding: var(--space-xl);
+  border: none;
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  text-align: center;
+}
+
+.dialog::backdrop {
+  background-color: var(--color-backdrop);
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--size-dialog-icon);
+  height: var(--size-dialog-icon);
+  margin: 0 auto var(--space-md);
+  border-radius: 50%;
+  color: var(--color-on-primary);
+}
+
+.primary {
+  background-color: var(--color-primary);
+}
+
+.success {
+  background-color: var(--color-success);
+}
+
+.danger {
+  background-color: var(--color-danger);
+}
+
+.title {
+  margin-bottom: var(--space-xs);
+  font-size: var(--font-size-title);
+}
+
+.message {
+  margin-bottom: var(--space-lg);
+  font-size: var(--font-size-input);
+}
+
+.buttons {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-md);
+}
+
+/* Always shows what Enter would press, even when a mouse click opened the dialog. */
+.buttons button:focus {
+  box-shadow: var(--focus-ring);
+}

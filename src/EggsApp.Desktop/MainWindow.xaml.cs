@@ -21,7 +21,9 @@ public partial class MainWindow : Window
     {
         _appUrl = appUrl;
 
-        var environment = await CoreWebView2Environment.CreateAsync(userDataFolder: userDataFolder);
+        // Keeps the date field and its calendar in Spanish whatever language Windows is in.
+        var options = new CoreWebView2EnvironmentOptions { Language = "es-CR" };
+        var environment = await CoreWebView2Environment.CreateAsync(userDataFolder: userDataFolder, options: options);
         await Browser.EnsureCoreWebView2Async(environment);
 
         var browser = Browser.CoreWebView2;
