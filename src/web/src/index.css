@@ -29,8 +29,14 @@ p {
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
+}
+
+textarea {
+  display: block;
+  resize: vertical;
 }
 
 :focus-visible {

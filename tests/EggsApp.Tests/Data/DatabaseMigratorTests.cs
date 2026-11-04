@@ -1,4 +1,5 @@
 using EggsApp.Api.Data;
+using EggsApp.Api.Features.Customers;
 using EggsApp.Tests.Infrastructure;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -99,6 +100,46 @@ public sealed class DatabaseMigratorTests : IDisposable
         Assert.Null(TestDatabaseFolder.Scalar(
             copy,
             "SELECT name FROM sqlite_master WHERE name = '__EFMigrationsHistory'"));
+    }
+
+    // The real upgrade: a database a previous version of the app left behind, not one with no history at all.
+    [Fact]
+    public async Task DatabaseFromThePreviousVersion_IsCopiedAndGainsTheCustomersTable()
+    {
+        await using (var previous = CreateContext())
+        {
+            await previous.GetService<IMigrator>().MigrateAsync("Initial");
+        }
+
+        using (var connection = _folder.Connect())
+        {
+            TestDatabaseFolder.Execute(connection, "CREATE TABLE Marker (Value TEXT); INSERT INTO Marker VALUES ('kept');");
+        }
+
+        var result = await MigrateWithRealContextAsync();
+
+        Assert.Contains(result.AppliedMigrations, migration => migration.EndsWith("_AddCustomers", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.AppliedMigrations, migration => migration.EndsWith("_Initial", StringComparison.Ordinal));
+
+        const string HasCustomers = "SELECT name FROM sqlite_master WHERE name = 'Customers'";
+        var backup = Assert.Single(_folder.Backups());
+
+        using (var copy = _folder.Connect(backup))
+        {
+            Assert.Equal("kept", TestDatabaseFolder.Scalar(copy, "SELECT Value FROM Marker"));
+            Assert.Null(TestDatabaseFolder.Scalar(copy, HasCustomers));
+        }
+
+        using (var migrated = _folder.Connect())
+        {
+            Assert.Equal("kept", TestDatabaseFolder.Scalar(migrated, "SELECT Value FROM Marker"));
+            Assert.Equal("Customers", TestDatabaseFolder.Scalar(migrated, HasCustomers));
+        }
+
+        await using var db = CreateContext();
+        db.Customers.Add(new Customer { Name = "María" });
+        await db.SaveChangesAsync();
+        Assert.Equal("María", (await db.Customers.SingleAsync()).Name);
     }
 
     [Fact]

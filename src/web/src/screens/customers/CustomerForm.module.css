@@ -1,0 +1,28 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  max-width: 984px; /* Two inputs and the gap between them. */
+  margin: 0 auto;
+}
+
+/* Two columns, so the whole form and its buttons fit a short window with no scrolling: a Guardar below the fold might
+   never be found. A narrow window falls back to one column. */
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--space-lg);
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+/* Far apart, so aiming for Guardar can't land on Borrar. */
+.buttons {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-xl);
+}

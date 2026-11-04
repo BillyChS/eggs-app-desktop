@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using EggsApp.Api.Features.Customers;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +9,8 @@ public class AppDbContext(DbContextOptions options) : DbContext(options)
 {
     /// <summary>Pass this to IgnoreQueryFilters to also read soft-deleted rows.</summary>
     public const string SoftDeleteFilter = "SoftDelete";
+
+    public DbSet<Customer> Customers => Set<Customer>();
 
     /// <summary>The one place that defines how the app connects to its database.</summary>
     public static void Configure(DbContextOptionsBuilder options, string databasePath, Func<DateTime>? now = null)

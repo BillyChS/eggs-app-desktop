@@ -21,7 +21,7 @@ src/
     Hosting/                   EmbeddedApiHost (in-process host), FailureLog, AppDataPaths
     Data/                      AppDbContext, BaseEntity, DatabaseMigrator (startup migration)
     Data/Migrations/           EF Core migrations
-    Features/<Feature>/        Vertical slices (e.g. Features/Health/HealthEndpoint.cs)
+    Features/<Feature>/        Vertical slices (e.g. Features/Customers/: one file per action, plus CustomerEndpoints.cs)
     wwwroot/                   React build output (git-ignored)
   EggsApp.Desktop/             WPF shell (net10.0-windows); hosts the API in-process + WebView2
     App.xaml.cs                Startup order, shutdown, failure handling
@@ -34,10 +34,10 @@ src/
     src/routes.tsx             All screens and their addresses
     src/theme/tokens.css       Design tokens: colors, spacing, radii, font sizes
     src/components/            Button, inputs, ConfirmDialog, useMessages (success and error messages)
-    src/layout/                AppLayout (status footer), Screen (header with "‹ Volver")
+    src/layout/                AppLayout (status footer), Screen (header with "‹ Volver"), useUnsavedChanges
     src/lib/                   Money and date helpers
     src/screens/               Screens; dev/ is a components page that exists only in pnpm dev
-    src/services/              API calls
+    src/services/              API calls; http.ts has the timeout and ApiError
     vite.config.ts             Dev proxy: /api → http://localhost:5080; Vitest settings
 tests/
   EggsApp.Tests/               xUnit; integration tests via WebApplicationFactory<Program>
@@ -89,9 +89,14 @@ touch the real data; set `Database:Path` to override it for the standalone API.
 - **Entities:** every entity inherits `BaseEntity` (`CreatedAt`, `UpdatedAt`, `IsDeleted`). Deletes are soft deletes:
   `Remove` sets `IsDeleted`, and a global query filter hides the row. `ExecuteUpdate` and `ExecuteDelete` skip the
   timestamps and soft delete, so don't use them on entities without handling both.
-- **Soft delete limits, to decide per entity when Customers and Sales arrive:** soft delete doesn't cascade to related
-  rows that aren't loaded, and a unique index still counts soft-deleted rows, so it must either include `IsDeleted` or
-  filter on it.
+- **Soft delete limits, to decide per entity:** soft delete doesn't cascade to related rows that aren't loaded, and a
+  unique index still counts soft-deleted rows, so it must either include `IsDeleted` or filter on it.
+- **Customers:** names aren't unique, so there's no unique index and a deleted customer's name can be reused; the UI
+  asks before saving a similar name. A deleted customer is gone from lists, search and the similar-name check, and
+  `GET`, `PUT` and `DELETE` answer 404. There's no undelete screen, but the row stays. Sales must keep showing a deleted
+  customer's name, which takes `IgnoreQueryFilters`. A pending balance will block deletion: the rule goes in
+  `DeleteCustomer.FindBlockerAsync`, and the API (409) and UI already handle its Spanish message.
+- **Comparing names:** use `CustomerNames`, in C#. SQLite's `LIKE` and `ORDER BY` get accents and Spanish order wrong.
 - **Backend:** Vertical Slice Architecture. Build order: Command → Validator → Handler → Entity → Endpoint → Migration.
 - **Frontend:** build order: Screen → Service/Hook → State.
 - **UI state:** anything that must survive a restart goes through the API to SQLite. Never use `localStorage`,
@@ -102,6 +107,8 @@ touch the real data; set `Database:Path` to override it for the standalone API.
 - **Dates and money in the UI:** use `lib/dates.ts` and `lib/money.ts`. `new Date("YYYY-MM-DD")` means UTC and shows
   the day before in Costa Rica; `Intl` doesn't give `₡12.500` for `es-CR`.
 - **Navigation:** "‹ Volver" goes to the parent screen, never browser history, so it still works after a reload.
+- **Forms:** use `useUnsavedChanges` so leaving asks first. It can't cover closing the window. Don't disable the button
+  being pressed while saving: that loses keyboard focus.
 - **Data safety:** never commit `.db` files or backup JSON files.
 - **Commits:** Conventional Commits with a footer `Refs: AB#<id>` (Azure Boards) when a ticket exists. No co-author or attribution trailers; commits are authored solely by the user.
 - **Screenshots:** never capture the full screen; only capture the app's own windows.

@@ -1,9 +1,11 @@
 import { Navigate, type RouteObject } from 'react-router'
 import { AppLayout } from './layout/AppLayout'
 import { ComingSoonScreen } from './screens/ComingSoonScreen'
+import { CustomersScreen } from './screens/customers/CustomersScreen'
+import { EditCustomerScreen } from './screens/customers/EditCustomerScreen'
+import { NewCustomerScreen } from './screens/customers/NewCustomerScreen'
 import { ErrorScreen } from './screens/ErrorScreen'
 import { HomeScreen } from './screens/HomeScreen'
-import { MODULES } from './screens/modules'
 
 // Loaded on demand, so the build leaves this page out entirely.
 const devRoutes: RouteObject[] = import.meta.env.DEV
@@ -21,7 +23,12 @@ export const routes: RouteObject[] = [
     errorElement: <ErrorScreen />,
     children: [
       { index: true, element: <HomeScreen /> },
-      ...MODULES.map(({ path, label }) => ({ path, element: <ComingSoonScreen title={label} /> })),
+      { path: 'ventas', element: <ComingSoonScreen title="Ventas" /> },
+      { path: 'clientes', element: <CustomersScreen /> },
+      { path: 'clientes/nuevo', element: <NewCustomerScreen /> },
+      { path: 'clientes/:id/editar', element: <EditCustomerScreen /> },
+      { path: 'gastos', element: <ComingSoonScreen title="Gastos" /> },
+      { path: 'resumenes', element: <ComingSoonScreen title="Resúmenes" /> },
       ...devRoutes,
       // The API serves index.html for any address, so an unknown one lands here.
       { path: '*', element: <Navigate to="/" replace /> },
