@@ -1,4 +1,5 @@
 using EggsApp.Api.Data;
+using EggsApp.Api.Features.Customers;
 using EggsApp.Api.Features.Health;
 using EggsApp.Api.Hosting;
 
@@ -46,6 +47,7 @@ public static class EggsAppHostExtensions
 
         var api = app.MapGroup("/api");
         api.MapHealth();
+        api.MapCustomers();
 
         // Unknown /api routes return 404; every other route falls back to the React app.
         app.MapFallback("/api/{**path}", () => Results.NotFound());

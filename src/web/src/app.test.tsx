@@ -40,7 +40,6 @@ describe('navigation', () => {
 
   it.each([
     ['Ventas', '/ventas'],
-    ['Clientes', '/clientes'],
     ['Gastos', '/gastos'],
     ['Resúmenes', '/resumenes'],
   ])('%s opens, says Próximamente, and Volver returns to Inicio', async (label, path) => {

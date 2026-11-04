@@ -9,7 +9,7 @@ import { Screen } from '../../layout/Screen'
 import { formatColones } from '../../lib/money'
 import styles from './ComponentsScreen.module.css'
 
-/** Development only: no screen uses these components yet, and this page isn't in the shipped build. */
+/** Development only: every base component in one place. This page isn't in the shipped build. */
 export function ComponentsScreen() {
   const { showSuccess, showError } = useMessages()
   const [name, setName] = useState('')
