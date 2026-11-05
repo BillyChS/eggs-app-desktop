@@ -36,12 +36,21 @@ public partial class FailureDialog : Window
     /// <summary>
     /// Asks a yes/no question.
     /// </summary>
-    public static bool Confirm(string message)
+    /// <param name="message">The question.</param>
+    /// <param name="noIsSafe">Yes would lose something, so a stray Enter must mean No.</param>
+    public static bool Confirm(string message, bool noIsSafe = false)
     {
         var dialog = new FailureDialog(message);
         dialog.PrimaryButton.Content = UiText.Yes;
         dialog.SecondaryButton.Content = UiText.No;
         dialog.SecondaryButton.Visibility = Visibility.Visible;
+
+        if (noIsSafe)
+        {
+            dialog.PrimaryButton.IsDefault = false;
+            dialog.SecondaryButton.IsDefault = true;
+            dialog.Loaded += (_, _) => dialog.SecondaryButton.Focus();
+        }
 
         // A question to answer, not a failure to report: the log folder would only get in the way.
         dialog.HintText.Visibility = Visibility.Collapsed;

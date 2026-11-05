@@ -1,4 +1,5 @@
-﻿using System.Windows;
+﻿using System.ComponentModel;
+using System.Windows;
 using EggsApp.Api.Hosting;
 using Microsoft.Web.WebView2.Core;
 
@@ -9,6 +10,7 @@ public partial class MainWindow : Window
     private readonly FailureLog _log;
     private Uri? _appUrl;
     private bool _uiShown;
+    private bool _hasUnsavedChanges;
 
     public MainWindow(FailureLog log)
     {
@@ -33,8 +35,22 @@ public partial class MainWindow : Window
         browser.NewWindowRequested += OnNewWindowRequested;
         browser.NavigationCompleted += OnNavigationCompleted;
         browser.ProcessFailed += OnProcessFailed;
+        browser.WebMessageReceived += OnWebMessageReceived;
 
         browser.Navigate(appUrl.ToString());
+    }
+
+    /// <summary>For closing that isn't the user's choice, like a failure or Windows shutting down: nobody gets asked.</summary>
+    public void CloseWithoutAsking() => _hasUnsavedChanges = false;
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        if (_hasUnsavedChanges && !FailureDialog.Confirm(UiText.CloseWithUnsavedChanges, noIsSafe: true))
+        {
+            e.Cancel = true;
+        }
+
+        base.OnClosing(e);
     }
 
     public void BringToFront()
@@ -78,6 +94,30 @@ public partial class MainWindow : Window
         if (!IsAppUrl(e.Uri))
         {
             e.Cancel = true;
+            return;
+        }
+
+        // A whole new page, like a reload: whatever was being typed is already gone.
+        _hasUnsavedChanges = false;
+    }
+
+    // The page says when closing would lose something. See services/desktopShell.ts.
+    private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        if (!IsAppUrl(e.Source))
+        {
+            return;
+        }
+
+        switch (e.TryGetWebMessageAsString())
+        {
+            case "unsaved-changes":
+                _hasUnsavedChanges = true;
+                break;
+
+            case "no-unsaved-changes":
+                _hasUnsavedChanges = false;
+                break;
         }
     }
 
@@ -127,8 +167,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private static void ExitWithMessage(string message)
+    private void ExitWithMessage(string message)
     {
+        CloseWithoutAsking();
         FailureDialog.ShowMessage(message);
         Application.Current.Shutdown(1);
     }

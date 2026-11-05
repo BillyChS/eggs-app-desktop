@@ -143,6 +143,35 @@ public sealed class DatabaseMigratorTests : IDisposable
     }
 
     [Fact]
+    public async Task DatabaseWithCustomers_IsCopiedAndGainsTheSalesTablesKeepingTheCustomers()
+    {
+        await using (var previous = CreateContext())
+        {
+            await previous.GetService<IMigrator>().MigrateAsync("AddCustomers");
+            previous.Customers.Add(new Customer { Name = "María" });
+            await previous.SaveChangesAsync();
+        }
+
+        var result = await MigrateWithRealContextAsync();
+
+        var applied = Assert.Single(result.AppliedMigrations);
+        Assert.EndsWith("_AddSales", applied);
+
+        const string HasSales = "SELECT COUNT(*) FROM sqlite_master WHERE name IN ('Sales', 'SaleItems')";
+        var backup = Assert.Single(_folder.Backups());
+
+        using (var copy = _folder.Connect(backup))
+        {
+            Assert.Equal("María", TestDatabaseFolder.Scalar(copy, "SELECT Name FROM Customers"));
+            Assert.Equal(0L, TestDatabaseFolder.Scalar(copy, HasSales));
+        }
+
+        using var migrated = _folder.Connect();
+        Assert.Equal("María", TestDatabaseFolder.Scalar(migrated, "SELECT Name FROM Customers"));
+        Assert.Equal(2L, TestDatabaseFolder.Scalar(migrated, HasSales));
+    }
+
+    [Fact]
     public async Task Copy_IncludesCommittedDataStillInTheWal()
     {
         // Stays open with checkpoints off, so the row exists only in eggs.db-wal, as it would after a crash.

@@ -1,0 +1,25 @@
+.picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-sm) var(--space-md);
+}
+
+/* Inside .picker, to win over the width every other button has. */
+.picker .dayButton {
+  min-width: 104px;
+}
+
+.date {
+  width: 250px;
+}
+
+.written {
+  flex: 1;
+  min-width: 240px;
+  min-height: var(--size-input);
+  align-content: center;
+  font-size: var(--font-size-body);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}

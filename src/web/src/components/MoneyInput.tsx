@@ -1,4 +1,12 @@
-import { useLayoutEffect, useRef, useState, type ChangeEvent, type ClipboardEvent } from 'react'
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ClipboardEvent,
+  type InputHTMLAttributes,
+  type RefObject,
+} from 'react'
 import { groupThousands, MAX_COLONES, parseColones, type ParsedColones } from '../lib/money'
 import { Field } from './Field'
 
@@ -8,6 +16,9 @@ interface Props {
   value: number | null
   onChange: (value: number | null) => void
   error?: string
+  /** For Enter, and for selecting the value on focus. */
+  inputProps?: InputHTMLAttributes<HTMLInputElement>
+  ref?: RefObject<HTMLInputElement | null>
 }
 
 const MAX_DIGITS = MAX_COLONES.toString().length
@@ -34,13 +45,14 @@ function errorFor(parsed: ParsedColones): string | undefined {
  * Normally only digits count, and the dots are the field's own. Once someone types a separator themselves, the
  * text stays as typed until they leave the field, so "12500,50" gets an error instead of becoming ₡1.250.050.
  */
-export function MoneyInput({ label, value, onChange, error }: Props) {
+export function MoneyInput({ label, value, onChange, error, inputProps, ref }: Props) {
   const [text, setText] = useState(() => display(value))
   const [asTyped, setAsTyped] = useState(false)
   const [ownError, setOwnError] = useState<string>()
   const [reported, setReported] = useState(value)
 
-  const inputRef = useRef<HTMLInputElement>(null)
+  const ownRef = useRef<HTMLInputElement>(null)
+  const inputRef = ref ?? ownRef
   const digitsBeforeCaret = useRef<number | null>(null)
 
   // The parent changed the value, for example by clearing the form.
@@ -67,7 +79,7 @@ export function MoneyInput({ label, value, onChange, error }: Props) {
 
     input.setSelectionRange(position, position)
     digitsBeforeCaret.current = null
-  }, [text])
+  }, [text, inputRef])
 
   const report = (next: number | null) => {
     setReported(next)
@@ -136,6 +148,7 @@ export function MoneyInput({ label, value, onChange, error }: Props) {
       {(input) => (
         <input
           {...input}
+          {...inputProps}
           ref={inputRef}
           type="text"
           inputMode="numeric"

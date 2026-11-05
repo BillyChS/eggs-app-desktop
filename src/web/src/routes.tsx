@@ -6,6 +6,9 @@ import { EditCustomerScreen } from './screens/customers/EditCustomerScreen'
 import { NewCustomerScreen } from './screens/customers/NewCustomerScreen'
 import { ErrorScreen } from './screens/ErrorScreen'
 import { HomeScreen } from './screens/HomeScreen'
+import { EditSaleScreen } from './screens/sales/EditSaleScreen'
+import { NewSaleScreen } from './screens/sales/NewSaleScreen'
+import { SalesScreen } from './screens/sales/SalesScreen'
 
 // Loaded on demand, so the build leaves this page out entirely.
 const devRoutes: RouteObject[] = import.meta.env.DEV
@@ -23,7 +26,9 @@ export const routes: RouteObject[] = [
     errorElement: <ErrorScreen />,
     children: [
       { index: true, element: <HomeScreen /> },
-      { path: 'ventas', element: <ComingSoonScreen title="Ventas" /> },
+      { path: 'ventas', element: <SalesScreen /> },
+      { path: 'ventas/nueva', element: <NewSaleScreen /> },
+      { path: 'ventas/:id/editar', element: <EditSaleScreen /> },
       { path: 'clientes', element: <CustomersScreen /> },
       { path: 'clientes/nuevo', element: <NewCustomerScreen /> },
       { path: 'clientes/:id/editar', element: <EditCustomerScreen /> },
