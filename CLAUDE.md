@@ -33,9 +33,9 @@ src/
   web/                         React + Vite + TypeScript (pnpm)
     src/routes.tsx             All screens and their addresses
     src/theme/tokens.css       Design tokens: colors, spacing, radii, font sizes
-    src/components/            Button, inputs, ConfirmDialog, useMessages (success and error messages)
-    src/layout/                AppLayout (status footer), Screen (header with "‹ Volver"), useUnsavedChanges
-    src/lib/                   Money and date helpers
+    src/components/            Button, inputs, DayPicker, ConfirmDialog, useMessages (success and error messages)
+    src/layout/                AppLayout (status footer), Screen (header with "‹ Volver"), useUnsavedChanges, useOneAtATime
+    src/lib/                   Money and date helpers, selectOnFocus
     src/screens/               Screens; dev/ is a components page that exists only in pnpm dev
     src/services/              API calls; http.ts has the timeout and ApiError
     vite.config.ts             Dev proxy: /api → http://localhost:5080; Vitest settings
@@ -97,6 +97,14 @@ touch the real data; set `Database:Path` to override it for the standalone API.
   customer's name, which takes `IgnoreQueryFilters`. A pending balance will block deletion: the rule goes in
   `DeleteCustomer.FindBlockerAsync`, and the API (409) and UI already handle its Spanish message.
 - **Comparing names:** use `CustomerNames`, in C#. SQLite's `LIKE` and `ORDER BY` get accents and Spanish order wrong.
+- **Sales:** a `Sale` is one purchase, like an invoice, with `SaleItem` lines (carton type A = 15 eggs or B = 30, whole
+  quantity, unit price). The server calculates `LineTotal` and `Total` and ignores any sent to it; there's no way to
+  override a total. `SaleDate` is a `DateOnly`, so no clock or time zone can move a sale to another day. Editing keeps
+  the sale's id and replaces all its lines; deleting soft-deletes the lines too, by loading them.
+- **Income:** cash-basis. A cash sale counts on its sale date. A future credit flag and customer go on `Sale`, and
+  `cashTotal` in `ListSales` must then skip credit sales: they become income only through abonos.
+- **Last prices:** the form starts with the price of the latest active line per carton type, by sale date rather than
+  entry date, so typing in an old sale doesn't replace the current price.
 - **Backend:** Vertical Slice Architecture. Build order: Command → Validator → Handler → Entity → Endpoint → Migration.
 - **Frontend:** build order: Screen → Service/Hook → State.
 - **UI state:** anything that must survive a restart goes through the API to SQLite. Never use `localStorage`,
@@ -104,11 +112,15 @@ touch the real data; set `Database:Path` to override it for the standalone API.
 - **User data on disk:** only under `%LocalAppData%\EggsApp` (see `AppDataPaths`), never next to the exe.
 - **UX for an elderly user:** large targets, 18px+ text, at most 2–3 actions per screen, confirmation dialogs. Inicio
   is the one exception to the action limit: it has a button per module. Tokens keep text and buttons at 7:1 contrast.
+  The browser's calendar popup is a known exception to the size rule: CSS can't reach it (about 13px text and 28px
+  days at 125% scaling), so `DayPicker` offers Hoy and Ayer as large buttons, and a date can be typed.
 - **Dates and money in the UI:** use `lib/dates.ts` and `lib/money.ts`. `new Date("YYYY-MM-DD")` means UTC and shows
   the day before in Costa Rica; `Intl` doesn't give `₡12.500` for `es-CR`.
 - **Navigation:** "‹ Volver" goes to the parent screen, never browser history, so it still works after a reload.
-- **Forms:** use `useUnsavedChanges` so leaving asks first. It can't cover closing the window. Don't disable the button
-  being pressed while saving: that loses keyboard focus.
+- **Forms:** use `useUnsavedChanges` so leaving asks first. It also tells the window, which asks before closing. Don't
+  disable the button being pressed while saving, because that loses keyboard focus: use `useOneAtATime`.
+- **Sale form keyboard:** Enter moves on (type → quantity → price → "Guardar venta") and never saves from a field; only
+  activating the button saves. So that form has no `<form>` element, and a held-down Enter is ignored.
 - **Data safety:** never commit `.db` files or backup JSON files.
 - **Commits:** Conventional Commits with a footer `Refs: AB#<id>` (Azure Boards) when a ticket exists. No co-author or attribution trailers; commits are authored solely by the user.
 - **Screenshots:** never capture the full screen; only capture the app's own windows.

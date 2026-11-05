@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatDateLong, todayLocal } from './dates'
+import { formatDateLong, todayLocal, yesterdayLocal } from './dates'
 
 describe('todayLocal', () => {
   it('is still today in the evening, when UTC is already tomorrow', () => {
@@ -11,6 +11,20 @@ describe('todayLocal', () => {
 
   it('pads month and day', () => {
     expect(todayLocal(new Date(2026, 0, 5))).toBe('2026-01-05')
+  })
+})
+
+describe('yesterdayLocal', () => {
+  it('is the day before in local time, in the evening too', () => {
+    expect(yesterdayLocal(new Date('2026-11-04T20:00:00-06:00'))).toBe('2026-11-03')
+  })
+
+  it.each([
+    [new Date(2026, 2, 1), '2026-02-28'],
+    [new Date(2028, 2, 1), '2028-02-29'],
+    [new Date(2027, 0, 1), '2026-12-31'],
+  ])('crosses months and years: %s', (now, expected) => {
+    expect(yesterdayLocal(now)).toBe(expected)
   })
 })
 

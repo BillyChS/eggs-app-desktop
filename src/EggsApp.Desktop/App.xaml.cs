@@ -84,6 +84,13 @@ public partial class App : Application
         }
     }
 
+    // A question here would hold up Windows shutting down, with nobody there to answer it.
+    protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
+    {
+        (MainWindow as MainWindow)?.CloseWithoutAsking();
+        base.OnSessionEnding(e);
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
         // Failures exit with code 1, and a second launch never starts a host, so neither logs this line.
@@ -178,6 +185,7 @@ public partial class App : Application
     private void ExitWithFailure(string message, Exception exception)
     {
         _failing = true;
+        (MainWindow as MainWindow)?.CloseWithoutAsking();
         _log.Write(LogSource, "A failure ended the app.", exception);
         FailureDialog.ShowMessage(message);
         Shutdown(1);

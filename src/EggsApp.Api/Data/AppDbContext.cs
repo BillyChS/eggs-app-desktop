@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using EggsApp.Api.Features.Customers;
+using EggsApp.Api.Features.Sales;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,6 +12,10 @@ public class AppDbContext(DbContextOptions options) : DbContext(options)
     public const string SoftDeleteFilter = "SoftDelete";
 
     public DbSet<Customer> Customers => Set<Customer>();
+
+    public DbSet<Sale> Sales => Set<Sale>();
+
+    public DbSet<SaleItem> SaleItems => Set<SaleItem>();
 
     /// <summary>The one place that defines how the app connects to its database.</summary>
     public static void Configure(DbContextOptionsBuilder options, string databasePath, Func<DateTime>? now = null)

@@ -13,8 +13,13 @@ export function todayLocal(now: Date = new Date()): string {
   return `${year}-${month}-${day}`
 }
 
+/** Yesterday as local YYYY-MM-DD. By calendar day, so it works across a month or year. */
+export function yesterdayLocal(now: Date = new Date()): string {
+  return todayLocal(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1))
+}
+
 /**
- * "2026-11-04" → "martes, 4 de noviembre de 2026", or null if it isn't a real date.
+ * "2026-11-04" → "miércoles, 4 de noviembre de 2026", or null if it isn't a real date.
  * Built from its parts because new Date("2026-11-04") means midnight UTC, which is Nov 3 in Costa Rica.
  */
 export function formatDateLong(localDate: string): string | null {

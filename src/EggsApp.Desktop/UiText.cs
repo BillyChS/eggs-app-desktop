@@ -34,6 +34,9 @@ internal static class UiText
         "La pantalla de Eggs App dejó de responder.\n\n"
         + "¿Quiere que la abra de nuevo? Lo último que estaba anotando se puede perder.";
 
+    public const string CloseWithUnsavedChanges =
+        "Tiene cambios sin guardar.\n\n¿Cerrar Eggs App sin guardar?";
+
     public const string LogFolderHint =
         "Si Billy se lo pide, los detalles están en esta carpeta:";
 

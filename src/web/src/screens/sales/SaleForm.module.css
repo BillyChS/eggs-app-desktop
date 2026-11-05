@@ -1,0 +1,189 @@
+/* Fills the screen, so that the total and the buttons stay at the bottom and only the lines scroll: a Guardar venta
+   below the fold might never be found. */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  height: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.lines {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-height: 120px;
+  overflow-y: auto;
+  /* Room for the focus ring, which the scrolling would otherwise cut off. */
+  margin: -8px;
+  padding: 8px;
+}
+
+.doneLines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.doneLine {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-xs) var(--space-md);
+  border: 2px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  font-size: var(--font-size-input);
+}
+
+.doneText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Inside a line, to win over the width every other button has. */
+.doneLine .remove,
+.editor .remove {
+  flex-shrink: 0;
+  min-width: 110px;
+  padding: var(--space-xs) var(--space-md);
+}
+
+.editor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-sm) var(--space-md);
+}
+
+.fieldLabel {
+  display: block;
+  margin-bottom: var(--space-xs);
+  font-size: var(--font-size-body);
+  font-weight: 700;
+}
+
+.typeField {
+  flex: 1 1 400px;
+  min-width: 0;
+}
+
+.types {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.type {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  min-height: var(--size-button);
+  padding: var(--space-xs);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-body);
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.type:hover {
+  background-color: var(--color-back);
+}
+
+.type svg {
+  flex-shrink: 0;
+}
+
+.chosen,
+.chosen:hover {
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.quantity {
+  width: 120px;
+}
+
+.price {
+  width: 220px;
+}
+
+.subtotal {
+  min-width: 130px;
+}
+
+.subtotal strong {
+  display: flex;
+  align-items: center;
+  min-height: var(--size-input);
+  font-size: var(--font-size-input);
+}
+
+/* Lines up with the inputs, which have a label above them. */
+.editor .remove {
+  margin-top: 36px;
+}
+
+.bottom {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding-top: var(--space-xs);
+  border-top: 2px solid var(--color-divider);
+  font-size: var(--font-size-input);
+  font-weight: 700;
+}
+
+.total strong {
+  font-size: var(--font-size-title);
+}
+
+/* Far apart, so aiming for Guardar venta can't land on Borrar venta. */
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-sm) var(--space-xl);
+}
+
+.mainButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-md);
+}
+
+.buttonContent {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  white-space: nowrap;
+}
+
+.error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+  color: var(--color-danger);
+  font-size: var(--font-size-body);
+  font-weight: 700;
+}

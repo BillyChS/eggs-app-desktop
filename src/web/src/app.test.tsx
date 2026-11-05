@@ -39,7 +39,6 @@ describe('navigation', () => {
   })
 
   it.each([
-    ['Ventas', '/ventas'],
     ['Gastos', '/gastos'],
     ['Resúmenes', '/resumenes'],
   ])('%s opens, says Próximamente, and Volver returns to Inicio', async (label, path) => {
@@ -89,7 +88,7 @@ describe('navigation', () => {
   })
 
   it('a one-level screen has no separate Inicio button', () => {
-    open('/ventas')
+    open('/gastos')
 
     expect(screen.queryByRole('button', { name: 'Inicio' })).toBeNull()
   })
@@ -114,7 +113,7 @@ describe('server status', () => {
     const { user } = open()
     await screen.findByText('Conectado')
 
-    await user.click(screen.getByRole('button', { name: 'Ventas' }))
+    await user.click(screen.getByRole('button', { name: 'Gastos' }))
 
     expect(screen.getByText('Conectado')).toBeTruthy()
   })

@@ -5,6 +5,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { useMessages } from '../../components/messages'
 import { TextArea } from '../../components/TextArea'
 import { TextInput } from '../../components/TextInput'
+import { useOneAtATime } from '../../layout/useOneAtATime'
 import { useUnsavedChanges } from '../../layout/useUnsavedChanges'
 import {
   createCustomer,
@@ -58,9 +59,7 @@ export function CustomerForm({ customer }: Props) {
   const [similar, setSimilar] = useState<CustomerSummary[] | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const nameRef = useRef<HTMLInputElement>(null)
-  const busy = useRef(false)
-  // The API can answer before the screen has changed, and a double click's second click would then save a copy.
-  const finished = useRef(false)
+  const { run: oneAtATime, finish } = useOneAtATime()
 
   const cleaned = clean(values)
   const guard = useUnsavedChanges(!isSame(cleaned, saved))
@@ -78,24 +77,8 @@ export function CustomerForm({ customer }: Props) {
     setErrors((current) => ({ ...current, [field]: undefined }))
   }
 
-  // Ignores a second click while the first is working. The buttons stay enabled: disabling the focused button would
-  // lose keyboard focus, and the local API answers too fast for a disabled look to mean anything.
-  const oneAtATime = async (work: () => Promise<void>) => {
-    if (busy.current || finished.current) {
-      return
-    }
-
-    busy.current = true
-
-    try {
-      await work()
-    } finally {
-      busy.current = false
-    }
-  }
-
   const backToList = () => {
-    finished.current = true
+    finish()
     guard.allowLeaving()
     navigate(LIST)
   }
