@@ -6,10 +6,37 @@ import { DayPicker } from '../../components/DayPicker'
 import { todayLocal } from '../../lib/dates'
 import { formatColones } from '../../lib/money'
 import { Screen } from '../../layout/Screen'
+import type { CustomerRef } from '../../services/customers'
+import { statementOf } from '../customers/customerText'
 import { summarizeSale } from './saleText'
 import styles from './SalesScreen.module.css'
 import { canHaveSales, useSaleDay } from './useSaleDay'
-import { useSaleList } from './useSaleList'
+import { useSaleList, type DayList } from './useSaleList'
+
+const nameOf = (customer: CustomerRef) => (customer.isDeleted ? `${customer.name} (borrado)` : customer.name)
+
+/**
+ * The money that came in that day, which is cash sales and abonos. Fiado is shown apart as owed, never added in, so
+ * the big number is always what should be in the drawer.
+ */
+function DayTotals({ list, isToday }: { list: DayList; isToday: boolean }) {
+  const cameIn = list.cashTotal + list.payments.total
+  const parts = [
+    `Contado ${formatColones(list.cashTotal)}`,
+    ...(list.payments.total > 0 ? [`Abonos ${formatColones(list.payments.total)}`] : []),
+    ...(list.creditTotal > 0 ? [`Fiado (por cobrar) ${formatColones(list.creditTotal)}`] : []),
+  ]
+
+  return (
+    <div className={styles.totals}>
+      <p className={styles.total}>
+        <span>{isToday ? 'Entró hoy' : 'Entró'}</span>
+        <strong>{formatColones(cameIn)}</strong>
+      </p>
+      {parts.length > 1 && <p className={styles.parts}>{parts.join(' · ')}</p>}
+    </div>
+  )
+}
 
 export function SalesScreen() {
   const navigate = useNavigate()
@@ -50,12 +77,7 @@ export function SalesScreen() {
             </span>
           </Button>
         </div>
-        {list && (
-          <p className={styles.total}>
-            <span>Total del día</span>
-            <strong>{formatColones(list.cashTotal)}</strong>
-          </p>
-        )}
+        {list && <DayTotals list={list} isToday={day === todayLocal()} />}
       </div>
 
       {failed ? (
@@ -67,14 +89,38 @@ export function SalesScreen() {
         <p role="status" className={styles.message}>
           Cargando…
         </p>
-      ) : list.sales.length > 0 ? (
-        <ul className={styles.list} aria-label="Ventas del día">
+      ) : list.sales.length > 0 || list.payments.payments.length > 0 ? (
+        <ul className={styles.list} aria-label="Ventas y abonos del día">
           {list.sales.map((sale) => (
             <li key={sale.id}>
               <button type="button" className={styles.row} onClick={() => navigate(`/ventas/${sale.id}/editar${query}`)}>
-                <span className={styles.summary}>{summarizeSale(sale.items)}</span>
+                <span className={styles.summary}>
+                  {sale.customer && (
+                    <>
+                      <span className={styles.tag}>Fiado</span> {nameOf(sale.customer)} ·{' '}
+                    </>
+                  )}
+                  {summarizeSale(sale.items)}
+                </span>
                 <span className={styles.rowEnd}>
                   <strong className={styles.rowTotal}>{formatColones(sale.total)}</strong>
+                  <ChevronRight size={36} aria-hidden="true" />
+                </span>
+              </button>
+            </li>
+          ))}
+          {list.payments.payments.map((payment) => (
+            <li key={payment.id}>
+              <button
+                type="button"
+                className={styles.row}
+                onClick={() => navigate(`${statementOf(payment.customer.id)}/abonos/${payment.id}/editar${query}`)}
+              >
+                <span className={styles.summary}>
+                  <span className={styles.tag}>Abono</span> {nameOf(payment.customer)}
+                </span>
+                <span className={styles.rowEnd}>
+                  <strong className={styles.rowTotal}>{formatColones(payment.amount)}</strong>
                   <ChevronRight size={36} aria-hidden="true" />
                 </span>
               </button>

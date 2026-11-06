@@ -17,6 +17,7 @@ import {
   type CustomerSummary,
 } from '../../services/customers'
 import { ApiError, hasStatus } from '../../services/http'
+import { describeSimilar, statementOf } from './customerText'
 import styles from './CustomerForm.module.css'
 
 const LIST = '/clientes'
@@ -37,10 +38,6 @@ function clean({ name, phone, notes }: CustomerInput): CustomerInput {
 
 function isSame(a: CustomerInput, b: CustomerInput) {
   return a.name === b.name && a.phone === b.phone && a.notes === b.notes
-}
-
-function describe(customers: CustomerSummary[]) {
-  return customers.map(({ name, phone }) => (phone ? `${name} (${phone})` : name)).join(', ')
 }
 
 interface Props {
@@ -77,11 +74,13 @@ export function CustomerForm({ customer }: Props) {
     setErrors((current) => ({ ...current, [field]: undefined }))
   }
 
-  const backToList = () => {
+  const leaveTo = (address: string) => {
     finish()
     guard.allowLeaving()
-    navigate(LIST)
+    navigate(address)
   }
+
+  const backToList = () => leaveTo(LIST)
 
   const handleGone = () => {
     showError(GONE_MESSAGE)
@@ -92,7 +91,8 @@ export function CustomerForm({ customer }: Props) {
     try {
       await (customer ? updateCustomer(customer.id, cleaned) : createCustomer(cleaned))
       showSuccess('Cliente guardado.')
-      backToList()
+      // An edit comes from the customer's account, and goes back there.
+      leaveTo(customer ? statementOf(customer.id) : LIST)
     } catch (error) {
       if (hasStatus(error, 404)) {
         handleGone()
@@ -194,7 +194,7 @@ export function CustomerForm({ customer }: Props) {
       {similar && (
         <ConfirmDialog
           title="Ya existe un cliente parecido"
-          message={`${describe(similar)}. ¿Es otra persona?`}
+          message={describeSimilar(similar)}
           cancelLabel="No, revisar"
           confirmLabel="Sí, es otra persona"
           onCancel={() => setSimilar(null)}

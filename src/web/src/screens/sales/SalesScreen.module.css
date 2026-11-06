@@ -30,6 +30,11 @@
   white-space: nowrap;
 }
 
+.totals {
+  display: flex;
+  flex-direction: column;
+}
+
 .total {
   display: flex;
   align-items: baseline;
@@ -41,6 +46,23 @@
 
 .total strong {
   font-size: var(--font-size-title);
+}
+
+.parts {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-body);
+  text-align: right;
+}
+
+/* Says in words what kind of row it is, not just with color. */
+.tag {
+  display: inline-block;
+  padding: 0 var(--space-xs);
+  border: 2px solid var(--color-border);
+  border-radius: 8px;
+  font-size: var(--font-size-body);
+  font-weight: 700;
+  vertical-align: 2px;
 }
 
 .list {
@@ -72,7 +94,7 @@
   text-align: left;
   cursor: pointer;
   /* Tabbing to a row must not leave it hidden under the toolbar. */
-  scroll-margin-top: 210px;
+  scroll-margin-top: 250px;
 }
 
 .row:hover {

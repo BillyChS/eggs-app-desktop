@@ -1,51 +1,29 @@
-using System.Globalization;
+using EggsApp.Api.Features.Common;
 
 namespace EggsApp.Api.Features.Sales;
 
 public static class SaleValidator
 {
-    private static readonly DateOnly EarliestDate = new(2000, 1, 1);
-
     /// <returns>
     /// Spanish messages by field, ready to show next to each input, with lines as "items[1].unitPrice". When there are
-    /// none, the fields to save.
+    /// none, the fields to save. Whether the customer exists is the handler's to check.
     /// </returns>
     public static (Dictionary<string, string[]> Errors, SaleFields? Fields) Validate(SaleCommand command)
     {
         var errors = new Dictionary<string, string[]>();
-        var date = ReadDate(command.Date, errors);
+        var date = CalendarDays.Read(command.Date, "Escoja la fecha de la venta.", errors);
         var items = ReadItems(command.Items, errors);
 
-        return (errors, errors.Count == 0 ? new SaleFields(date, items) : null);
-    }
-
-    public static bool TryParseDate(string? text, out DateOnly date) =>
-        DateOnly.TryParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
-
-    private static DateOnly ReadDate(string? text, Dictionary<string, string[]> errors)
-    {
-        if (string.IsNullOrWhiteSpace(text))
+        if (command.IsCredit && command.CustomerId is null)
         {
-            errors["date"] = ["Escoja la fecha de la venta."];
+            errors["customerId"] = ["Escoja a quién se le fió."];
         }
-        else if (!TryParseDate(text, out var date))
+        else if (!command.IsCredit && command.CustomerId is not null)
         {
-            errors["date"] = ["Esa fecha no es válida."];
-        }
-        else if (date < EarliestDate)
-        {
-            errors["date"] = ["Revise el año de la fecha."];
-        }
-        else if (date > DateOnly.FromDateTime(DateTime.Now))
-        {
-            errors["date"] = ["La fecha no puede ser futura."];
-        }
-        else
-        {
-            return date;
+            errors["customerId"] = ["Una venta al contado no lleva cliente."];
         }
 
-        return default;
+        return (errors, errors.Count == 0 ? new SaleFields(date, items, command.CustomerId) : null);
     }
 
     private static List<SaleItemFields> ReadItems(

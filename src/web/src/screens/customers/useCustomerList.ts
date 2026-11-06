@@ -5,6 +5,8 @@ const SEARCH_DELAY_MS = 300
 
 interface Result {
   customers: CustomerSummary[]
+  /** What everyone owes together, whatever the search. */
+  owedTotal: number
   /** The search these customers answer, which can lag behind what's typed. */
   search: string
 }
@@ -21,13 +23,13 @@ export function useCustomerList(search: string) {
 
     const timer = setTimeout(async () => {
       try {
-        const customers = await listCustomers(search, controller.signal)
+        const { items, owedTotal } = await listCustomers(search, controller.signal)
 
         if (controller.signal.aborted) {
           return
         }
 
-        setResult({ customers, search })
+        setResult({ customers: items, owedTotal, search })
         setFailed(false)
       } catch {
         if (!controller.signal.aborted) {

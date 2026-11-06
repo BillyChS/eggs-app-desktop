@@ -21,6 +21,6 @@ public static class FindSimilarCustomers
             .Take(MaxResults)
             .ToList();
 
-        return new CustomerListResponse(similar);
+        return new CustomerListResponse(similar, customers.Sum(customer => customer.Balance));
     }
 }

@@ -1,11 +1,15 @@
 using EggsApp.Api.Data;
+using EggsApp.Api.Features.Customers;
 using Microsoft.EntityFrameworkCore;
 
 namespace EggsApp.Api.Features.Sales;
 
 public static class ListSales
 {
-    /// <returns>The sales from one date to another, both included, newest first, and the income they add up to.</returns>
+    /// <returns>
+    /// The sales from one date to another, both included, newest first. Income is cash-basis: only the cash sales add
+    /// up to it, and the credit sales are totaled apart, as money owed.
+    /// </returns>
     public static async Task<SaleListResponse> HandleAsync(AppDbContext db, DateOnly from, DateOnly to)
     {
         var sales = await db.Sales
@@ -16,6 +20,13 @@ public static class ListSales
             .ThenByDescending(sale => sale.CreatedAt)
             .ToListAsync();
 
-        return new SaleListResponse([.. sales.Select(SaleDetail.From)], sales.Sum(sale => sale.Total));
+        var customers = await CustomerAccounts.FindRefsAsync(
+            db,
+            sales.Where(sale => sale.CustomerId is not null).Select(sale => sale.CustomerId!.Value));
+
+        return new SaleListResponse(
+            [.. sales.Select(sale => SaleDetail.From(sale, customers))],
+            CashTotal: sales.Where(sale => !sale.IsCredit).Sum(sale => sale.Total),
+            CreditTotal: sales.Where(sale => sale.IsCredit).Sum(sale => sale.Total));
     }
 }

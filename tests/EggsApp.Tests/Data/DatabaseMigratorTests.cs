@@ -154,8 +154,10 @@ public sealed class DatabaseMigratorTests : IDisposable
 
         var result = await MigrateWithRealContextAsync();
 
-        var applied = Assert.Single(result.AppliedMigrations);
-        Assert.EndsWith("_AddSales", applied);
+        Assert.Collection(
+            result.AppliedMigrations,
+            applied => Assert.EndsWith("_AddSales", applied),
+            applied => Assert.EndsWith("_AddCreditSales", applied));
 
         const string HasSales = "SELECT COUNT(*) FROM sqlite_master WHERE name IN ('Sales', 'SaleItems')";
         var backup = Assert.Single(_folder.Backups());
@@ -169,6 +171,65 @@ public sealed class DatabaseMigratorTests : IDisposable
         using var migrated = _folder.Connect();
         Assert.Equal("María", TestDatabaseFolder.Scalar(migrated, "SELECT Name FROM Customers"));
         Assert.Equal(2L, TestDatabaseFolder.Scalar(migrated, HasSales));
+    }
+
+    [Fact]
+    public async Task DatabaseWithSales_KeepsThemAllAsCashSalesAndChecksCreditFromThenOn()
+    {
+        await using (var previous = CreateContext())
+        {
+            await previous.GetService<IMigrator>().MigrateAsync("AddSales");
+        }
+
+        // Raw SQL, because the current model has columns this schema doesn't have yet.
+        using (var connection = _folder.Connect())
+        {
+            TestDatabaseFolder.Execute(
+                connection,
+                """
+                INSERT INTO Customers (Id, Name, CreatedAt, UpdatedAt, IsDeleted)
+                    VALUES ('c1', 'María', '2024-11-01 08:00:00', '2024-11-01 08:00:00', 0);
+                INSERT INTO Sales (Id, SaleDate, Total, CreatedAt, UpdatedAt, IsDeleted) VALUES
+                    ('s1', '2024-11-03', 3000, '2024-11-03 09:00:00', '2024-11-03 09:00:00', 0),
+                    ('s2', '2024-11-04', 2000, '2024-11-04 09:00:00', '2024-11-04 09:00:00', 1);
+                INSERT INTO SaleItems (Id, SaleId, Position, CartonType, Quantity, UnitPrice, LineTotal, CreatedAt,
+                    UpdatedAt, IsDeleted) VALUES
+                    ('i1', 's1', 0, 'A', 3, 1000, 3000, '2024-11-03 09:00:00', '2024-11-03 09:00:00', 0),
+                    ('i2', 's2', 0, 'B', 1, 2000, 2000, '2024-11-04 09:00:00', '2024-11-04 09:00:00', 1);
+                """);
+        }
+
+        var result = await MigrateWithRealContextAsync();
+
+        Assert.EndsWith("_AddCreditSales", Assert.Single(result.AppliedMigrations));
+        Assert.Single(_folder.Backups());
+
+        using var migrated = _folder.Connect();
+        TestDatabaseFolder.Execute(migrated, "PRAGMA foreign_keys = ON;");
+        Assert.Equal("s1,2024-11-03,3000,0,,0|s2,2024-11-04,2000,0,,1", TestDatabaseFolder.Scalar(
+            migrated,
+            """
+            SELECT group_concat(Id || ',' || SaleDate || ',' || Total || ',' || IsCredit || ',' ||
+                ifnull(CustomerId, '') || ',' || IsDeleted, '|') FROM (SELECT * FROM Sales ORDER BY Id)
+            """));
+        Assert.Equal(2L, TestDatabaseFolder.Scalar(migrated, "SELECT COUNT(*) FROM SaleItems"));
+        Assert.Equal("ok", TestDatabaseFolder.Scalar(migrated, "PRAGMA integrity_check"));
+        Assert.Null(TestDatabaseFolder.Scalar(migrated, "PRAGMA foreign_key_check"));
+
+        const string Insert =
+            "INSERT INTO Sales (Id, SaleDate, Total, CreatedAt, UpdatedAt, IsDeleted, IsCredit, CustomerId) " +
+            "VALUES ('{0}', '2024-11-05', 1000, '2024-11-05 09:00:00', '2024-11-05 09:00:00', 0, {1}, {2})";
+
+        TestDatabaseFolder.Execute(migrated, string.Format(Insert, "ok", 1, "'c1'"));
+        AssertRefused("CHECK", string.Format(Insert, "credit-alone", 1, "NULL"));
+        AssertRefused("CHECK", string.Format(Insert, "cash-with-customer", 0, "'c1'"));
+        AssertRefused("FOREIGN KEY", string.Format(Insert, "unknown-customer", 1, "'nobody'"));
+
+        void AssertRefused(string constraint, string sql)
+        {
+            var exception = Assert.Throws<SqliteException>(() => TestDatabaseFolder.Execute(migrated, sql));
+            Assert.Contains(constraint, exception.Message);
+        }
     }
 
     [Fact]

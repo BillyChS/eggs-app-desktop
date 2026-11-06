@@ -6,6 +6,7 @@ import { Screen } from '../../layout/Screen'
 import { getCustomer, type Customer } from '../../services/customers'
 import { hasStatus } from '../../services/http'
 import centered from '../CenteredMessage.module.css'
+import { statementOf } from './customerText'
 import { CustomerForm } from './CustomerForm'
 
 type Load = { state: 'loading' } | { state: 'failed' } | { state: 'gone' } | { state: 'ready'; customer: Customer }
@@ -46,7 +47,7 @@ export function EditCustomerScreen() {
   }
 
   return (
-    <Screen title="Editar cliente" backTo="/clientes">
+    <Screen title="Editar cliente" backTo={statementOf(id)}>
       {load.state === 'ready' ? (
         <CustomerForm customer={load.customer} />
       ) : load.state === 'failed' ? (

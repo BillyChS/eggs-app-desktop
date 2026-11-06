@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react'
+import { listPayments, type PaymentList } from '../../services/payments'
 import { listSales, type SaleList } from '../../services/sales'
 
-interface Result extends SaleList {
-  /** The day these sales are from, which can lag behind the day asked for. */
+export interface DayList extends SaleList {
+  /** The abonos paid that day, which are income of the day too. */
+  payments: PaymentList
+}
+
+interface Result extends DayList {
+  /** The day these are from, which can lag behind the day asked for. */
   day: string
 }
 
-/** Loads the sales of a day. An answer that comes late is dropped. */
+/** Loads the sales and abonos of a day. An answer that comes late is dropped. */
 export function useSaleList(day: string) {
   const [result, setResult] = useState<Result | null>(null)
   const [failedDay, setFailedDay] = useState<string | null>(null)
@@ -15,10 +21,10 @@ export function useSaleList(day: string) {
   useEffect(() => {
     const controller = new AbortController()
 
-    listSales(day, day, controller.signal)
-      .then((list) => {
+    Promise.all([listSales(day, day, controller.signal), listPayments(day, day, controller.signal)])
+      .then(([sales, payments]) => {
         if (!controller.signal.aborted) {
-          setResult({ ...list, day })
+          setResult({ ...sales, payments, day })
           setFailedDay(null)
         }
       })

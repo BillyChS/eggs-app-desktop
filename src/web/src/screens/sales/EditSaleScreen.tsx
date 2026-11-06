@@ -1,74 +1,50 @@
-import { useEffect, useState } from 'react'
-import { Navigate, useParams } from 'react-router'
-import { Button } from '../../components/Button'
-import { useMessages } from '../../components/messages'
+import { Navigate, useParams, useSearchParams } from 'react-router'
+import { LoadProblem } from '../../layout/LoadProblem'
 import { Screen } from '../../layout/Screen'
-import { hasStatus } from '../../services/http'
-import { getSale, type Sale } from '../../services/sales'
+import { useLoad } from '../../layout/useLoad'
+import { formatDateLong } from '../../lib/dates'
+import { formatColones } from '../../lib/money'
+import { getSale } from '../../services/sales'
 import centered from '../CenteredMessage.module.css'
+import { statementOf } from '../customers/customerText'
 import { SaleForm } from './SaleForm'
 import { listOfDay, useSaleDay } from './useSaleDay'
-
-type Load = { state: 'loading' } | { state: 'failed' } | { state: 'gone' } | { state: 'ready'; sale: Sale }
 
 export function EditSaleScreen() {
   const { id = '' } = useParams()
   const { day } = useSaleDay()
-  const { showError } = useMessages()
-  const [load, setLoad] = useState<Load>({ state: 'loading' })
-  const [attempt, setAttempt] = useState(0)
+  const [params] = useSearchParams()
+  const { load, retry } = useLoad(id, (signal) => getSale(id, signal), 'Esta venta ya no existe.')
 
-  useEffect(() => {
-    const controller = new AbortController()
-
-    getSale(id, controller.signal)
-      .then((sale) => {
-        if (!controller.signal.aborted) {
-          setLoad({ state: 'ready', sale })
-        }
-      })
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) {
-          return
-        }
-
-        if (hasStatus(error, 404)) {
-          showError('Esta venta ya no existe.')
-          setLoad({ state: 'gone' })
-        } else {
-          setLoad({ state: 'failed' })
-        }
-      })
-
-    return () => controller.abort()
-  }, [id, attempt, showError])
+  // Opened from a customer's account ("?cliente="), it goes back there; otherwise to the day of the sale.
+  const fromCustomer = params.get('cliente')
+  const returnTo = fromCustomer
+    ? statementOf(fromCustomer)
+    : listOfDay(load.state === 'ready' ? load.value.date : day)
 
   if (load.state === 'gone') {
-    return <Navigate to={listOfDay(day)} replace />
+    return <Navigate to={returnTo} replace />
   }
 
   return (
-    <Screen title="Editar venta" backTo={listOfDay(load.state === 'ready' ? load.sale.date : day)}>
-      {load.state === 'ready' ? (
-        <SaleForm sale={load.sale} startDay={load.sale.date} />
-      ) : load.state === 'failed' ? (
+    <Screen title="Editar venta" backTo={returnTo}>
+      {load.state !== 'ready' ? (
+        <LoadProblem state={load.state} failedMessage="No se pudo abrir esta venta." onRetry={retry} />
+      ) : load.value.customer?.isDeleted ? (
         <div className={centered.center}>
-          <p role="alert" className={centered.text}>
-            No se pudo abrir esta venta.
+          <p role="status" className={centered.text}>
+            Venta fiada de {formatColones(load.value.total)}, {formatDateLong(load.value.date)}.
           </p>
-          <Button
-            onClick={() => {
-              setLoad({ state: 'loading' })
-              setAttempt((current) => current + 1)
-            }}
-          >
-            Intentar de nuevo
-          </Button>
+          <p className={centered.detail}>
+            Es de {load.value.customer.name}, un cliente que se borró, así que ya no se puede cambiar.
+          </p>
         </div>
       ) : (
-        <p role="status" className={centered.center}>
-          Cargando…
-        </p>
+        <SaleForm
+          sale={load.value}
+          startDay={load.value.date}
+          returnTo={fromCustomer ? returnTo : undefined}
+        />
       )}
     </Screen>
   )

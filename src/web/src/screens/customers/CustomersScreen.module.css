@@ -4,11 +4,29 @@
   top: calc(-1 * var(--space-lg));
   z-index: 1;
   display: flex;
-  align-items: flex-end;
-  gap: var(--space-lg);
+  flex-direction: column;
+  gap: var(--space-sm);
   margin: calc(-1 * var(--space-lg)) calc(-1 * var(--space-lg)) 0;
   padding: var(--space-md) var(--space-lg);
   background-color: var(--color-background);
+}
+
+.controls {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-lg);
+}
+
+.owing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm) var(--space-lg);
+}
+
+.owedTotal {
+  font-size: var(--font-size-input);
 }
 
 .search {
@@ -51,7 +69,26 @@
   text-align: left;
   cursor: pointer;
   /* Tabbing to a row must not leave it hidden under the toolbar. */
-  scroll-margin-top: 150px;
+  scroll-margin-top: 230px;
+}
+
+.rowEnd {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.owes {
+  font-size: var(--font-size-input);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.upToDate {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-body);
+  white-space: nowrap;
 }
 
 .row:hover {

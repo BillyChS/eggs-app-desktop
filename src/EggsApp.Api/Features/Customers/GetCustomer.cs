@@ -10,6 +10,6 @@ public static class GetCustomer
     {
         var customer = await db.Customers.AsNoTracking().FirstOrDefaultAsync(candidate => candidate.Id == id);
 
-        return customer is null ? null : CustomerDetail.From(customer);
+        return customer is null ? null : CustomerDetail.From(customer, (await CustomerAccounts.ReadAsync(db, id)).Balance);
     }
 }

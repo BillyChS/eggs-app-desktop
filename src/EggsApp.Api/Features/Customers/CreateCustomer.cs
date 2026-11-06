@@ -11,6 +11,6 @@ public static class CreateCustomer
         db.Customers.Add(customer);
         await db.SaveChangesAsync();
 
-        return CustomerDetail.From(customer);
+        return CustomerDetail.From(customer, balance: 0);
     }
 }

@@ -13,6 +13,6 @@ public static class GetSale
             .Include(candidate => candidate.Items)
             .FirstOrDefaultAsync(candidate => candidate.Id == id);
 
-        return sale is null ? null : SaleDetail.From(sale);
+        return sale is null ? null : await SaleCredit.DescribeAsync(db, sale);
     }
 }
