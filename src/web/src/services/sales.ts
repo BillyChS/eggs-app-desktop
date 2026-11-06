@@ -1,3 +1,4 @@
+import type { CustomerRef } from './customers'
 import { request } from './http'
 
 /** A holds 15 eggs and B holds 30. */
@@ -18,17 +19,27 @@ export interface Sale {
   /** Local YYYY-MM-DD. */
   date: string
   total: number
+  /** Fiado: owed by the customer instead of paid. */
+  isCredit: boolean
+  /** Who owes a credit sale, even if they were deleted since. Null for a cash sale. */
+  customer: CustomerRef | null
   items: SaleItem[]
 }
 
 export interface SaleInput {
   date: string
   items: SaleItemInput[]
+  isCredit: boolean
+  /** Only for a credit sale. */
+  customerId: string | null
 }
 
 export interface SaleList {
   sales: Sale[]
+  /** Income: cash sales only. */
   cashTotal: number
+  /** Sold on credit: owed, not income. */
+  creditTotal: number
 }
 
 /** The price to start with per carton type. A type that has never been sold isn't there. */

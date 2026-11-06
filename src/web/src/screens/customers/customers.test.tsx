@@ -4,8 +4,8 @@ import { createMemoryRouter, RouterProvider } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { routes } from '../../routes'
 
-const MARIA = { id: '1', name: 'María Rodríguez', phone: '8888-8888', notes: 'Casa verde' }
-const PEDRO = { id: '2', name: 'Pedro Solís', phone: null, notes: null }
+const MARIA = { id: '1', name: 'María Rodríguez', phone: '8888-8888', notes: 'Casa verde', balance: 8000 }
+const PEDRO = { id: '2', name: 'Pedro Solís', phone: null, notes: null, balance: 0 }
 
 interface Call {
   method: string
@@ -45,9 +45,10 @@ beforeEach(() => {
   calls.length = 0
   handlers = {
     'GET /api/health': () => json({ status: 'ok', time: '2026-11-04T10:00:00' }),
-    'GET /api/customers': () => json({ items: [MARIA, PEDRO] }),
-    'GET /api/customers/similar': () => json({ items: [] }),
+    'GET /api/customers': () => json({ items: [MARIA, PEDRO], owedTotal: 8000 }),
+    'GET /api/customers/similar': () => json({ items: [], owedTotal: 0 }),
     'GET /api/customers/1': () => json(MARIA),
+    'GET /api/customers/1/statement': () => json({ ...MARIA, entries: [] }),
     'POST /api/customers': () => json(MARIA, 201),
     'PUT /api/customers/1': () => json(MARIA),
     'DELETE /api/customers/1': () => new Response(null, { status: 204 }),
@@ -56,22 +57,29 @@ beforeEach(() => {
 })
 
 describe('customer list', () => {
-  it('shows name and phone, and says when there is no phone', async () => {
+  it('shows name, phone and balance, and says when there is no phone', async () => {
     open('/clientes')
 
     const rows = await screen.findAllByRole('listitem')
 
-    expect(rows.map((row) => row.textContent)).toEqual(['María Rodríguez8888-8888', 'Pedro SolísSin teléfono'])
+    expect(rows.map((row) => row.textContent)).toEqual([
+      'María Rodríguez8888-8888Debe ₡8.000',
+      'Pedro SolísSin teléfonoAl día',
+    ])
   })
 
-  it('a row opens that customer, and Nuevo cliente opens an empty form', async () => {
+  it('a row opens the account of that customer, which edits them, and Nuevo cliente opens an empty form', async () => {
     const { router, user } = open('/clientes')
 
     await user.click(await screen.findByRole('button', { name: /María Rodríguez/ }))
+    expect(router.state.location.pathname).toBe('/clientes/1')
+    await user.click(await screen.findByRole('button', { name: 'Editar cliente' }))
     expect(router.state.location.pathname).toBe('/clientes/1/editar')
     expect(await screen.findByDisplayValue('María Rodríguez')).toBeTruthy()
 
     await user.click(button('Volver'))
+    expect(router.state.location.pathname).toBe('/clientes/1')
+    await user.click(await screen.findByRole('button', { name: 'Volver' }))
     await user.click(await screen.findByRole('button', { name: 'Nuevo cliente' }))
     expect(router.state.location.pathname).toBe('/clientes/nuevo')
     expect((screen.getByLabelText('Nombre') as HTMLInputElement).value).toBe('')
@@ -233,7 +241,7 @@ describe('customer form: saving', () => {
       phone: '',
       notes: 'Casa verde',
     })
-    expect(router.state.location.pathname).toBe('/clientes')
+    expect(router.state.location.pathname).toBe('/clientes/1')
   })
 
   it('shows what the API refuses next to its field and stays on the form', async () => {
@@ -367,7 +375,7 @@ describe('customer form: unsaved changes', () => {
     await user.click(button('Volver'))
 
     expect(screen.queryByRole('alertdialog')).toBeNull()
-    expect(router.state.location.pathname).toBe('/clientes')
+    expect(router.state.location.pathname).toBe('/clientes/1')
   })
 
   it('a change that is only spaces counts as no change', async () => {
@@ -377,7 +385,7 @@ describe('customer form: unsaved changes', () => {
     await user.click(button('Volver'))
 
     expect(screen.queryByRole('alertdialog')).toBeNull()
-    expect(router.state.location.pathname).toBe('/clientes')
+    expect(router.state.location.pathname).toBe('/clientes/1')
   })
 
   it.each(['Volver', 'Inicio'])('%s asks first; No, seguir aquí stays with the text intact', async (exit) => {

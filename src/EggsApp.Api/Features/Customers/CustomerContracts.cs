@@ -10,15 +10,15 @@ public sealed record CustomerFields(string Name, string? Phone, string? Notes);
 // without changing what existing callers read.
 
 /// <summary>A row of a customer list.</summary>
-public sealed record CustomerSummary(Guid Id, string Name, string? Phone);
+/// <param name="Balance">What they owe now; 0 if they're up to date.</param>
+public sealed record CustomerSummary(Guid Id, string Name, string? Phone, long Balance);
 
-public sealed record CustomerListResponse(IReadOnlyList<CustomerSummary> Items);
+/// <param name="OwedTotal">What all active customers owe together, whatever the search.</param>
+public sealed record CustomerListResponse(IReadOnlyList<CustomerSummary> Items, long OwedTotal);
 
-public sealed record CustomerDetail(Guid Id, string Name, string? Phone, string? Notes)
+/// <param name="Balance">What they owe now; 0 if they're up to date.</param>
+public sealed record CustomerDetail(Guid Id, string Name, string? Phone, string? Notes, long Balance = 0)
 {
-    public static CustomerDetail From(Customer customer) =>
-        new(customer.Id, customer.Name, customer.Phone, customer.Notes);
+    public static CustomerDetail From(Customer customer, long balance) =>
+        new(customer.Id, customer.Name, customer.Phone, customer.Notes, balance);
 }
-
-/// <summary>Why something was refused, in Spanish, to show as it is.</summary>
-public sealed record CustomerRefusal(string Message);

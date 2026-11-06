@@ -20,6 +20,6 @@ public static class UpdateCustomer
         customer.Notes = fields.Notes;
         await db.SaveChangesAsync();
 
-        return CustomerDetail.From(customer);
+        return CustomerDetail.From(customer, (await CustomerAccounts.ReadAsync(db, id)).Balance);
     }
 }

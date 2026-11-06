@@ -1,4 +1,5 @@
 using EggsApp.Api.Data;
+using EggsApp.Api.Features.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace EggsApp.Api.Features.Customers;
@@ -28,7 +29,7 @@ public static class DeleteCustomer
             return new DeleteCustomerResult(DeleteCustomerOutcome.NotFound);
         }
 
-        var blocker = await FindBlockerAsync();
+        var blocker = await FindBlockerAsync(db, customer);
 
         if (blocker is not null)
         {
@@ -41,7 +42,15 @@ public static class DeleteCustomer
         return new DeleteCustomerResult(DeleteCustomerOutcome.Deleted);
     }
 
-    // The rule for a pending balance goes here, once credit sales exist. Return the Spanish message to show: the
-    // endpoint answers 409 with it, and the UI shows it as it is.
-    private static Task<string?> FindBlockerAsync() => Task.FromResult<string?>(null);
+    // Returns the Spanish message to show: the endpoint answers 409 with it, and the UI shows it as it is. Once
+    // deleted, a customer's balance can't be seen anywhere, so only one who owes nothing can go. Their sales and
+    // abonos stay, and can't be changed after (see SaleCredit and PaymentRules).
+    private static async Task<string?> FindBlockerAsync(AppDbContext db, Customer customer)
+    {
+        var balance = (await CustomerAccounts.ReadAsync(db, customer.Id)).Balance;
+
+        return balance > 0
+            ? $"{customer.Name} todavía debe {Colones.Format(balance)}. Solo se puede borrar un cliente que esté al día."
+            : null;
+    }
 }

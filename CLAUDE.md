@@ -22,6 +22,7 @@ src/
     Data/                      AppDbContext, BaseEntity, DatabaseMigrator (startup migration)
     Data/Migrations/           EF Core migrations
     Features/<Feature>/        Vertical slices (e.g. Features/Customers/: one file per action, plus CustomerEndpoints.cs)
+    Features/Common/           Outcome (200/400/404/409 from a handler), Refusal, CalendarDays, Colones
     wwwroot/                   React build output (git-ignored)
   EggsApp.Desktop/             WPF shell (net10.0-windows); hosts the API in-process + WebView2
     App.xaml.cs                Startup order, shutdown, failure handling
@@ -94,15 +95,20 @@ touch the real data; set `Database:Path` to override it for the standalone API.
 - **Customers:** names aren't unique, so there's no unique index and a deleted customer's name can be reused; the UI
   asks before saving a similar name. A deleted customer is gone from lists, search and the similar-name check, and
   `GET`, `PUT` and `DELETE` answer 404. There's no undelete screen, but the row stays. Sales must keep showing a deleted
-  customer's name, which takes `IgnoreQueryFilters`. A pending balance will block deletion: the rule goes in
-  `DeleteCustomer.FindBlockerAsync`, and the API (409) and UI already handle its Spanish message.
+  customer's name, which takes `IgnoreQueryFilters` (`CustomerAccounts.FindRefsAsync`). Only a customer who owes nothing
+  can be deleted (`DeleteCustomer.FindBlockerAsync`, 409); their sales and abonos stay and can't change after.
 - **Comparing names:** use `CustomerNames`, in C#. SQLite's `LIKE` and `ORDER BY` get accents and Spanish order wrong.
 - **Sales:** a `Sale` is one purchase, like an invoice, with `SaleItem` lines (carton type A = 15 eggs or B = 30, whole
   quantity, unit price). The server calculates `LineTotal` and `Total` and ignores any sent to it; there's no way to
   override a total. `SaleDate` is a `DateOnly`, so no clock or time zone can move a sale to another day. Editing keeps
   the sale's id and replaces all its lines; deleting soft-deletes the lines too, by loading them.
-- **Income:** cash-basis. A cash sale counts on its sale date. A future credit flag and customer go on `Sale`, and
-  `cashTotal` in `ListSales` must then skip credit sales: they become income only through abonos.
+- **Income:** cash-basis. A cash sale counts on its sale date, and an abono on its payment date. A credit sale (fiado)
+  is never income: it's owed. `cashTotal` skips credit sales; Ventas shows "Entró" as cash sales plus abonos.
+- **Credit:** a credit sale has `IsCredit` and a `CustomerId`, and a cash sale has neither (a check constraint).
+  Each customer has one running account: balance = their credit sales − their abonos (`Payment`), worked out on every
+  read, never stored. An abono isn't tied to a sale. The balance never goes below 0: an abono can't be more than is
+  owed, and editing, moving or deleting a credit sale is refused (409) if it would leave less than was already paid.
+  A new sale must be told "Al contado" or "Fiado" each time; there's no default.
 - **Last prices:** the form starts with the price of the latest active line per carton type, by sale date rather than
   entry date, so typing in an old sale doesn't replace the current price.
 - **Backend:** Vertical Slice Architecture. Build order: Command → Validator → Handler → Entity → Endpoint → Migration.
@@ -119,8 +125,10 @@ touch the real data; set `Database:Path` to override it for the standalone API.
 - **Navigation:** "‹ Volver" goes to the parent screen, never browser history, so it still works after a reload.
 - **Forms:** use `useUnsavedChanges` so leaving asks first. It also tells the window, which asks before closing. Don't
   disable the button being pressed while saving, because that loses keyboard focus: use `useOneAtATime`.
-- **Sale form keyboard:** Enter moves on (type → quantity → price → "Guardar venta") and never saves from a field; only
-  activating the button saves. So that form has no `<form>` element, and a held-down Enter is ignored.
+- **Sale and abono form keyboard:** Enter moves on (type → quantity → price → "Al contado" until a payment is chosen →
+  "Guardar venta"; amount → note → "Guardar abono") and never saves from a field; only activating the button saves.
+  So these forms have no `<form>` element, and a held-down Enter is ignored. Both must keep their save button in sight
+  at 1093×560.
 - **Data safety:** never commit `.db` files or backup JSON files.
 - **Commits:** Conventional Commits with a footer `Refs: AB#<id>` (Azure Boards) when a ticket exists. No co-author or attribution trailers; commits are authored solely by the user.
 - **Screenshots:** never capture the full screen; only capture the app's own windows.

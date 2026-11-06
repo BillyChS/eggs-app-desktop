@@ -16,8 +16,9 @@ const line = (cartonType: 'A' | 'B', quantity: number, unitPrice: number) => ({
   lineTotal: quantity * unitPrice,
 })
 
-const MIXED = { id: '1', date: OLD_DAY, total: 5000, items: [line('A', 3, 1000), line('B', 1, 2000)] }
-const SINGLE = { id: '2', date: OLD_DAY, total: 4000, items: [line('B', 2, 2000)] }
+const CASH = { isCredit: false, customer: null }
+const MIXED = { id: '1', date: OLD_DAY, total: 5000, ...CASH, items: [line('A', 3, 1000), line('B', 1, 2000)] }
+const SINGLE = { id: '2', date: OLD_DAY, total: 4000, ...CASH, items: [line('B', 2, 2000)] }
 
 interface Call {
   method: string
@@ -60,6 +61,7 @@ const price = () => field('Precio por cartón')
 const carton15 = () => button('Cartón de 15 huevos')
 const carton30 = () => button('Cartón de 30 huevos')
 const save = () => button('Guardar venta')
+const cash = () => button('Al contado')
 const add = () => button('Agregar otro cartón')
 const saleTotal = () => screen.getByText('Total de la venta').parentElement!.textContent
 const subtotalShown = () => screen.getByText('Subtotal').parentElement!.textContent
@@ -70,6 +72,12 @@ const doneLines = () =>
     .map((row) => row.firstChild!.textContent)
 
 type User = ReturnType<typeof userEvent.setup>
+
+/** Saves as a cash sale, which a new sale must be told it is. */
+async function saveCash(user: User) {
+  await user.click(cash())
+  await user.click(save())
+}
 
 async function fillLine(user: User, carton: HTMLElement, howMany: string, howMuch: string) {
   await user.click(carton)
@@ -83,14 +91,15 @@ beforeEach(() => {
   calls.length = 0
   handlers = {
     'GET /api/health': () => json({ status: 'ok', time: '2026-11-04T10:00:00' }),
-    'GET /api/sales': () => json({ sales: [], cashTotal: 0 }),
+    'GET /api/sales': () => json({ sales: [], cashTotal: 0, creditTotal: 0 }),
+    'GET /api/payments': () => json({ payments: [], total: 0 }),
     'GET /api/sales/last-prices': () => json({}),
     'GET /api/sales/1': () => json(MIXED),
     'GET /api/sales/2': () => json(SINGLE),
     'POST /api/sales': ({ body }) => {
       const { date, items } = body as { date: string; items: { quantity: number; unitPrice: number }[] }
       const total = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
-      return json({ id: '9', date, total, items }, 201)
+      return json({ id: '9', date, total, ...CASH, items }, 201)
     },
     'PUT /api/sales/1': () => json(MIXED),
     'PUT /api/sales/2': () => json(SINGLE),
@@ -118,18 +127,18 @@ describe('sales list', () => {
   })
 
   it('shows one row per sale with its summary and total, and the total of the day', async () => {
-    handlers['GET /api/sales'] = () => json({ sales: [MIXED, SINGLE], cashTotal: 9000 })
+    handlers['GET /api/sales'] = () => json({ sales: [MIXED, SINGLE], cashTotal: 9000, creditTotal: 0 })
 
     open(`/ventas?fecha=${OLD_DAY}`)
 
     const rows = await screen.findAllByRole('listitem')
     expect(rows.map((row) => row.textContent)).toEqual(['3 de 15 · 1 de 30₡5.000', '2 de 30₡4.000'])
-    expect(screen.getByText('Total del día').parentElement!.textContent).toBe('Total del día₡9.000')
+    expect(screen.getByText('Entró').parentElement!.textContent).toBe('Entró₡9.000')
   })
 
   it('a summary adds up the same type bought at different prices', async () => {
     const sale = { ...MIXED, items: [line('A', 2, 1000), line('B', 1, 2000), line('A', 1, 900)] }
-    handlers['GET /api/sales'] = () => json({ sales: [sale], cashTotal: 4900 })
+    handlers['GET /api/sales'] = () => json({ sales: [sale], cashTotal: 4900, creditTotal: 0 })
 
     open(`/ventas?fecha=${OLD_DAY}`)
 
@@ -203,14 +212,14 @@ describe('sales list', () => {
           answerOld = resolve
         })
       }
-      return json({ sales: [], cashTotal: 0 })
+      return json({ sales: [], cashTotal: 0, creditTotal: 0 })
     }
 
     const { user } = open(`/ventas?fecha=${OLD_DAY}`)
     await user.click(button('Hoy'))
     await screen.findByText('Todavía no hay ventas hoy.')
 
-    answerOld(json({ sales: [MIXED], cashTotal: 5000 }))
+    answerOld(json({ sales: [MIXED], cashTotal: 5000, creditTotal: 0 }))
     await new Promise((resolve) => setTimeout(resolve, 20))
 
     expect(screen.queryByText('₡5.000')).toBeNull()
@@ -220,15 +229,16 @@ describe('sales list', () => {
   it('never shows the total of another day while the new one loads', async () => {
     handlers['GET /api/sales'] = ({ url }) =>
       url.searchParams.get('from') === OLD_DAY
-        ? json({ sales: [MIXED], cashTotal: 5000 })
+        ? json({ sales: [MIXED], cashTotal: 5000, creditTotal: 0 })
         : new Promise(() => {})
 
     const { user } = open(`/ventas?fecha=${OLD_DAY}`)
-    await screen.findByText('Total del día')
+    await screen.findByText('Entró')
 
     await user.click(button('Hoy'))
 
-    expect(screen.queryByText('Total del día')).toBeNull()
+    expect(screen.queryByText('Entró hoy')).toBeNull()
+    expect(screen.queryByText('Entró')).toBeNull()
     expect(screen.getByText('Cargando…')).toBeTruthy()
   })
 
@@ -244,7 +254,7 @@ describe('sales list', () => {
   })
 
   it('a row opens that sale, and Volver returns to its day', async () => {
-    handlers['GET /api/sales'] = () => json({ sales: [SINGLE], cashTotal: 4000 })
+    handlers['GET /api/sales'] = () => json({ sales: [SINGLE], cashTotal: 4000, creditTotal: 0 })
 
     const { router, user } = open(`/ventas?fecha=${OLD_DAY}`)
     await user.click(await screen.findByRole('button', { name: /2 de 30/ }))
@@ -263,7 +273,7 @@ describe('sales list', () => {
 
     expect((await screen.findByRole('alert')).textContent).toBe('No se pudieron cargar las ventas.')
 
-    handlers['GET /api/sales'] = () => json({ sales: [], cashTotal: 0 })
+    handlers['GET /api/sales'] = () => json({ sales: [], cashTotal: 0, creditTotal: 0 })
     await user.click(button('Intentar de nuevo'))
 
     expect(await screen.findByText('Todavía no hay ventas hoy.')).toBeTruthy()
@@ -350,7 +360,7 @@ describe('sale form: one line', () => {
   it('a blank form shows what is missing, on the first thing missing, and sends nothing', async () => {
     const { user } = open('/ventas/nueva')
 
-    await user.click(save())
+    await saveCash(user)
 
     expect(screen.getByText('Escoja el tipo de cartón.')).toBeTruthy()
     expect(screen.getByText('Escriba el precio por cartón.')).toBeTruthy()
@@ -360,7 +370,7 @@ describe('sale form: one line', () => {
 
   it('an error goes away once that field changes', async () => {
     const { user } = open('/ventas/nueva')
-    await user.click(save())
+    await saveCash(user)
 
     await user.click(carton15())
     expect(screen.queryByText('Escoja el tipo de cartón.')).toBeNull()
@@ -379,7 +389,7 @@ describe('sale form: one line', () => {
     const { user } = open('/ventas/nueva')
 
     await fillLine(user, carton15(), howMany, '1000')
-    await user.click(save())
+    await saveCash(user)
 
     expect(screen.getByText(message)).toBeTruthy()
     expect(document.activeElement).toBe(quantity())
@@ -392,7 +402,7 @@ describe('sale form: one line', () => {
     await user.click(carton15())
     await user.clear(quantity())
     await user.type(price(), '1000')
-    await user.click(save())
+    await saveCash(user)
 
     expect(screen.getByText('Escriba la cantidad de cartones.')).toBeTruthy()
     expect(posted()).toEqual([])
@@ -402,7 +412,7 @@ describe('sale form: one line', () => {
     const { user } = open('/ventas/nueva')
 
     await fillLine(user, carton15(), '1', '1000001')
-    await user.click(save())
+    await saveCash(user)
 
     expect(screen.getByText('El precio no puede ser mayor que ₡1.000.000.')).toBeTruthy()
     expect(document.activeElement).toBe(price())
@@ -415,13 +425,15 @@ describe('sale form: saving', () => {
     const { router, user } = open(`/ventas/nueva?fecha=${OLD_DAY}`)
 
     await fillLine(user, carton15(), '3', '1000')
-    await user.click(save())
+    await saveCash(user)
 
     const success = await dialog()
     expect(success.textContent).toContain(`Venta guardada: ₡3.000, ${formatDateLong(OLD_DAY)}.`)
     expect(posted()[0].body).toEqual({
       date: OLD_DAY,
       items: [{ cartonType: 'A', quantity: 3, unitPrice: 1000 }],
+      isCredit: false,
+      customerId: null,
     })
     expect(address(router)).toBe(`/ventas?fecha=${OLD_DAY}`)
   })
@@ -431,7 +443,7 @@ describe('sale form: saving', () => {
 
     await fillLine(user, carton30(), '1', '2000')
     await user.click(button('Ayer'))
-    await user.click(save())
+    await saveCash(user)
 
     await dialog()
     expect((posted()[0].body as { date: string }).date).toBe(YESTERDAY)
@@ -443,7 +455,7 @@ describe('sale form: saving', () => {
 
     await fillLine(user, carton30(), '1', '2000')
     fireEvent.change(field('Fecha'), { target: { value: '' } })
-    await user.click(save())
+    await saveCash(user)
 
     expect(screen.getByText('Escoja la fecha de la venta.')).toBeTruthy()
     expect(document.activeElement).toBe(field('Fecha'))
@@ -454,6 +466,7 @@ describe('sale form: saving', () => {
     const { user } = open('/ventas/nueva')
 
     await fillLine(user, carton30(), '1', '2000')
+    await user.click(cash())
     await user.dblClick(save())
 
     await dialog()
@@ -477,7 +490,7 @@ describe('sale form: saving', () => {
     await fillLine(user, carton15(), '1', '1000')
     await user.click(add())
     await fillLine(user, carton30(), '1', '2000')
-    await user.click(save())
+    await saveCash(user)
 
     await screen.findByText('La fecha no puede ser futura.')
     const firstLine = screen.getByRole('list', { name: 'Cartones de esta venta' })
@@ -493,7 +506,7 @@ describe('sale form: saving', () => {
 
     const { router, user } = open('/ventas/nueva')
     await fillLine(user, carton15(), '3', '1000')
-    await user.click(save())
+    await saveCash(user)
 
     const error = await dialog()
     expect(error.textContent).toContain('No se pudo guardar la venta.')
@@ -544,7 +557,7 @@ describe('sale form: several lines', () => {
     await fillLine(user, carton30(), '1', '2000')
     await user.click(add())
     await fillLine(user, carton15(), '1', '900')
-    await user.click(save())
+    await saveCash(user)
 
     expect((await dialog()).textContent).toContain('₡4.900')
     expect((posted()[0].body as { items: unknown[] }).items).toEqual([
@@ -559,7 +572,7 @@ describe('sale form: several lines', () => {
 
     await fillLine(user, carton15(), '3', '1000')
     await user.click(add())
-    await user.click(save())
+    await saveCash(user)
 
     await dialog()
     expect((posted()[0].body as { items: unknown[] }).items.length).toBe(1)
@@ -575,7 +588,7 @@ describe('sale form: several lines', () => {
     await fillLine(user, carton15(), '3', '1000')
     await user.click(add())
     await touch(user)
-    await user.click(save())
+    await saveCash(user)
 
     expect(screen.getByText(message)).toBeTruthy()
     expect(posted()).toEqual([])
@@ -661,7 +674,7 @@ describe('sale form: several lines', () => {
     expect(screen.getByText('Una venta no puede tener más de 20 líneas.')).toBeTruthy()
     expect(doneLines().length).toBe(19)
 
-    await user.click(save())
+    await saveCash(user)
     await dialog()
     expect((posted()[0].body as { items: unknown[] }).items.length).toBe(20)
   }, 30_000)
@@ -735,7 +748,7 @@ describe('sale form: last prices', () => {
 
     expect(price().value).toBe('1.200')
 
-    await user.click(save())
+    await saveCash(user)
     await dialog()
     expect((posted()[0].body as { items: { unitPrice: number }[] }).items[0].unitPrice).toBe(1200)
   })
@@ -745,7 +758,7 @@ describe('sale form: last prices', () => {
 
     await user.click(carton15())
     await waitFor(() => expect(price().value).toBe('1.000'))
-    await user.click(save())
+    await saveCash(user)
 
     await dialog()
     expect((posted()[0].body as { items: { unitPrice: number }[] }).items[0].unitPrice).toBe(1000)
@@ -782,7 +795,7 @@ describe('sale form: last prices', () => {
     const { user } = open('/ventas/nueva')
 
     await fillLine(user, carton15(), '1', '900')
-    await user.click(save())
+    await saveCash(user)
 
     await dialog()
     expect(screen.queryByText(/No se pudo/)).toBeNull()
@@ -802,7 +815,7 @@ describe('sale form: last prices', () => {
 })
 
 describe('sale form: Enter', () => {
-  it('goes type → quantity → price → Guardar venta, saving only on the button itself', async () => {
+  it('goes type → quantity → price → Al contado → Guardar venta, saving only on the button itself', async () => {
     const { user } = open('/ventas/nueva')
     expect(document.activeElement).toBe(carton15())
 
@@ -816,6 +829,11 @@ describe('sale form: Enter', () => {
     await user.keyboard('1000')
 
     await user.keyboard('{Enter}')
+    expect(document.activeElement).toBe(cash())
+    expect(cash().getAttribute('aria-pressed')).toBe('false')
+
+    await user.keyboard('{Enter}')
+    expect(cash().getAttribute('aria-pressed')).toBe('true')
     expect(document.activeElement).toBe(save())
     expect(posted()).toEqual([])
     expect(screen.queryByRole('alertdialog')).toBeNull()
@@ -836,7 +854,19 @@ describe('sale form: Enter', () => {
 
     await user.keyboard('{Enter}')
     expect(posted()).toEqual([])
+    expect(document.activeElement).toBe(cash())
+  })
+
+  it('once the payment is chosen, the price moves straight to Guardar venta', async () => {
+    const { user } = open('/ventas/nueva')
+    await fillLine(user, carton15(), '3', '1000')
+    await user.click(cash())
+
+    await user.click(price())
+    await user.keyboard('{Enter}')
+
     expect(document.activeElement).toBe(save())
+    expect(posted()).toEqual([])
   })
 
   it('moves on from an empty field too, without showing errors yet', async () => {
@@ -845,7 +875,7 @@ describe('sale form: Enter', () => {
     await user.click(price())
     await user.keyboard('{Enter}')
 
-    expect(document.activeElement).toBe(save())
+    expect(document.activeElement).toBe(cash())
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
@@ -860,7 +890,7 @@ describe('sale form: Enter', () => {
     expect(posted()).toEqual([])
   })
 
-  it('in the date field with no open line it moves to Guardar venta', async () => {
+  it('in the date field with no open line it moves on to the payment', async () => {
     const { user } = open('/ventas/nueva')
     await fillLine(user, carton15(), '3', '1000')
     await user.click(add())
@@ -869,7 +899,7 @@ describe('sale form: Enter', () => {
     field('Fecha').focus()
     await user.keyboard('{Enter}')
 
-    expect(document.activeElement).toBe(save())
+    expect(document.activeElement).toBe(cash())
   })
 
   it('holding Enter down does not run through the fields', async () => {
@@ -922,7 +952,7 @@ describe('sale form: editing', () => {
 
     await user.clear(price())
     await user.type(price(), '2500')
-    await user.click(save())
+    await saveCash(user)
 
     await dialog()
     expect(callsTo('PUT', '/api/sales/1')[0].body).toEqual({
@@ -931,6 +961,8 @@ describe('sale form: editing', () => {
         { cartonType: 'A', quantity: 3, unitPrice: 1000 },
         { cartonType: 'B', quantity: 1, unitPrice: 2500 },
       ],
+      isCredit: false,
+      customerId: null,
     })
     expect(posted()).toEqual([])
     expect(address(router)).toBe(`/ventas?fecha=${OLD_DAY}`)
@@ -950,7 +982,7 @@ describe('sale form: editing', () => {
 
     const { router, user } = open('/ventas/1/editar')
     await screen.findByLabelText('Cantidad')
-    await user.click(save())
+    await saveCash(user)
 
     expect((await dialog()).textContent).toContain('Esta venta ya no existe.')
     await waitFor(() => expect(router.state.location.pathname).toBe('/ventas'))
@@ -1048,7 +1080,7 @@ describe('sale form: unsaved changes', () => {
     const { user } = open('/ventas/nueva')
     await fillLine(user, carton15(), '3', '1000')
 
-    await user.click(save())
+    await saveCash(user)
 
     const success = await dialog()
     expect(success.textContent).toContain('Venta guardada')
@@ -1086,10 +1118,10 @@ describe('closing the window', () => {
     await fillLine(user, carton15(), '3', '1000')
     expect(postMessage).toHaveBeenLastCalledWith('unsaved-changes')
 
-    await user.click(save())
+    await saveCash(user)
 
     await dialog()
-    expect(postMessage).toHaveBeenLastCalledWith('no-unsaved-changes')
+    await waitFor(() => expect(postMessage).toHaveBeenLastCalledWith('no-unsaved-changes'))
   })
 
   it('leaving without saving clears it', async () => {

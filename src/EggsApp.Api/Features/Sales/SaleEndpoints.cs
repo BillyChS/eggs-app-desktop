@@ -1,4 +1,5 @@
 using EggsApp.Api.Data;
+using EggsApp.Api.Features.Common;
 
 namespace EggsApp.Api.Features.Sales;
 
@@ -10,22 +11,7 @@ public static class SaleEndpoints
 
         sales.MapGet("/", async (AppDbContext db, string? from, string? to) =>
             {
-                var errors = new Dictionary<string, string[]>();
-
-                if (!SaleValidator.TryParseDate(from, out var first))
-                {
-                    errors["from"] = ["Esa fecha no es válida."];
-                }
-
-                if (!SaleValidator.TryParseDate(to, out var last))
-                {
-                    errors["to"] = ["Esa fecha no es válida."];
-                }
-
-                if (errors.Count == 0 && first > last)
-                {
-                    errors["to"] = ["La fecha final no puede ser antes de la inicial."];
-                }
+                var errors = CalendarDays.ReadRange(from, to, out var first, out var last);
 
                 return errors.Count > 0
                     ? Results.ValidationProblem(errors)
@@ -51,8 +37,8 @@ public static class SaleEndpoints
                     return Results.ValidationProblem(errors);
                 }
 
-                var sale = await CreateSale.HandleAsync(db, fields);
-                return Results.Created($"/api/sales/{sale.Id}", sale);
+                var outcome = await CreateSale.HandleAsync(db, fields);
+                return outcome.ToResult(sale => Results.Created($"/api/sales/{sale.Id}", sale));
             })
             .WithName("CreateSale");
 
@@ -65,16 +51,13 @@ public static class SaleEndpoints
                     return Results.ValidationProblem(errors);
                 }
 
-                return await UpdateSale.HandleAsync(db, id, fields) is { } sale
-                    ? Results.Ok(sale)
-                    : Results.NotFound();
+                var outcome = await UpdateSale.HandleAsync(db, id, fields);
+                return outcome.ToResult(sale => Results.Ok(sale));
             })
             .WithName("UpdateSale");
 
         sales.MapDelete("/{id:guid}", async (AppDbContext db, Guid id) =>
-                await DeleteSale.HandleAsync(db, id)
-                    ? Results.NoContent()
-                    : Results.NotFound())
+                (await DeleteSale.HandleAsync(db, id)).ToResult(_ => Results.NoContent()))
             .WithName("DeleteSale");
 
         return api;

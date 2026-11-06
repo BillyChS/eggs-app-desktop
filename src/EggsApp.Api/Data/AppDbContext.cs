@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using EggsApp.Api.Features.Customers;
+using EggsApp.Api.Features.Payments;
 using EggsApp.Api.Features.Sales;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +17,8 @@ public class AppDbContext(DbContextOptions options) : DbContext(options)
     public DbSet<Sale> Sales => Set<Sale>();
 
     public DbSet<SaleItem> SaleItems => Set<SaleItem>();
+
+    public DbSet<Payment> Payments => Set<Payment>();
 
     /// <summary>The one place that defines how the app connects to its database.</summary>
     public static void Configure(DbContextOptionsBuilder options, string databasePath, Func<DateTime>? now = null)

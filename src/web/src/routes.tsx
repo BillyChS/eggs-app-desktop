@@ -2,10 +2,13 @@ import { Navigate, type RouteObject } from 'react-router'
 import { AppLayout } from './layout/AppLayout'
 import { ComingSoonScreen } from './screens/ComingSoonScreen'
 import { CustomersScreen } from './screens/customers/CustomersScreen'
+import { CustomerStatementScreen } from './screens/customers/CustomerStatementScreen'
 import { EditCustomerScreen } from './screens/customers/EditCustomerScreen'
 import { NewCustomerScreen } from './screens/customers/NewCustomerScreen'
 import { ErrorScreen } from './screens/ErrorScreen'
 import { HomeScreen } from './screens/HomeScreen'
+import { EditPaymentScreen } from './screens/payments/EditPaymentScreen'
+import { NewPaymentScreen } from './screens/payments/NewPaymentScreen'
 import { EditSaleScreen } from './screens/sales/EditSaleScreen'
 import { NewSaleScreen } from './screens/sales/NewSaleScreen'
 import { SalesScreen } from './screens/sales/SalesScreen'
@@ -31,7 +34,10 @@ export const routes: RouteObject[] = [
       { path: 'ventas/:id/editar', element: <EditSaleScreen /> },
       { path: 'clientes', element: <CustomersScreen /> },
       { path: 'clientes/nuevo', element: <NewCustomerScreen /> },
+      { path: 'clientes/:id', element: <CustomerStatementScreen /> },
       { path: 'clientes/:id/editar', element: <EditCustomerScreen /> },
+      { path: 'clientes/:id/abonos/nuevo', element: <NewPaymentScreen /> },
+      { path: 'clientes/:id/abonos/:paymentId/editar', element: <EditPaymentScreen /> },
       { path: 'gastos', element: <ComingSoonScreen title="Gastos" /> },
       { path: 'resumenes', element: <ComingSoonScreen title="Resúmenes" /> },
       ...devRoutes,

@@ -1,4 +1,5 @@
 using EggsApp.Api.Data;
+using EggsApp.Api.Features.Common;
 
 namespace EggsApp.Api.Features.Customers;
 
@@ -22,6 +23,12 @@ public static class CustomerEndpoints
                     ? Results.Ok(customer)
                     : Results.NotFound())
             .WithName("GetCustomer");
+
+        customers.MapGet("/{id:guid}/statement", async (AppDbContext db, Guid id) =>
+                await GetStatement.HandleAsync(db, id) is { } statement
+                    ? Results.Ok(statement)
+                    : Results.NotFound())
+            .WithName("GetCustomerStatement");
 
         customers.MapPost("/", async (AppDbContext db, CustomerCommand command) =>
             {
@@ -61,7 +68,7 @@ public static class CustomerEndpoints
                 return result.Outcome switch
                 {
                     DeleteCustomerOutcome.Deleted => Results.NoContent(),
-                    DeleteCustomerOutcome.Blocked => Results.Conflict(new CustomerRefusal(result.BlockedMessage!)),
+                    DeleteCustomerOutcome.Blocked => Results.Conflict(new Refusal(result.BlockedMessage!)),
                     _ => Results.NotFound(),
                 };
             })

@@ -11,4 +11,11 @@
 .text {
   font-size: var(--font-size-title);
   font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.detail {
+  max-width: 800px;
+  font-size: var(--font-size-input);
+  overflow-wrap: anywhere;
 }

@@ -1,0 +1,119 @@
+/* Stays visible while the entries scroll under it: the balance is what this screen is for. */
+.top {
+  position: sticky;
+  top: calc(-1 * var(--space-lg));
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-md) var(--space-lg);
+  margin: calc(-1 * var(--space-lg)) calc(-1 * var(--space-lg)) var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  background-color: var(--color-background);
+}
+
+.balance {
+  display: flex;
+  flex: 1 1 360px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-lg);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  font-size: var(--font-size-title);
+  font-weight: 700;
+}
+
+.owes strong {
+  font-size: 44px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-md);
+}
+
+.buttonContent {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  white-space: nowrap;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+}
+
+.list li + li {
+  border-top: 2px solid var(--color-divider);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  width: 100%;
+  min-height: 80px;
+  padding: var(--space-sm) var(--space-md);
+  border: none;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text);
+  font-size: var(--font-size-input);
+  text-align: left;
+  cursor: pointer;
+  /* Tabbing to a row must not leave it hidden under the balance. */
+  scroll-margin-top: 140px;
+}
+
+.row:hover {
+  background-color: var(--color-back);
+}
+
+.row svg {
+  flex-shrink: 0;
+}
+
+.date {
+  flex-shrink: 0;
+  width: 190px;
+  font-size: var(--font-size-body);
+}
+
+.description {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.amounts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.amount {
+  white-space: nowrap;
+}
+
+.after {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-body);
+  white-space: nowrap;
+}
+
+.message {
+  padding: var(--space-xl) 0;
+  font-size: var(--font-size-input);
+  text-align: center;
+  overflow-wrap: anywhere;
+}

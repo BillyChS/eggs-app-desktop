@@ -1,12 +1,13 @@
 using EggsApp.Api.Data;
+using EggsApp.Api.Features.Customers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace EggsApp.Api.Features.Sales;
 
 /// <summary>
-/// One purchase, like an invoice. Everything that belongs to the purchase as a whole goes here, so that later one
-/// purchase is one entry in a customer's account. A cash sale counts as income on <see cref="SaleDate"/>.
+/// One purchase, like an invoice. A cash sale counts as income on <see cref="SaleDate"/>. A credit sale ("fiado") is
+/// money owed instead: it adds to the customer's balance, and becomes income only as that customer's abonos.
 /// </summary>
 public sealed class Sale : BaseEntity
 {
@@ -15,6 +16,15 @@ public sealed class Sale : BaseEntity
 
     /// <summary>The sum of the lines: what was actually charged.</summary>
     public long Total { get; set; }
+
+    /// <summary>A credit sale. It always has a customer, and a cash sale never has one: the database checks both.</summary>
+    public bool IsCredit { get; set; }
+
+    /// <summary>
+    /// Who owes it. There's no navigation property on purpose: the customer may be soft-deleted, and a navigation
+    /// would quietly come back null. CustomerAccounts.FindRefsAsync reads names with IgnoreQueryFilters instead.
+    /// </summary>
+    public Guid? CustomerId { get; set; }
 
     public List<SaleItem> Items { get; } = [];
 }
@@ -54,6 +64,15 @@ internal sealed class SaleConfiguration : IEntityTypeConfiguration<Sale>
     public void Configure(EntityTypeBuilder<Sale> builder)
     {
         builder.HasIndex(sale => sale.SaleDate);
+
+        builder.HasOne<Customer>()
+            .WithMany()
+            .HasForeignKey(sale => sale.CustomerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.ToTable(table => table.HasCheckConstraint(
+            "CK_Sales_CreditHasCustomer",
+            "(\"IsCredit\" = 0 AND \"CustomerId\" IS NULL) OR (\"IsCredit\" = 1 AND \"CustomerId\" IS NOT NULL)"));
 
         // Nothing is ever really deleted: DeleteSale soft-deletes the lines along with the sale.
         builder.HasMany(sale => sale.Items)

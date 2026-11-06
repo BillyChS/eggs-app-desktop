@@ -28,7 +28,9 @@ export function Screen({ title, backTo, children }: Props) {
         </div>
         <h1 className={styles.title}>
           {!backTo && <Egg size={38} aria-hidden="true" />}
-          {title}
+          <span className={styles.titleText} title={title}>
+            {title}
+          </span>
         </h1>
         <div className={`${styles.side} ${styles.end}`}>
           {/* From one level down, Volver already goes to Inicio. */}
