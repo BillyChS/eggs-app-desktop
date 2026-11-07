@@ -448,6 +448,11 @@ src/EggsApp.Api/wwwroot/
 backups/
 *.backup.json
 
+# Source code of the backup feature, which "backups/" matches on case-insensitive file systems.
+# The *.db rules above still apply inside them.
+!src/EggsApp.Api/Features/Backups/
+!tests/EggsApp.Tests/Features/Backups/
+
 # Environment files
 .env
 .env.*

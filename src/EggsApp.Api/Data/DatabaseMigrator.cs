@@ -12,7 +12,10 @@ public sealed record DatabaseMigrationResult(IReadOnlyList<string> AppliedMigrat
 /// </summary>
 public static class DatabaseMigrator
 {
-    private const string BackupsFolder = "backups";
+    public const string BackupsFolder = "backups";
+
+    /// <summary>The copies made before migrating are named "eggs-{this}.db".</summary>
+    public const string PreMigrationTimestampFormat = "yyyy-MM-dd_HH-mm-ss-fff";
 
     /// <exception cref="DatabaseMigrationException">The database is not usable, so the app must not start.</exception>
     public static async Task<DatabaseMigrationResult> MigrateAsync(AppDbContext db)
@@ -65,41 +68,17 @@ public static class DatabaseMigrator
         }
     }
 
-    // SQLite's backup API, not File.Copy: after a crash, committed data can still be in eggs.db-wal. The copy gets
-    // its real name only once complete, so a file in the backups folder is never a partial one.
+    // The copy gets its real name only once complete and verified, so a file in the backups folder is never a
+    // partial one. Old copies are pruned by the daily backup (BackupRetention).
     private static string CopyDatabase(string databasePath)
     {
         var folder = Directory.CreateDirectory(
             Path.Combine(Path.GetDirectoryName(databasePath)!, BackupsFolder)).FullName;
 
-        var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss-fff", CultureInfo.InvariantCulture);
+        var timestamp = DateTime.Now.ToString(PreMigrationTimestampFormat, CultureInfo.InvariantCulture);
         var backupPath = Path.Combine(folder, $"{Path.GetFileNameWithoutExtension(databasePath)}-{timestamp}.db");
-        var partialPath = backupPath + ".partial";
 
-        try
-        {
-            using (var source = OpenUnpooled(databasePath))
-            using (var destination = OpenUnpooled(partialPath))
-            {
-                source.BackupDatabase(destination);
-            }
-
-            File.Move(partialPath, backupPath);
-            return backupPath;
-        }
-        finally
-        {
-            File.Delete(partialPath);
-        }
-    }
-
-    // Unpooled, so closing really releases the file.
-    private static SqliteConnection OpenUnpooled(string path)
-    {
-        var connection = new SqliteConnection(
-            new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString());
-
-        connection.Open();
-        return connection;
+        SqliteBackup.CopyDatabase(databasePath, backupPath);
+        return backupPath;
     }
 }

@@ -73,7 +73,8 @@ dotnet ef migrations add <Name> --project src/EggsApp.Api --output-dir Data/Migr
 ```
 
 Migrations apply automatically at startup, before the host listens, so there's no `database update` step. If the
-database has data and migrations are pending, it's first copied to `backups\`. A failure stops the app.
+database has data and migrations are pending, it's first copied to `backups\` (the 5 newest are kept). A failure
+stops the app.
 
 The desktop app uses `eggs.db`. The standalone API and the `dotnet ef` tools use `eggs.dev.db`, so development can't
 touch the real data; set `Database:Path` to override it for the standalone API.
@@ -126,7 +127,14 @@ touch the real data; set `Database:Path` to override it for the standalone API.
 - **Frontend:** build order: Screen → Service/Hook → State.
 - **UI state:** anything that must survive a restart goes through the API to SQLite. Never use `localStorage`,
   `sessionStorage`, IndexedDB, or cookies: the origin changes on every launch, so they start empty each time.
-- **User data on disk:** only under `%LocalAppData%\EggsApp` (see `AppDataPaths`), never next to the exe.
+- **User data on disk:** only under `%LocalAppData%\EggsApp` (see `AppDataPaths`), never next to the exe. The one
+  exception is the backups' second location (`%OneDrive%\Respaldos Eggs App` by default).
+- **Backups:** `Features/Backups/` (desktop only: `Backup:Enabled` is set by `EmbeddedApiHost`, so the standalone API
+  and tests never make any). Copies of the live database use `SqliteBackup.CopyDatabase` (backup API, integrity check,
+  then rename), never `File.Copy`. A backup must never throw into the host or stop the app: log it and let the status
+  warn. Pruning only deletes names matching `BackupFiles` patterns. Warnings count days the app was used, never
+  calendar days. Tests that start `EmbeddedApiHost` must turn the second location off or point it at a temp folder,
+  or they write into the real OneDrive. Restore steps are in README.md.
 - **UX for an elderly user:** large targets, 18px+ text, at most 2–3 actions per screen, confirmation dialogs. Inicio
   is the one exception to the action limit: it has a button per module. Tokens keep text and buttons at 7:1 contrast.
   The browser's calendar popup is a known exception to the size rule: CSS can't reach it (about 13px text and 28px
