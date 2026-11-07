@@ -157,7 +157,8 @@ public sealed class DatabaseMigratorTests : IDisposable
         Assert.Collection(
             result.AppliedMigrations,
             applied => Assert.EndsWith("_AddSales", applied),
-            applied => Assert.EndsWith("_AddCreditSales", applied));
+            applied => Assert.EndsWith("_AddCreditSales", applied),
+            applied => Assert.EndsWith("_AddExpenses", applied));
 
         const string HasSales = "SELECT COUNT(*) FROM sqlite_master WHERE name IN ('Sales', 'SaleItems')";
         var backup = Assert.Single(_folder.Backups());
@@ -201,7 +202,10 @@ public sealed class DatabaseMigratorTests : IDisposable
 
         var result = await MigrateWithRealContextAsync();
 
-        Assert.EndsWith("_AddCreditSales", Assert.Single(result.AppliedMigrations));
+        Assert.Collection(
+            result.AppliedMigrations,
+            applied => Assert.EndsWith("_AddCreditSales", applied),
+            applied => Assert.EndsWith("_AddExpenses", applied));
         Assert.Single(_folder.Backups());
 
         using var migrated = _folder.Connect();
@@ -230,6 +234,66 @@ public sealed class DatabaseMigratorTests : IDisposable
             var exception = Assert.Throws<SqliteException>(() => TestDatabaseFolder.Execute(migrated, sql));
             Assert.Contains(constraint, exception.Message);
         }
+    }
+
+    [Fact]
+    public async Task DatabaseWithCreditSalesAndAbonos_KeepsThemAndGainsTheSeededExpenseCategories()
+    {
+        await using (var previous = CreateContext())
+        {
+            await previous.GetService<IMigrator>().MigrateAsync("AddCreditSales");
+        }
+
+        // Raw SQL, because the current model has tables this schema doesn't have yet.
+        using (var connection = _folder.Connect())
+        {
+            TestDatabaseFolder.Execute(
+                connection,
+                """
+                INSERT INTO Customers (Id, Name, CreatedAt, UpdatedAt, IsDeleted)
+                    VALUES ('c1', 'María', '2024-11-01 08:00:00', '2024-11-01 08:00:00', 0);
+                INSERT INTO Sales (Id, SaleDate, Total, IsCredit, CustomerId, CreatedAt, UpdatedAt, IsDeleted) VALUES
+                    ('s1', '2024-11-03', 3000, 1, 'c1', '2024-11-03 09:00:00', '2024-11-03 09:00:00', 0);
+                INSERT INTO Payments (Id, CustomerId, PaymentDate, Amount, CreatedAt, UpdatedAt, IsDeleted) VALUES
+                    ('p1', 'c1', '2024-11-04', 1000, '2024-11-04 09:00:00', '2024-11-04 09:00:00', 0);
+                """);
+        }
+
+        var result = await MigrateWithRealContextAsync();
+
+        Assert.EndsWith("_AddExpenses", Assert.Single(result.AppliedMigrations));
+        Assert.Single(_folder.Backups());
+
+        using (var migrated = _folder.Connect())
+        {
+            Assert.Equal("s1,3000,1,c1", TestDatabaseFolder.Scalar(
+                migrated,
+                "SELECT Id || ',' || Total || ',' || IsCredit || ',' || CustomerId FROM Sales"));
+            Assert.Equal(1000L, TestDatabaseFolder.Scalar(migrated, "SELECT Amount FROM Payments"));
+            Assert.Equal(
+                "Alimento|Vitaminas|Desparasitantes|Burucha|Cartones|Plásticos/Envoltorios|Equipo|Otro",
+                TestDatabaseFolder.Scalar(
+                    migrated,
+                    "SELECT group_concat(Name, '|') FROM (SELECT Name FROM ExpenseCategories ORDER BY SortOrder)"));
+            Assert.Equal("Otro", TestDatabaseFolder.Scalar(
+                migrated,
+                "SELECT group_concat(Name) FROM ExpenseCategories WHERE NeedsDescription = 1"));
+            Assert.Equal("ok", TestDatabaseFolder.Scalar(migrated, "PRAGMA integrity_check"));
+        }
+
+        // The seeded rows work through EF, which reads the Guids it didn't write itself.
+        await using var db = CreateContext();
+        var otro = await db.ExpenseCategories.SingleAsync(category => category.NeedsDescription);
+        db.Expenses.Add(new EggsApp.Api.Features.Expenses.Expense
+        {
+            ExpenseDate = new DateOnly(2024, 11, 5),
+            CategoryId = otro.Id,
+            Amount = 5000,
+            Note = "Gasolina",
+        });
+        await db.SaveChangesAsync();
+        Assert.Equal("Otro", (await db.ExpenseCategories.SingleAsync(
+            category => category.Id == db.Expenses.Single().CategoryId)).Name);
     }
 
     [Fact]

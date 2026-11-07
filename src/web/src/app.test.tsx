@@ -38,10 +38,7 @@ describe('navigation', () => {
     ])
   })
 
-  it.each([
-    ['Gastos', '/gastos'],
-    ['Resúmenes', '/resumenes'],
-  ])('%s opens, says Próximamente, and Volver returns to Inicio', async (label, path) => {
+  it.each([['Resúmenes', '/resumenes']])('%s opens, says Próximamente, and Volver returns to Inicio', async (label, path) => {
     const { router, user } = open()
 
     await user.click(screen.getByRole('button', { name: label }))
@@ -57,9 +54,9 @@ describe('navigation', () => {
   })
 
   it('opening directly on a screen, as a reload does, still has a way back', async () => {
-    const { router, user } = open('/gastos')
+    const { router, user } = open('/resumenes')
 
-    expect(title()).toBe('Gastos')
+    expect(title()).toBe('Resúmenes')
 
     await user.click(screen.getByRole('button', { name: 'Volver a Inicio' }))
 
@@ -88,7 +85,7 @@ describe('navigation', () => {
   })
 
   it('a one-level screen has no separate Inicio button', () => {
-    open('/gastos')
+    open('/resumenes')
 
     expect(screen.queryByRole('button', { name: 'Inicio' })).toBeNull()
   })
@@ -113,7 +110,7 @@ describe('server status', () => {
     const { user } = open()
     await screen.findByText('Conectado')
 
-    await user.click(screen.getByRole('button', { name: 'Gastos' }))
+    await user.click(screen.getByRole('button', { name: 'Resúmenes' }))
 
     expect(screen.getByText('Conectado')).toBeTruthy()
   })

@@ -49,6 +49,161 @@ namespace EggsApp.Api.Data.Migrations
                     b.ToTable("Customers");
                 });
 
+            modelBuilder.Entity("EggsApp.Api.Features.Expenses.Expense", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("ExpenseDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("ExpenseDate");
+
+                    b.ToTable("Expenses", t =>
+                        {
+                            t.HasCheckConstraint("CK_Expenses_AmountIsPositive", "\"Amount\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("EggsApp.Api.Features.Expenses.ExpenseCategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("NeedsDescription")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = 0");
+
+                    b.ToTable("ExpenseCategories");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("5d1f3c0e-6a51-4c39-9a0b-0f0c1e5a0001"),
+                            CreatedAt = new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Alimento",
+                            NeedsDescription = false,
+                            SortOrder = 10,
+                            UpdatedAt = new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified)
+                        },
+                        new
+                        {
+                            Id = new Guid("5d1f3c0e-6a51-4c39-9a0b-0f0c1e5a0002"),
+                            CreatedAt = new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Vitaminas",
+                            NeedsDescription = false,
+                            SortOrder = 20,
+                            UpdatedAt = new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified)
+                        },
+                        new
+                        {
+                            Id = new Guid("5d1f3c0e-6a51-4c39-9a0b-0f0c1e5a0003"),
+                            CreatedAt = new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Desparasitantes",
+                            NeedsDescription = false,
+                            SortOrder = 30,
+                            UpdatedAt = new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified)
+                        },
+                        new
+                        {
+                            Id = new Guid("5d1f3c0e-6a51-4c39-9a0b-0f0c1e5a0004"),
+                            CreatedAt = new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Burucha",
+                            NeedsDescription = false,
+                            SortOrder = 40,
+                            UpdatedAt = new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified)
+                        },
+                        new
+                        {
+                            Id = new Guid("5d1f3c0e-6a51-4c39-9a0b-0f0c1e5a0005"),
+                            CreatedAt = new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Cartones",
+                            NeedsDescription = false,
+                            SortOrder = 50,
+                            UpdatedAt = new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified)
+                        },
+                        new
+                        {
+                            Id = new Guid("5d1f3c0e-6a51-4c39-9a0b-0f0c1e5a0006"),
+                            CreatedAt = new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Plásticos/Envoltorios",
+                            NeedsDescription = false,
+                            SortOrder = 60,
+                            UpdatedAt = new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified)
+                        },
+                        new
+                        {
+                            Id = new Guid("5d1f3c0e-6a51-4c39-9a0b-0f0c1e5a0007"),
+                            CreatedAt = new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Equipo",
+                            NeedsDescription = false,
+                            SortOrder = 70,
+                            UpdatedAt = new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified)
+                        },
+                        new
+                        {
+                            Id = new Guid("5d1f3c0e-6a51-4c39-9a0b-0f0c1e5a0008"),
+                            CreatedAt = new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Otro",
+                            NeedsDescription = true,
+                            SortOrder = 80,
+                            UpdatedAt = new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified)
+                        });
+                });
+
             modelBuilder.Entity("EggsApp.Api.Features.Payments.Payment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -165,6 +320,15 @@ namespace EggsApp.Api.Data.Migrations
                     b.HasIndex("SaleId");
 
                     b.ToTable("SaleItems");
+                });
+
+            modelBuilder.Entity("EggsApp.Api.Features.Expenses.Expense", b =>
+                {
+                    b.HasOne("EggsApp.Api.Features.Expenses.ExpenseCategory", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("EggsApp.Api.Features.Payments.Payment", b =>
