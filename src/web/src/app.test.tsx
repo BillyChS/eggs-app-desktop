@@ -38,27 +38,14 @@ describe('navigation', () => {
     ])
   })
 
-  it.each([['Resúmenes', '/resumenes']])('%s opens, says Próximamente, and Volver returns to Inicio', async (label, path) => {
-    const { router, user } = open()
+  it('opening directly on a one-level screen, as a reload does, has Volver back to Inicio', async () => {
+    const { router, user } = open('/clientes', [
+      { path: '/clientes', element: <Screen title="Clientes" backTo="/">x</Screen> },
+      { path: '*', element: null },
+    ])
 
-    await user.click(screen.getByRole('button', { name: label }))
-
-    expect(router.state.location.pathname).toBe(path)
-    expect(title()).toBe(label)
-    expect(screen.getByText('Próximamente')).toBeTruthy()
-
+    expect(title()).toBe('Clientes')
     await user.click(screen.getByRole('button', { name: 'Volver' }))
-
-    expect(router.state.location.pathname).toBe('/')
-    expect(title()).toBe('Eggs App')
-  })
-
-  it('opening directly on a screen, as a reload does, still has a way back', async () => {
-    const { router, user } = open('/resumenes')
-
-    expect(title()).toBe('Resúmenes')
-
-    await user.click(screen.getByRole('button', { name: 'Volver a Inicio' }))
 
     expect(router.state.location.pathname).toBe('/')
   })
@@ -85,7 +72,7 @@ describe('navigation', () => {
   })
 
   it('a one-level screen has no separate Inicio button', () => {
-    open('/resumenes')
+    open('/clientes', [{ path: '/clientes', element: <Screen title="Clientes" backTo="/">x</Screen> }])
 
     expect(screen.queryByRole('button', { name: 'Inicio' })).toBeNull()
   })
@@ -107,10 +94,16 @@ describe('navigation', () => {
 
 describe('server status', () => {
   it('shows Conectado on every screen', async () => {
+    fetchMock.mockImplementation(async (input) =>
+      String(input).startsWith('/api/customers')
+        ? new Response(JSON.stringify({ items: [], owedTotal: 0 }))
+        : healthy(),
+    )
     const { user } = open()
     await screen.findByText('Conectado')
 
-    await user.click(screen.getByRole('button', { name: 'Resúmenes' }))
+    await user.click(screen.getByRole('button', { name: 'Clientes' }))
+    await screen.findByText('Todavía no hay clientes.')
 
     expect(screen.getByText('Conectado')).toBeTruthy()
   })

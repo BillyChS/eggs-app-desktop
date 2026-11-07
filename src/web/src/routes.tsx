@@ -1,6 +1,5 @@
 import { Navigate, type RouteObject } from 'react-router'
 import { AppLayout } from './layout/AppLayout'
-import { ComingSoonScreen } from './screens/ComingSoonScreen'
 import { CustomersScreen } from './screens/customers/CustomersScreen'
 import { CustomerStatementScreen } from './screens/customers/CustomerStatementScreen'
 import { EditCustomerScreen } from './screens/customers/EditCustomerScreen'
@@ -15,6 +14,7 @@ import { NewPaymentScreen } from './screens/payments/NewPaymentScreen'
 import { EditSaleScreen } from './screens/sales/EditSaleScreen'
 import { NewSaleScreen } from './screens/sales/NewSaleScreen'
 import { SalesScreen } from './screens/sales/SalesScreen'
+import { SummariesScreen } from './screens/summaries/SummariesScreen'
 
 // Loaded on demand, so the build leaves this page out entirely.
 const devRoutes: RouteObject[] = import.meta.env.DEV
@@ -44,7 +44,7 @@ export const routes: RouteObject[] = [
       { path: 'gastos', element: <ExpensesScreen /> },
       { path: 'gastos/nuevo', element: <NewExpenseScreen /> },
       { path: 'gastos/:id/editar', element: <EditExpenseScreen /> },
-      { path: 'resumenes', element: <ComingSoonScreen title="Resúmenes" /> },
+      { path: 'resumenes', element: <SummariesScreen /> },
       ...devRoutes,
       // The API serves index.html for any address, so an unknown one lands here.
       { path: '*', element: <Navigate to="/" replace /> },
