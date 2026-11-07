@@ -115,6 +115,11 @@ touch the real data; set `Database:Path` to override it for the standalone API.
   its old expenses keep showing its name (`ExpenseCategories.FindRefsAsync`) and can keep it when edited, but it's
   no longer offered. A category with `NeedsDescription` ("Otro") requires the note. A new expense starts with no
   category chosen.
+- **Summaries:** `GetSummary` never adds anything up on its own: it calls `ListSales`, `ListPayments`,
+  `ListExpenses` and `ListCustomers` and combines their results, so Resúmenes can't disagree with Ventas, Gastos or
+  Clientes. Entró = cash sales + abonos; Gastado = expenses; Quedó = Entró − Gastado (it can be negative). Fiado is
+  shown apart, and "Por cobrar en total" is today's, whatever the period. Weeks start on Monday, and the current week
+  or month stops at today.
 - **Last prices:** the form starts with the price of the latest active line per carton type, by sale date rather than
   entry date, so typing in an old sale doesn't replace the current price.
 - **Backend:** Vertical Slice Architecture. Build order: Command → Validator → Handler → Entity → Endpoint → Migration.
