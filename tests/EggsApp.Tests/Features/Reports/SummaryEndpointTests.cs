@@ -318,4 +318,102 @@ public sealed class SummaryEndpointTests : IDisposable
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
+
+    /// <summary>A cash sale naming who bought it: cartons of 15 at ₡1.000 and of 30 at ₡2.000.</summary>
+    private Task<SaleDetail> CashToAsync(string date, Guid buyer, long fifteens, long thirties = 0)
+    {
+        var items = new List<SaleItemCommand?>();
+
+        if (fifteens > 0)
+        {
+            items.Add(new SaleItemCommand("A", fifteens, 1000));
+        }
+
+        if (thirties > 0)
+        {
+            items.Add(new SaleItemCommand("B", thirties, 2000));
+        }
+
+        return PostAsync<SaleDetail>("/api/sales", new SaleCommand(date, items, false, buyer));
+    }
+
+    [Fact]
+    public async Task BestCustomers_CountCashWithABuyerAndFiado_AndSayWhatWasSoldToNobody()
+    {
+        var rosa = await CustomerAsync("Doña Rosa");
+        var luis = await CustomerAsync("Don Luis");
+        await CashToAsync("2024-11-04", rosa.Id, fifteens: 2, thirties: 1);
+        await SaleAsync("2024-11-05", fifteens: 3, creditTo: rosa.Id);
+        await SaleAsync("2024-11-05", fifteens: 0, thirties: 1, creditTo: luis.Id);
+        await SaleAsync("2024-11-05", fifteens: 4);
+        await CashToAsync("2024-10-31", luis.Id, fifteens: 50);
+
+        var summary = await SummaryAsync("2024-11-01", "2024-11-07");
+        var best = summary.BestCustomers;
+
+        Assert.Equal(
+            [
+                new CustomerBought(rosa.Id, "Doña Rosa", false, 5, 1, 7000),
+                new CustomerBought(luis.Id, "Don Luis", false, 0, 1, 2000),
+            ],
+            best.Top);
+        Assert.Equal((0, 0L), (best.OthersCount, best.OthersTotal));
+        Assert.Equal(4000, best.WithoutCustomer);
+
+        // The ranking leaves out nothing, and adds nothing to the totals, which stay as before.
+        Assert.Equal(
+            summary.CameIn.Cash + summary.CreditSold,
+            best.Top.Sum(customer => customer.Total) + best.OthersTotal + best.WithoutCustomer);
+        Assert.Equal((8000L, 5000L), (summary.CameIn.Cash, summary.CreditSold));
+    }
+
+    [Fact]
+    public async Task BestCustomers_NameTheTopTen_AndAddUpTheRest()
+    {
+        // Twelve customers, each buying a different amount: 1.000 to 12.000.
+        var ids = new List<Guid>();
+
+        for (var number = 1; number <= 12; number++)
+        {
+            var customer = await CustomerAsync($"Cliente {number:00}");
+            ids.Add(customer.Id);
+            await CashToAsync("2024-11-04", customer.Id, fifteens: number);
+        }
+
+        var best = (await SummaryAsync("2024-11-04", "2024-11-04")).BestCustomers;
+
+        Assert.Equal(GetSummary.TopCustomers, best.Top.Count);
+        Assert.Equal("Cliente 12", best.Top[0].Name);
+        Assert.Equal("Cliente 03", best.Top[^1].Name);
+        Assert.Equal((2, 3000L), (best.OthersCount, best.OthersTotal));
+        Assert.Equal(0, best.WithoutCustomer);
+    }
+
+    [Fact]
+    public async Task BestCustomers_BreakTies_ByCartonsThenName_AndKeepDeletedCustomers()
+    {
+        var beto = await CustomerAsync("Beto");
+        var ana = await CustomerAsync("Ana");
+        var ceci = await CustomerAsync("Ceci");
+        await CashToAsync("2024-11-04", beto.Id, fifteens: 2);
+        await CashToAsync("2024-11-04", ana.Id, fifteens: 2);
+        await CashToAsync("2024-11-04", ceci.Id, fifteens: 0, thirties: 1);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.DeleteAsync($"/api/customers/{beto.Id}")).StatusCode);
+
+        var top = (await SummaryAsync("2024-11-04", "2024-11-04")).BestCustomers.Top;
+
+        // All ₡2.000: two cartons beat one, then Spanish order.
+        Assert.Equal(["Ana", "Beto", "Ceci"], top.Select(customer => customer.Name));
+        Assert.True(top[1].IsDeleted);
+    }
+
+    [Fact]
+    public async Task BestCustomers_WithNoSales_IsEmpty()
+    {
+        var best = (await SummaryAsync("2024-11-04", "2024-11-04")).BestCustomers;
+
+        Assert.Equal(new BestCustomers([], 0, 0, 0), best with { Top = [] });
+        Assert.Empty(best.Top);
+    }
 }

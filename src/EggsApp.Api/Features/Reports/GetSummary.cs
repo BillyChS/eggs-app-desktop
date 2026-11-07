@@ -11,6 +11,9 @@ public static class GetSummary
     /// <summary>The longest period one summary covers, so a typo in a year can't load everything ever entered.</summary>
     public const int MaxDays = 366;
 
+    /// <summary>How many customers "Mejores clientes" names. The rest are added up in one line.</summary>
+    public const int TopCustomers = 10;
+
     /// <summary>
     /// Puts together what the Ventas, Gastos and Clientes screens already show, by calling their own handlers, so a
     /// number here can never disagree with the same number there.
@@ -67,6 +70,40 @@ public static class GetSummary
             sales.CreditTotal,
             owedTotal,
             cartons,
-            days);
+            days,
+            RankCustomers(sales));
+    }
+
+    /// <summary>From the sales Ventas lists, so it adds up with them: ranked plus without customer is every sale.</summary>
+    private static BestCustomers RankCustomers(SaleListResponse sales)
+    {
+        var ranked = sales.Sales
+            .Where(sale => sale.Customer is not null)
+            .GroupBy(sale => sale.Customer!.Id)
+            .Select(group =>
+            {
+                var items = group.SelectMany(sale => sale.Items).ToList();
+                var customer = group.First().Customer!;
+
+                return new CustomerBought(
+                    customer.Id,
+                    customer.Name,
+                    customer.IsDeleted,
+                    items.Where(item => item.CartonType == "A").Sum(item => item.Quantity),
+                    items.Where(item => item.CartonType == "B").Sum(item => item.Quantity),
+                    group.Sum(sale => sale.Total));
+            })
+            .OrderByDescending(customer => customer.Total)
+            .ThenByDescending(customer => customer.Fifteens + customer.Thirties)
+            .ThenBy(customer => customer.Name, CustomerNames.SpanishOrder)
+            .ToList();
+
+        var others = ranked.Skip(TopCustomers).ToList();
+
+        return new BestCustomers(
+            [.. ranked.Take(TopCustomers)],
+            others.Count,
+            others.Sum(customer => customer.Total),
+            sales.Sales.Where(sale => sale.Customer is null).Sum(sale => sale.Total));
     }
 }

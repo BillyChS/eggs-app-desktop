@@ -17,6 +17,11 @@ public static class UpdatePayment
             return Outcome<PaymentDetail>.NotFound();
         }
 
+        if (payment.SaleId is not null)
+        {
+            return Outcome<PaymentDetail>.Refused(PaymentRules.PaidWithSaleMessage);
+        }
+
         var customers = await CustomerAccounts.FindRefsAsync(db, [payment.CustomerId]);
         var customer = customers[payment.CustomerId];
 

@@ -17,12 +17,13 @@ public sealed class Sale : BaseEntity
     /// <summary>The sum of the lines: what was actually charged.</summary>
     public long Total { get; set; }
 
-    /// <summary>A credit sale. It always has a customer, and a cash sale never has one: the database checks both.</summary>
+    /// <summary>A credit sale. It always has a customer, which the database checks. A cash sale may have one.</summary>
     public bool IsCredit { get; set; }
 
     /// <summary>
-    /// Who owes it. There's no navigation property on purpose: the customer may be soft-deleted, and a navigation
-    /// would quietly come back null. CustomerAccounts.FindRefsAsync reads names with IgnoreQueryFilters instead.
+    /// Who owes a credit sale, or who bought a cash sale (optional, and it never touches a balance). There's no
+    /// navigation property on purpose: the customer may be soft-deleted, and a navigation would quietly come back
+    /// null. CustomerAccounts.FindRefsAsync reads names with IgnoreQueryFilters instead.
     /// </summary>
     public Guid? CustomerId { get; set; }
 
@@ -72,7 +73,7 @@ internal sealed class SaleConfiguration : IEntityTypeConfiguration<Sale>
 
         builder.ToTable(table => table.HasCheckConstraint(
             "CK_Sales_CreditHasCustomer",
-            "(\"IsCredit\" = 0 AND \"CustomerId\" IS NULL) OR (\"IsCredit\" = 1 AND \"CustomerId\" IS NOT NULL)"));
+            "\"IsCredit\" = 0 OR \"CustomerId\" IS NOT NULL"));
 
         // Nothing is ever really deleted: DeleteSale soft-deletes the lines along with the sale.
         builder.HasMany(sale => sale.Items)

@@ -10,7 +10,7 @@
   <!-- The app's version, set only here. The installer, the startup log line and the UI footer all read it.
        A version tag (v1.2.3) must match it: see .github/workflows/installer.yml. -->
   <PropertyGroup>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
   </PropertyGroup>
 
 </Project>

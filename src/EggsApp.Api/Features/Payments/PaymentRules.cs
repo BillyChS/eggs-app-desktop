@@ -35,6 +35,10 @@ internal static class PaymentRules
             : $"Sin este abono, {customer.Name} debería {Colones.Format(owed)}. El abono no puede ser mayor.";
     }
 
+    /// <summary>For an abono paid as a credit sale was made, which follows that sale: see Payment.SaleId.</summary>
+    public const string PaidWithSaleMessage =
+        "Este abono se dio al hacer una venta fiada, así que se cambia o se borra desde esa venta.";
+
     public static string DeletedCustomerMessage(CustomerRef customer) =>
         $"Este abono es de {customer.Name}, un cliente que se borró, así que ya no se puede cambiar.";
 }

@@ -1,4 +1,5 @@
-import { Navigate, useParams } from 'react-router'
+import { Navigate, useNavigate, useParams } from 'react-router'
+import { Button } from '../../components/Button'
 import { LoadProblem } from '../../layout/LoadProblem'
 import { Screen } from '../../layout/Screen'
 import { useLoad } from '../../layout/useLoad'
@@ -13,6 +14,7 @@ import { useReturnTo } from './useReturnTo'
 export function EditPaymentScreen() {
   const { id = '', paymentId = '' } = useParams()
   const returnTo = useReturnTo(id)
+  const navigate = useNavigate()
 
   const { load, retry } = useLoad(
     paymentId,
@@ -39,6 +41,26 @@ export function EditPaymentScreen() {
     >
       {load.state !== 'ready' ? (
         <LoadProblem state={load.state} failedMessage="No se pudo abrir este abono." onRetry={retry} />
+      ) : load.value.payment.saleId ? (
+        // Paid as a fiado was made: it follows that sale, so it's changed from there (see Payment.SaleId).
+        <div className={centered.center}>
+          <p role="status" className={centered.text}>
+            Abono de {formatColones(load.value.payment.amount)} del {formatDateLong(load.value.payment.date)}.
+          </p>
+          <p className={centered.detail}>
+            Lo pagó al hacer una venta fiada, así que se cambia o se borra desde esa venta.
+          </p>
+          <Button
+            onClick={() =>
+              navigate(
+                `/ventas/${load.value.payment.saleId}/editar` +
+                  (returnTo.startsWith('/clientes') ? `?${new URLSearchParams({ cliente: id })}` : ''),
+              )
+            }
+          >
+            Abrir la venta
+          </Button>
+        </div>
       ) : load.value.customer ? (
         <PaymentForm
           customer={load.value.customer}

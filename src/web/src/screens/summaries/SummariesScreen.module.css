@@ -127,6 +127,43 @@
   font-size: var(--font-size-body);
 }
 
+/* Mejores clientes: read-only rows, number, name, cartons and amount in columns that line up. */
+.ranking {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rank {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: var(--space-md);
+  padding: var(--space-xs) 0;
+  border-bottom: 2px solid var(--color-divider);
+  font-size: var(--font-size-input);
+}
+
+.rankNumber {
+  color: var(--color-text-muted);
+}
+
+.rankName {
+  overflow-wrap: anywhere;
+}
+
+.rankCartons {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-body);
+  white-space: nowrap;
+}
+
+.rankTotal {
+  min-width: 130px;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .empty {
   padding: var(--space-md) 0;
   font-size: var(--font-size-input);

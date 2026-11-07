@@ -21,15 +21,17 @@ export interface PickedCustomer {
 }
 
 interface Props {
+  /** The question it answers: who a credit sale goes to, or who bought a cash sale. */
+  title: string
   onPick: (customer: PickedCustomer) => void
   onCancel: () => void
 }
 
 /**
- * Who a credit sale goes to: the same search as Clientes, and a way to add someone new by name, because leaving the
- * sale to go create them would lose it.
+ * Who a sale goes to: the same search as Clientes, and a way to add someone new by name, because leaving the sale to
+ * go create them would lose it.
  */
-export function CustomerPicker({ onPick, onCancel }: Props) {
+export function CustomerPicker({ title, onPick, onCancel }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
@@ -105,7 +107,7 @@ export function CustomerPicker({ onPick, onCancel }: Props) {
       }}
     >
       <h2 id={titleId} className={modal.title}>
-        ¿A quién se le fió?
+        {title}
       </h2>
 
       <TextInput

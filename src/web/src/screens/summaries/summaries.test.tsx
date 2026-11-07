@@ -39,7 +39,19 @@ const OCTOBER = {
     { date: '2026-10-05', cameIn: 52000, spent: 31000, net: 21000 },
     { date: '2026-10-06', cameIn: 18000, spent: 20000, net: -2000 },
   ],
+  // 352.000 cash + 48.000 fiado = 400.000: 100.500 + 30.000 + 1.500 named, 268.000 to nobody.
+  bestCustomers: {
+    top: [
+      { id: 'c1', name: 'Doña Rosa', isDeleted: false, fifteens: 40, thirties: 1, total: 100500 },
+      { id: 'c2', name: 'Don Luis', isDeleted: true, fifteens: 12, thirties: 0, total: 30000 },
+    ],
+    othersCount: 1,
+    othersTotal: 1500,
+    withoutCustomer: 268000,
+  },
 }
+
+const NOBODY_NAMED = { top: [], othersCount: 0, othersTotal: 0, withoutCustomer: 0 }
 
 const EMPTY = {
   from: TODAY,
@@ -51,6 +63,7 @@ const EMPTY = {
   owedTotal: 8000,
   cartons: [],
   days: [],
+  bestCustomers: NOBODY_NAMED,
 }
 
 interface Call {
@@ -166,6 +179,35 @@ describe('Resúmenes', () => {
       'Por cobrar en total₡96.500',
       'Lo que deben hoy todos los clientes.',
     ])
+  })
+
+  it('ranks the customers who were named, and says what was sold to nobody in particular', async () => {
+    open('/resumenes?periodo=mes&desde=2026-10-01')
+    await screen.findByText('₡412.000')
+
+    const best = section('Mejores clientes')
+    expect(within(best).getByText(/^Solo cuenta las ventas en que se anotó quién compró/)).toBeTruthy()
+    expect(within(best).getAllByRole('listitem').map((row) => row.textContent)).toEqual([
+      '1.Doña Rosa40 de 15 · 1 de 30₡100.500',
+      '2.Don Luis (borrado)12 de 15₡30.000',
+    ])
+    expect(lines('Mejores clientes').slice(-2)).toEqual(['Y 1 cliente más₡1.500', 'Ventas sin cliente₡268.000'])
+
+    // Something to read, not to press.
+    expect(within(best).queryAllByRole('button')).toEqual([])
+  })
+
+  it('with sales but nobody named, says so instead of an empty ranking', async () => {
+    summaryReply = () => json({ ...OCTOBER, bestCustomers: { ...NOBODY_NAMED, withoutCustomer: 400000 } })
+    open('/resumenes?periodo=mes&desde=2026-10-01')
+    await screen.findByText('₡412.000')
+
+    expect(lines('Mejores clientes')).toEqual([
+      'Solo cuenta las ventas en que se anotó quién compró (al contado y fiado).',
+      'En este período no se anotó quién compró en ninguna venta.',
+      'Ventas sin cliente₡400.000',
+    ])
+    expect(within(section('Mejores clientes')).queryByRole('list')).toBeNull()
   })
 
   it('lists the month day by day, and a day opens its own summary', async () => {

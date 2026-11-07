@@ -111,6 +111,29 @@
   white-space: nowrap;
 }
 
+/* Cash purchases: below the account, with room between, so they never read as part of it. */
+.cash {
+  margin-top: var(--space-xl);
+}
+
+.cashHeading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-xs) var(--space-lg);
+  margin-bottom: var(--space-sm);
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--font-size-input);
+}
+
+.cashNote {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-body);
+}
+
 .message {
   padding: var(--space-xl) 0;
   font-size: var(--font-size-input);

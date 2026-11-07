@@ -24,6 +24,29 @@ export interface Summary {
   cartons: { cartonType: 'A' | 'B'; quantity: number }[]
   /** Days with anything in them, oldest first. */
   days: DaySummary[]
+  bestCustomers: BestCustomers
+}
+
+/** What one customer bought in the period, cash and fiado both. */
+export interface CustomerBought {
+  id: string
+  name: string
+  isDeleted: boolean
+  /** Cartons of 15 eggs. */
+  fifteens: number
+  /** Cartons of 30 eggs. */
+  thirties: number
+  total: number
+}
+
+/** Only sales with a customer can be ranked, so what was sold to nobody in particular is given apart. */
+export interface BestCustomers {
+  /** The first ten, by total. */
+  top: CustomerBought[]
+  othersCount: number
+  othersTotal: number
+  /** Cash sales where nobody was named. */
+  withoutCustomer: number
 }
 
 export function getSummary(from: string, to: string, signal?: AbortSignal): Promise<Summary> {

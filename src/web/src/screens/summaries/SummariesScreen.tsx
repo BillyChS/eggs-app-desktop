@@ -7,7 +7,7 @@ import { Screen } from '../../layout/Screen'
 import { useLoad } from '../../layout/useLoad'
 import { formatDateShort, todayLocal } from '../../lib/dates'
 import { formatColones } from '../../lib/money'
-import { getSummary, type Summary } from '../../services/reports'
+import { getSummary, type BestCustomers, type CustomerBought, type Summary } from '../../services/reports'
 import {
   describePeriod,
   isCurrent,
@@ -108,6 +108,8 @@ function Breakdowns({ summary, kind, onOpenDay }: { summary: Summary; kind: Peri
         </section>
       </div>
 
+      <BestCustomersSection best={summary.bestCustomers} />
+
       {kind !== 'day' && summary.days.length > 0 && (
         <section aria-label="Día por día">
           <h2 className={styles.heading}>Día por día</h2>
@@ -129,6 +131,51 @@ function Breakdowns({ summary, kind, onOpenDay }: { summary: Summary; kind: Peri
         </section>
       )}
     </>
+  )
+}
+
+/** "4 de 15 · 6 de 30", leaving out a size they didn't buy. */
+function describeCartons({ fifteens, thirties }: CustomerBought): string {
+  return [fifteens > 0 && `${fifteens} de 15`, thirties > 0 && `${thirties} de 30`].filter(Boolean).join(' · ')
+}
+
+/**
+ * Only sales where someone was named can be ranked, which the note says plainly, and what was sold to nobody in
+ * particular is shown right under it, so the ranking can't pass for all the sales.
+ */
+function BestCustomersSection({ best }: { best: BestCustomers }) {
+  return (
+    <section className={styles.section} aria-labelledby="mejores-clientes">
+      <h2 id="mejores-clientes" className={styles.heading}>
+        Mejores clientes
+      </h2>
+      <p className={styles.note}>Solo cuenta las ventas en que se anotó quién compró (al contado y fiado).</p>
+
+      {best.top.length > 0 ? (
+        <ol className={styles.ranking}>
+          {best.top.map((customer, index) => (
+            <li key={customer.id} className={styles.rank}>
+              <span className={styles.rankNumber}>{index + 1}.</span>
+              <span className={styles.rankName}>
+                {customer.isDeleted ? `${customer.name} (borrado)` : customer.name}
+              </span>
+              <span className={styles.rankCartons}>{describeCartons(customer)}</span>
+              <strong className={styles.rankTotal}>{formatColones(customer.total)}</strong>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className={styles.none}>En este período no se anotó quién compró en ninguna venta.</p>
+      )}
+
+      {best.othersCount > 0 && (
+        <Line
+          label={best.othersCount === 1 ? 'Y 1 cliente más' : `Y ${best.othersCount} clientes más`}
+          value={formatColones(best.othersTotal)}
+        />
+      )}
+      <Line label="Ventas sin cliente" value={formatColones(best.withoutCustomer)} />
+    </section>
   )
 }
 

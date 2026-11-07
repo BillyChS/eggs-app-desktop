@@ -74,7 +74,7 @@ public sealed class CreditEndpointsTests : IDisposable
     }
 
     [Fact]
-    public async Task CreditSale_NeedsACustomer_AndACashSaleHasNone()
+    public async Task CreditSale_NeedsACustomer_AndACashSaleMayNameOne()
     {
         var maria = await CreateCustomerAsync("María");
 
@@ -84,7 +84,7 @@ public sealed class CreditEndpointsTests : IDisposable
             new SaleCommand(Nov3, Sale(Nov3, 1).Items, false, maria));
 
         Assert.Equal(["Escoja a quién se le fió."], (await ReadErrorsAsync(noCustomer))["customerId"]);
-        Assert.Equal(["Una venta al contado no lleva cliente."], (await ReadErrorsAsync(cashWithCustomer))["customerId"]);
+        Assert.Equal(HttpStatusCode.Created, cashWithCustomer.StatusCode);
     }
 
     [Fact]

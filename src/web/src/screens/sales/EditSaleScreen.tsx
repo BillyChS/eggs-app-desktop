@@ -30,7 +30,8 @@ export function EditSaleScreen() {
     <Screen title="Editar venta" backTo={returnTo}>
       {load.state !== 'ready' ? (
         <LoadProblem state={load.state} failedMessage="No se pudo abrir esta venta." onRetry={retry} />
-      ) : load.value.customer?.isDeleted ? (
+      ) : load.value.isCredit && load.value.customer?.isDeleted ? (
+        // A cash sale moves no balance, so it stays editable even after its buyer was deleted.
         <div className={centered.center}>
           <p role="status" className={centered.text}>
             Venta fiada de {formatColones(load.value.total)}, {formatDateLong(load.value.date)}.

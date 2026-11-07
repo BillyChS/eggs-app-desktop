@@ -44,6 +44,17 @@ export interface StatementEntry {
   balance: number
   note: string | null
   items: SaleItem[] | null
+  /** For an abono paid as a credit sale was made: that sale. */
+  saleId?: string | null
+}
+
+/** A cash sale the customer was named on. Paid on the spot, so never part of the account. */
+export interface CashPurchase {
+  id: string
+  /** Local YYYY-MM-DD. */
+  date: string
+  total: number
+  items: SaleItem[]
 }
 
 export interface CustomerStatement {
@@ -53,6 +64,8 @@ export interface CustomerStatement {
   balance: number
   /** Newest first. */
   entries: StatementEntry[]
+  /** Newest first. Kept apart from the entries, which add up to the balance. */
+  cashPurchases: CashPurchase[]
 }
 
 const BASE = '/api/customers'
