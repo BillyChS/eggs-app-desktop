@@ -9,10 +9,17 @@ public sealed record PaymentCommand(string? Date, long? Amount, string? Note);
 public sealed record PaymentFields(DateOnly Date, long Amount, string? Note);
 
 /// <param name="Customer">Who paid, even if they were deleted since.</param>
-public sealed record PaymentDetail(Guid Id, CustomerRef Customer, DateOnly Date, long Amount, string? Note)
+/// <param name="SaleId">The credit sale it was paid with, as the sale was made; it changes from there only.</param>
+public sealed record PaymentDetail(
+    Guid Id,
+    CustomerRef Customer,
+    DateOnly Date,
+    long Amount,
+    string? Note,
+    Guid? SaleId = null)
 {
     public static PaymentDetail From(Payment payment, IReadOnlyDictionary<Guid, CustomerRef> customers) =>
-        new(payment.Id, customers[payment.CustomerId], payment.PaymentDate, payment.Amount, payment.Note);
+        new(payment.Id, customers[payment.CustomerId], payment.PaymentDate, payment.Amount, payment.Note, payment.SaleId);
 }
 
 /// <param name="Total">The abonos added up: income of the period, on the days they were paid.</param>

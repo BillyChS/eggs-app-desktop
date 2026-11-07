@@ -27,9 +27,18 @@ const CREDIT_SALE = {
   isCredit: true,
   customer: MARIA_REF,
   items: [line('A', 3, 1000), line('B', 1, 2000)],
+  paidNow: 0,
 }
-const CASH_SALE = { id: '6', date: OLD_DAY, total: 3000, isCredit: false, customer: null, items: [line('A', 3, 1000)] }
-const PAYMENT = { id: '7', customer: MARIA_REF, date: PAID_DAY, amount: 2000, note: 'pagó la mitad' }
+const CASH_SALE = {
+  id: '6',
+  date: OLD_DAY,
+  total: 3000,
+  isCredit: false,
+  customer: null,
+  items: [line('A', 3, 1000)],
+  paidNow: 0,
+}
+const PAYMENT = { id: '7', customer: MARIA_REF, date: PAID_DAY, amount: 2000, note: 'pagó la mitad', saleId: null }
 
 interface Call {
   method: string
@@ -92,15 +101,18 @@ beforeEach(() => {
     'GET /api/sales/5': () => json(CREDIT_SALE),
     'GET /api/sales/6': () => json(CASH_SALE),
     'POST /api/sales': ({ body }) => {
-      const { date, items, isCredit, customerId } = body as {
+      const { date, items, isCredit, customerId, paidNow } = body as {
         date: string
         items: { quantity: number; unitPrice: number }[]
         isCredit: boolean
         customerId: string | null
+        paidNow: number
       }
       const total = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
-      const customer = isCredit ? { id: customerId, name: customerId === '1' ? MARIA.name : 'Ana', isDeleted: false } : null
-      return json({ id: '9', date, total, isCredit, customer, items }, 201)
+      const customer = customerId
+        ? { id: customerId, name: customerId === '1' ? MARIA.name : customerId === '2' ? MARIO.name : 'Ana', isDeleted: false }
+        : null
+      return json({ id: '9', date, total, isCredit, customer, items, paidNow }, 201)
     },
     'PUT /api/sales/5': () => json(CREDIT_SALE),
     'DELETE /api/sales/5': () => new Response(null, { status: 204 }),
@@ -219,17 +231,21 @@ describe('sale form: contado or fiado', () => {
     expect(credit().textContent).toBe('Fiado a Ana María')
   })
 
-  it('Al contado after Fiado takes the customer off', async () => {
+  it('Al contado after Fiado keeps the customer as who bought, and Quitar takes them off', async () => {
     const { user } = open('/ventas/nueva')
     await fillLine(user)
     await user.click(credit())
     await user.click(await within(await picker()).findByRole('button', { name: /María Rodríguez/ }))
 
     await user.click(cash())
+    expect(screen.getByText('Compró:').textContent).toBe('Compró: María Rodríguez')
+
+    await user.click(button('Quitar a María Rodríguez de esta venta'))
+    expect(screen.queryByText('Compró:')).toBeNull()
     await user.click(saveSale())
 
     await alertDialog()
-    expect(callsTo('POST', '/api/sales')[0].body).toMatchObject({ isCredit: false, customerId: null })
+    expect(callsTo('POST', '/api/sales')[0].body).toMatchObject({ isCredit: false, customerId: null, paidNow: 0 })
   })
 
   it('a fiado sale opens as fiado, and deleting it says what happens to the balance', async () => {
@@ -281,7 +297,171 @@ describe('sale form: contado or fiado', () => {
   })
 })
 
+describe('sale form: who bought a cash sale (optional)', () => {
+  const buyerLink = () => button('¿Quién compró? (opcional)')
+
+  it('appears only after Al contado, as a quiet link, and never takes the focus or blocks saving', async () => {
+    const { user } = open('/ventas/nueva')
+    await fillLine(user)
+    expect(screen.queryByRole('button', { name: '¿Quién compró? (opcional)' })).toBeNull()
+
+    await user.click(cash())
+
+    expect(buyerLink()).toBeTruthy()
+    expect(document.activeElement).toBe(saveSale())
+    await user.click(saveSale())
+
+    expect((await alertDialog()).textContent).toContain('Venta guardada: ₡3.000,')
+    expect(callsTo('POST', '/api/sales')[0].body).toMatchObject({ isCredit: false, customerId: null, paidNow: 0 })
+  })
+
+  it('Enter from the price still goes to Guardar venta, past the optional link', async () => {
+    const { user } = open('/ventas/nueva')
+    await fillLine(user)
+    await user.click(cash())
+
+    await user.click(field('Precio por cartón'))
+    await user.keyboard('{Enter}')
+
+    expect(document.activeElement).toBe(saveSale())
+    expect(callsTo('POST', '/api/sales')).toHaveLength(0)
+  })
+
+  it('picks who bought with the same search, and says it in the message', async () => {
+    const { user } = open('/ventas/nueva')
+    await fillLine(user)
+    await user.click(cash())
+
+    await user.click(buyerLink())
+    const dialog = await screen.findByRole('dialog', { name: '¿Quién compró?' })
+    await user.click(await within(dialog).findByRole('button', { name: /Mario Solís/ }))
+
+    expect(screen.getByText('Compró:').textContent).toBe('Compró: Mario Solís')
+    expect(cash().getAttribute('aria-pressed')).toBe('true')
+    await waitFor(() => expect(document.activeElement).toBe(saveSale()))
+    await user.click(saveSale())
+
+    expect((await alertDialog()).textContent).toContain('Venta guardada: ₡3.000 a Mario Solís,')
+    expect(callsTo('POST', '/api/sales')[0].body).toMatchObject({ isCredit: false, customerId: '2' })
+  })
+
+  it('Cancelar leaves it without anyone, still a cash sale', async () => {
+    const { user } = open('/ventas/nueva')
+    await fillLine(user)
+    await user.click(cash())
+
+    await user.click(buyerLink())
+    await user.click(within(await screen.findByRole('dialog', { name: '¿Quién compró?' })).getByRole('button', { name: 'Cancelar' }))
+
+    expect(buyerLink()).toBeTruthy()
+    expect(cash().getAttribute('aria-pressed')).toBe('true')
+  })
+})
+
+describe('sale form: paid something with a fiado', () => {
+  const paidNowField = () => field('¿Pagó algo ahora? (opcional)')
+
+  async function fiadoToMaria(user: User) {
+    await fillLine(user)
+    await user.click(credit())
+    await user.click(await within(await picker()).findByRole('button', { name: /María Rodríguez/ }))
+  }
+
+  it('is optional: a fiado with nothing paid saves as before', async () => {
+    const { user } = open('/ventas/nueva')
+    await fiadoToMaria(user)
+
+    expect(paidNowField().value).toBe('')
+    await user.click(saveSale())
+
+    expect((await alertDialog()).textContent).not.toContain('Pagó')
+    expect(callsTo('POST', '/api/sales')[0].body).toMatchObject({ isCredit: true, customerId: '1', paidNow: 0 })
+  })
+
+  it('shows what is left, Enter moves to Guardar venta, and the message says paid and still owed', async () => {
+    const { user } = open('/ventas/nueva')
+    await fiadoToMaria(user)
+
+    await user.type(paidNowField(), '1000')
+    expect(screen.getByText(/Queda debiendo/).textContent).toBe('Queda debiendo ₡2.000')
+
+    await user.keyboard('{Enter}')
+    expect(document.activeElement).toBe(saveSale())
+    expect(callsTo('POST', '/api/sales')).toHaveLength(0)
+
+    await user.click(saveSale())
+
+    expect((await alertDialog()).textContent).toContain(
+      `Venta fiada guardada: ₡3.000 a María Rodríguez, ${formatDateLong(TODAY)}. ` +
+        'Pagó ₡1.000 y queda debiendo ₡2.000 de esta venta.',
+    )
+    expect(callsTo('POST', '/api/sales')[0].body).toMatchObject({ isCredit: true, customerId: '1', paidNow: 1000 })
+  })
+
+  it('refuses more than the total, without sending', async () => {
+    const { user } = open('/ventas/nueva')
+    await fiadoToMaria(user)
+
+    await user.type(paidNowField(), '3001')
+    await user.click(saveSale())
+
+    expect(screen.getByText('No puede ser mayor que el total de la venta (₡3.000).')).toBeTruthy()
+    expect(document.activeElement).toBe(paidNowField())
+    expect(callsTo('POST', '/api/sales')).toHaveLength(0)
+  })
+
+  it('paid in full: says it is a cash sale, and one press makes it one, keeping who bought', async () => {
+    const { user } = open('/ventas/nueva')
+    await fiadoToMaria(user)
+
+    await user.type(paidNowField(), '3000')
+    await user.click(saveSale())
+
+    expect(screen.getByRole('alert').textContent).toContain('Si pagó todo, es una venta al contado.')
+    expect(callsTo('POST', '/api/sales')).toHaveLength(0)
+
+    await user.click(button('Cambiar a Al contado'))
+
+    expect(cash().getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByText('Compró:').textContent).toBe('Compró: María Rodríguez')
+    expect(screen.queryByLabelText('¿Pagó algo ahora? (opcional)')).toBeNull()
+    expect(document.activeElement).toBe(saveSale())
+
+    await user.click(saveSale())
+    expect((await alertDialog()).textContent).toContain('Venta guardada: ₡3.000 a María Rodríguez,')
+    expect(callsTo('POST', '/api/sales')[0].body).toMatchObject({ isCredit: false, customerId: '1', paidNow: 0 })
+  })
+
+  it('a fiado opened with what was paid shows it, and deleting says the abono goes too', async () => {
+    handlers['GET /api/sales/5'] = () => json({ ...CREDIT_SALE, paidNow: 1000 })
+    const { user } = open('/ventas/5/editar')
+    await screen.findByLabelText('Cantidad')
+
+    expect(paidNowField().value).toBe('1.000')
+    expect(screen.getByText(/Queda debiendo/).textContent).toBe('Queda debiendo ₡4.000')
+    await waitFor(() => expect(callsTo('GET', '/api/customers/1').length).toBe(1))
+
+    await user.click(button('Borrar venta'))
+
+    // She owes 8.000; without this sale and its abono she owes 5.000 − 1.000 less.
+    expect((await alertDialog()).textContent).toContain(
+      '¿Borrar la venta fiada de ₡5.000 a María Rodríguez? También se borra el abono de ₡1.000 que dio al hacerla. ' +
+        'Su saldo bajará de ₡8.000 a ₡4.000.',
+    )
+  })
+})
+
 describe('day list', () => {
+  it('names who bought a cash sale, and says when an abono came with its sale', async () => {
+    handlers['GET /api/sales'] = () =>
+      json({ sales: [{ ...CASH_SALE, customer: { id: '2', name: 'Mario Solís', isDeleted: false } }], cashTotal: 3000, creditTotal: 0 })
+    handlers['GET /api/payments'] = () => json({ payments: [{ ...PAYMENT, note: null, saleId: '5' }], total: 2000 })
+    open(`/ventas?fecha=${OLD_DAY}`)
+
+    const rows = (await screen.findAllByRole('listitem')).map((row) => row.textContent)
+    expect(rows).toEqual(['Mario Solís · 3 de 15₡3.000', 'Abono María Rodríguez · al hacer la venta₡2.000'])
+  })
+
   it('Entró hoy is cash sales and abonos; fiado is shown apart, as owed', async () => {
     handlers['GET /api/sales'] = () => json({ sales: [CREDIT_SALE, CASH_SALE], cashTotal: 3000, creditTotal: 5000 })
     handlers['GET /api/payments'] = () => json({ payments: [PAYMENT], total: 2000 })
@@ -478,6 +658,7 @@ describe('account statement', () => {
       { kind: 'sale', id: '5', date: '2026-11-04', amount: 5000, balance: 10000, note: null, items: CREDIT_SALE.items },
       { kind: 'sale', id: '4', date: OLD_DAY, amount: 5000, balance: 5000, note: null, items: [line('B', 2, 2500)] },
     ],
+    cashPurchases: [],
   }
 
   beforeEach(() => {
@@ -526,6 +707,61 @@ describe('account statement', () => {
     expect(screen.getByText('María Rodríguez no tiene fiados ni abonos.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Anotar abono' })).toBeNull()
     expect(button('Editar cliente')).toBeTruthy()
+  })
+
+  it('shows cash purchases apart, under their own heading, never in the account', async () => {
+    handlers['GET /api/customers/1/statement'] = () =>
+      json({
+        ...STATEMENT,
+        cashPurchases: [
+          { id: '9', date: PAID_DAY, total: 13500, items: [line('B', 3, 4500)] },
+          { id: '8', date: OLD_DAY, total: 2500, items: [line('A', 1, 2500)] },
+        ],
+      })
+    const { router, user } = open('/clientes/1')
+
+    const account = await screen.findByRole('list', { name: 'Fiados y abonos' })
+    expect(within(account).getAllByRole('listitem')).toHaveLength(3)
+    expect(screen.getByText('Debe').parentElement!.textContent).toBe('Debe₡8.000')
+
+    const cash = screen.getByRole('region', { name: 'Compras al contado' })
+    expect(within(cash).getByText('No cuentan en lo que debe. 2 compras · ₡16.000')).toBeTruthy()
+    expect(within(cash).getAllByRole('listitem').map((row) => row.textContent)).toEqual([
+      'jue 5 nov 2026' + '3 de 30' + '₡13.500',
+      'lun 2 nov 2026' + '1 de 15' + '₡2.500',
+    ])
+
+    await user.click(within(cash).getByRole('button', { name: /3 de 30/ }))
+    expect(address(router)).toBe('/ventas/9/editar?cliente=1')
+  })
+
+  it('has no cash purchases section when there are none', async () => {
+    open('/clientes/1')
+
+    await screen.findByRole('list', { name: 'Fiados y abonos' })
+    expect(screen.queryByRole('region', { name: 'Compras al contado' })).toBeNull()
+  })
+
+  it('an abono paid as a fiado was made says so, and opens as a note that leads to its sale', async () => {
+    handlers['GET /api/customers/1/statement'] = () =>
+      json({
+        ...STATEMENT,
+        entries: [{ ...STATEMENT.entries[0], note: null, saleId: '5' }, ...STATEMENT.entries.slice(1)],
+      })
+    handlers['GET /api/payments/7'] = () =>
+      json({ ...PAYMENT, note: null, saleId: '5' })
+    const { router, user } = open('/clientes/1')
+
+    await user.click(await screen.findByRole('button', { name: /Abono al hacer la venta/ }))
+
+    expect(
+      await screen.findByText('Lo pagó al hacer una venta fiada, así que se cambia o se borra desde esa venta.'),
+    ).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Guardar abono' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Borrar abono' })).toBeNull()
+
+    await user.click(button('Abrir la venta'))
+    expect(address(router)).toBe('/ventas/5/editar?cliente=1')
   })
 
   it('a customer who no longer exists goes back to the list', async () => {

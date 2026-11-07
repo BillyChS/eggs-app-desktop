@@ -7,8 +7,9 @@ namespace EggsApp.Api.Features.Sales;
 public static class UpdateSale
 {
     /// <summary>
-    /// The sale keeps its id and gets a whole new set of lines. The old ones stay, soft-deleted. Abonos aren't tied to
-    /// sales, so a change to a credit sale simply changes the balance from then on (see SaleCredit).
+    /// The sale keeps its id and gets a whole new set of lines. The old ones stay, soft-deleted. Other abonos aren't
+    /// tied to sales, so a change to a credit sale simply changes the balance from then on (see SaleCredit). The abono
+    /// paid when the sale was made follows it, in the same SaveChanges.
     /// </summary>
     public static async Task<Outcome<SaleDetail>> HandleAsync(AppDbContext db, Guid id, SaleFields fields)
     {
@@ -19,16 +20,24 @@ public static class UpdateSale
             return Outcome<SaleDetail>.NotFound();
         }
 
-        var newTotal = fields.Items.Sum(item => item.Quantity * item.UnitPrice);
-        var stillOwed = fields.CreditCustomerId is { } newCustomer && newCustomer == sale.CustomerId ? newTotal : 0;
+        var paidNow = await SaleCredit.FindPaidNowAsync(db, sale.Id);
+        var sameCreditCustomer = fields.IsCredit && fields.CustomerId == sale.CustomerId;
 
-        if (await SaleCredit.CheckChangeAsync(db, sale, stillOwed, "con este cambio") is { } refusal)
+        if (await SaleCredit.CheckChangeAsync(
+                db,
+                sale,
+                paidNow,
+                stillOwed: sameCreditCustomer ? fields.Total : 0,
+                stillPaid: sameCreditCustomer ? fields.PaidNow : 0,
+                "con este cambio") is { } refusal)
         {
             return Outcome<SaleDetail>.Refused(refusal);
         }
 
-        if (fields.CreditCustomerId != sale.CustomerId
-            && await SaleCredit.CheckNewCustomerAsync(db, fields.CreditCustomerId) is { } problem)
+        // A cash sale may keep a buyer who was deleted since, but nothing new can go to them, not even a fiado.
+        var becomesNewFor = fields.CustomerId != sale.CustomerId || (fields.IsCredit && !sale.IsCredit);
+
+        if (becomesNewFor && await SaleCredit.CheckNewCustomerAsync(db, fields.CustomerId) is { } problem)
         {
             return Outcome<SaleDetail>.Invalid(SaleCredit.CustomerField, problem);
         }
@@ -36,8 +45,9 @@ public static class UpdateSale
         db.SaleItems.RemoveRange(sale.Items);
         SaleLines.Add(db, sale, fields.Items);
         sale.SaleDate = fields.Date;
-        sale.IsCredit = fields.CreditCustomerId is not null;
-        sale.CustomerId = fields.CreditCustomerId;
+        sale.IsCredit = fields.IsCredit;
+        sale.CustomerId = fields.CustomerId;
+        SaleCredit.ApplyPaidNow(db, sale, paidNow, fields.PaidNow);
 
         // Marked by hand: a new set of lines with the same date and total wouldn't otherwise touch UpdatedAt.
         db.Entry(sale).State = EntityState.Modified;

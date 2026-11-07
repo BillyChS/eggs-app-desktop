@@ -24,8 +24,10 @@ public static class ListSales
             db,
             sales.Where(sale => sale.CustomerId is not null).Select(sale => sale.CustomerId!.Value));
 
+        var paidNow = await SaleCredit.ReadPaidNowAsync(db, sales.Where(sale => sale.IsCredit).Select(sale => sale.Id));
+
         return new SaleListResponse(
-            [.. sales.Select(sale => SaleDetail.From(sale, customers))],
+            [.. sales.Select(sale => SaleDetail.From(sale, customers, paidNow))],
             CashTotal: sales.Where(sale => !sale.IsCredit).Sum(sale => sale.Total),
             CreditTotal: sales.Where(sale => sale.IsCredit).Sum(sale => sale.Total));
     }

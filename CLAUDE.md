@@ -100,7 +100,8 @@ touch the real data; set `Database:Path` to override it for the standalone API.
   asks before saving a similar name. A deleted customer is gone from lists, search and the similar-name check, and
   `GET`, `PUT` and `DELETE` answer 404. There's no undelete screen, but the row stays. Sales must keep showing a deleted
   customer's name, which takes `IgnoreQueryFilters` (`CustomerAccounts.FindRefsAsync`). Only a customer who owes nothing
-  can be deleted (`DeleteCustomer.FindBlockerAsync`, 409); their sales and abonos stay and can't change after.
+  can be deleted (`DeleteCustomer.FindBlockerAsync`, 409); their fiados and abonos stay and can't change after. A cash
+  sale naming them stays editable (it moves no balance) and keeps the name, but nothing new can go to them.
 - **Comparing names:** use `CustomerNames`, in C#. SQLite's `LIKE` and `ORDER BY` get accents and Spanish order wrong.
 - **Sales:** a `Sale` is one purchase, like an invoice, with `SaleItem` lines (carton type A = 15 eggs or B = 30, whole
   quantity, unit price). The server calculates `LineTotal` and `Total` and ignores any sent to it; there's no way to
@@ -108,11 +109,18 @@ touch the real data; set `Database:Path` to override it for the standalone API.
   the sale's id and replaces all its lines; deleting soft-deletes the lines too, by loading them.
 - **Income:** cash-basis. A cash sale counts on its sale date, and an abono on its payment date. A credit sale (fiado)
   is never income: it's owed. `cashTotal` skips credit sales; Ventas shows "Entró" as cash sales plus abonos.
-- **Credit:** a credit sale has `IsCredit` and a `CustomerId`, and a cash sale has neither (a check constraint).
-  Each customer has one running account: balance = their credit sales − their abonos (`Payment`), worked out on every
-  read, never stored. An abono isn't tied to a sale. The balance never goes below 0: an abono can't be more than is
-  owed, and editing, moving or deleting a credit sale is refused (409) if it would leave less than was already paid.
-  A new sale must be told "Al contado" or "Fiado" each time; there's no default.
+- **Credit:** a credit sale has `IsCredit` and always a `CustomerId` (check constraint `IsCredit = 0 OR CustomerId IS
+  NOT NULL`). A cash sale may name who bought it ("¿Quién compró? (opcional)"): that never touches a balance, so every
+  balance and credit rule filters on `IsCredit`, never on `CustomerId` alone. Each customer has one running account:
+  balance = their credit sales − their abonos (`Payment`), worked out on every read, never stored. The balance never
+  goes below 0: an abono can't be more than is owed, and editing, moving or deleting a credit sale is refused (409) if
+  it would leave less than was already paid. A new sale must be told "Al contado" or "Fiado" each time; there's no
+  default. The customer statement is fiados and abonos only; cash purchases are listed apart (`CashPurchases`).
+- **Paid with a fiado:** "¿Pagó algo ahora?" saves the credit sale and an abono with `Payment.SaleId` in one
+  `SaveChanges`. It must be less than the total (all of it is "Al contado", which the form offers to switch to). That
+  abono follows its sale (`SaleCredit.ApplyPaidNow`): editing the sale changes it, moving the sale to another customer
+  replaces it, switching to cash or deleting the sale deletes it, and its own `PUT`/`DELETE` answer 409. Every other
+  abono isn't tied to any sale.
 - **Expenses:** cash-basis, like income: an `Expense` counts on its `ExpenseDate`. Its category is a row of
   `ExpenseCategory`, not code: the migration seeds them with fixed ids, and a new or renamed one is a data change
   (there's no screen for it yet). A category is never removed, only retired (soft-deleted, with a Restrict FK):
@@ -123,7 +131,8 @@ touch the real data; set `Database:Path` to override it for the standalone API.
   `ListExpenses` and `ListCustomers` and combines their results, so Resúmenes can't disagree with Ventas, Gastos or
   Clientes. Entró = cash sales + abonos; Gastado = expenses; Quedó = Entró − Gastado (it can be negative). Fiado is
   shown apart, and "Por cobrar en total" is today's, whatever the period. Weeks start on Monday, and the current week
-  or month stops at today.
+  or month stops at today. "Mejores clientes" ranks only sales with a customer (cash with a buyer and fiado) and always
+  shows "Ventas sin cliente" next to it: ranked + others + without customer = cash + fiado of the period.
 - **Last prices:** the form starts with the price of the latest active line per carton type, by sale date rather than
   entry date, so typing in an old sale doesn't replace the current price.
 - **Backend:** Vertical Slice Architecture. Build order: Command → Validator → Handler → Entity → Endpoint → Migration.
@@ -140,6 +149,9 @@ touch the real data; set `Database:Path` to override it for the standalone API.
   or they write into the real OneDrive. Restore steps are in README.md.
 - **UX for an elderly user:** large targets, 18px+ text, at most 2–3 actions per screen, confirmation dialogs. Inicio
   is the one exception to the action limit: it has a button per module. Tokens keep text and buttons at 7:1 contrast.
+  Optional fields look optional: quiet text, "(opcional)" in the label, never in the Enter path, never blocking a save.
+- **Screen sizes:** the target is a 21" or larger monitor at 1920×1080, 100% scaling. Layouts are checked at
+  1920×1080 and 1366×768 (both at 100%), the app maximized.
   The browser's calendar popup is a known exception to the size rule: CSS can't reach it (about 13px text and 28px
   days at 125% scaling), so `DayPicker` offers Hoy and Ayer as large buttons, and a date can be typed.
 - **Dates and money in the UI:** use `lib/dates.ts` and `lib/money.ts`. `new Date("YYYY-MM-DD")` means UTC and shows
@@ -148,9 +160,10 @@ touch the real data; set `Database:Path` to override it for the standalone API.
 - **Forms:** use `useUnsavedChanges` so leaving asks first. It also tells the window, which asks before closing. Don't
   disable the button being pressed while saving, because that loses keyboard focus: use `useOneAtATime`.
 - **Sale, abono and expense form keyboard:** Enter moves on (type → quantity → price → "Al contado" until a payment is
-  chosen → "Guardar venta"; amount → note → "Guardar abono"; category → amount → note → "Guardar gasto") and never
-  saves from a field; only activating the button saves. So these forms have no `<form>` element, and a held-down Enter
-  is ignored. All three must keep their save button in sight at 1093×560.
+  chosen → "Guardar venta"; "¿Pagó algo ahora?" → "Guardar venta"; amount → note → "Guardar abono"; category → amount
+  → note → "Guardar gasto") and never saves from a field; only activating the button saves. So these forms have no
+  `<form>` element, and a held-down Enter is ignored. All three must keep their save button in sight at both screen
+  sizes above.
 - **Data safety:** never commit `.db` files or backup JSON files.
 - **Version:** `<Version>` in `Directory.Build.props` is the only place it's set; read it through `AppVersion`. A `v*`
   tag must match it.

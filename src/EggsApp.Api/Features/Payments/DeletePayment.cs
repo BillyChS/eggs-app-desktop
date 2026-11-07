@@ -17,6 +17,11 @@ public static class DeletePayment
             return Outcome<bool>.NotFound();
         }
 
+        if (payment.SaleId is not null)
+        {
+            return Outcome<bool>.Refused(PaymentRules.PaidWithSaleMessage);
+        }
+
         var customer = (await CustomerAccounts.FindRefsAsync(db, [payment.CustomerId]))[payment.CustomerId];
 
         if (customer.IsDeleted)

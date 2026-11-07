@@ -5,10 +5,11 @@ import { Button } from '../../components/Button'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { DayPicker } from '../../components/DayPicker'
 import { useMessages } from '../../components/messages'
+import { MoneyInput } from '../../components/MoneyInput'
 import { useOneAtATime } from '../../layout/useOneAtATime'
 import { useUnsavedChanges } from '../../layout/useUnsavedChanges'
-import { formatDateLong } from '../../lib/dates'
 import { formatColones } from '../../lib/money'
+import { selectOnFocus } from '../../lib/selectOnFocus'
 import { getCustomer } from '../../services/customers'
 import { ApiError, hasStatus } from '../../services/http'
 import {
@@ -35,7 +36,7 @@ import {
 import { CustomerPicker, type PickedCustomer } from './CustomerPicker'
 import { SaleLineEditor } from './SaleLineEditor'
 import styles from './SaleForm.module.css'
-import { describeLine, summarizeSale } from './saleText'
+import { describeLine, describeSaved, PAID_IN_FULL, summarizeSale } from './saleText'
 import { listOfDay } from './useSaleDay'
 
 const GONE_MESSAGE = 'Esta venta ya no existe.'
@@ -73,23 +74,33 @@ function initialLines(sale: Sale | undefined): { done: DoneLine[]; open: OpenLin
   }
 }
 
+/** Who the customer picker is open for: who owes a fiado, or who bought a cash sale. */
+type Picking = 'credit' | 'buyer' | null
+
 interface Values {
   date: string
   done: DoneLine[]
   open: OpenLine | null
   paidWith: PaidWith
-  creditTo: PickedCustomer | null
+  customer: PickedCustomer | null
+  paidNow: number | null
 }
 
 /** What would be saved, to compare with what's there. An untouched open line isn't part of the sale. */
-function snapshot({ date, done, open, paidWith, creditTo }: Values, lastPrices: LastPrices) {
+function snapshot({ date, done, open, paidWith, customer, paidNow }: Values, lastPrices: LastPrices) {
   const lines = done.map(({ cartonType, quantity, unitPrice }) => [cartonType, String(quantity), unitPrice])
 
   if (open && !isUntouched(open)) {
     lines.push([open.cartonType ?? '', open.quantity.trim(), shownPrice(open, lastPrices) ?? 0])
   }
 
-  return JSON.stringify({ date, lines, paidWith, creditTo: creditTo?.id ?? null })
+  return JSON.stringify({
+    date,
+    lines,
+    paidWith,
+    customer: customer?.id ?? null,
+    paidNow: paidWith === 'credit' ? (paidNow ?? 0) : 0,
+  })
 }
 
 interface Props {
@@ -111,8 +122,10 @@ export function SaleForm({ sale, startDay, returnTo }: Props) {
   const [open, setOpen] = useState<OpenLine | null>(initial.open)
   const [lineNumber, setLineNumber] = useState(sale?.items.length ?? 0)
   const [paidWith, setPaidWith] = useState<PaidWith>(sale ? (sale.isCredit ? 'credit' : 'cash') : null)
-  const [creditTo, setCreditTo] = useState<PickedCustomer | null>(sale?.customer ?? null)
-  const [picking, setPicking] = useState(false)
+  // Who owes a fiado, or who bought a cash sale (optional). Kept when switching between the two: it's the same person.
+  const [customer, setCustomer] = useState<PickedCustomer | null>(sale?.customer ?? null)
+  const [paidNow, setPaidNow] = useState<number | null>(sale?.paidNow || null)
+  const [picking, setPicking] = useState<Picking>(null)
   const [lastPrices, setLastPrices] = useState<LastPrices>({})
   const [errors, setErrors] = useState<Errors>({})
   const [removing, setRemoving] = useState<DoneLine | null>(null)
@@ -124,6 +137,7 @@ export function SaleForm({ sale, startDay, returnTo }: Props) {
   const firstTypeRef = useRef<HTMLButtonElement>(null)
   const quantityRef = useRef<HTMLInputElement>(null)
   const priceRef = useRef<HTMLInputElement>(null)
+  const paidNowRef = useRef<HTMLInputElement>(null)
   const cashRef = useRef<HTMLButtonElement>(null)
   const saveRef = useRef<HTMLButtonElement>(null)
   const addRef = useRef<HTMLButtonElement>(null)
@@ -141,12 +155,13 @@ export function SaleForm({ sale, startDay, returnTo }: Props) {
         done: initial.done,
         open: sale ? initial.open : null,
         paidWith: sale ? (sale.isCredit ? 'credit' : 'cash') : null,
-        creditTo: sale?.customer ?? null,
+        customer: sale?.customer ?? null,
+        paidNow: sale?.paidNow || null,
       },
       {},
     ),
   )
-  const guard = useUnsavedChanges(snapshot({ date, done, open, paidWith, creditTo }, lastPrices) !== saved)
+  const guard = useUnsavedChanges(snapshot({ date, done, open, paidWith, customer, paidNow }, lastPrices) !== saved)
 
   useEffect(() => {
     if (focusNext.current) {
@@ -230,19 +245,39 @@ export function SaleForm({ sale, startDay, returnTo }: Props) {
     clearErrors('date')
   }
 
+  /** A fiado's customer stays on as who bought it: it's the same person, and "Quitar" is right there. */
   const chooseCash = () => {
     setPaidWith('cash')
-    setCreditTo(null)
-    clearErrors('paidWith', 'customerId')
+    clearErrors('paidWith', 'customerId', 'paidNow')
     saveRef.current?.focus()
   }
 
-  const pickCustomer = (customer: PickedCustomer) => {
-    setPaidWith('credit')
-    setCreditTo(customer)
-    setPicking(false)
+  const pickCustomer = (picked: PickedCustomer) => {
+    if (picking === 'credit') {
+      setPaidWith('credit')
+    }
+
+    setCustomer(picked)
+    setPicking(null)
     clearErrors('paidWith', 'customerId')
     focusNext.current = 'save'
+  }
+
+  const removeBuyer = () => {
+    setCustomer(null)
+    clearErrors('customerId')
+    saveRef.current?.focus()
+  }
+
+  const changePaidNow = (next: number | null) => {
+    setPaidNow(next)
+    clearErrors('paidNow')
+  }
+
+  /** "Si pagó todo": it's a cash sale, still to the same customer. */
+  const switchToCash = () => {
+    setPaidNow(null)
+    chooseCash()
   }
 
   /** After the price, the payment comes next until it's been chosen; then it's Guardar venta. */
@@ -371,18 +406,25 @@ export function SaleForm({ sale, startDay, returnTo }: Props) {
       ...(includesOpen ? [toItem(open, lastPrices)] : []),
     ]
 
+    const isCredit = paidWith === 'credit'
+    const paid = isCredit ? (paidNow ?? 0) : 0
+    const saleTotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
+
+    if (paid > saleTotal || (paid > 0 && paid === saleTotal)) {
+      setErrors((current) => ({
+        ...current,
+        paidNow:
+          paid === saleTotal ? PAID_IN_FULL : `No puede ser mayor que el total de la venta (${formatColones(saleTotal)}).`,
+      }))
+      paidNowRef.current?.focus()
+      return
+    }
+
     void oneAtATime(async () => {
       try {
-        const isCredit = paidWith === 'credit'
-        const input = { date, items, isCredit, customerId: isCredit ? creditTo!.id : null }
+        const input = { date, items, isCredit, customerId: customer?.id ?? null, paidNow: paid }
         const result = await (sale ? updateSale(sale.id, input) : createSale(input))
-        const when = formatDateLong(result.date)
-
-        showSuccess(
-          result.customer
-            ? `Venta fiada guardada: ${formatColones(result.total)} a ${result.customer.name}, ${when}.`
-            : `Venta guardada: ${formatColones(result.total)}, ${when}.`,
-        )
+        showSuccess(describeSaved(result))
         leaveTo(returnTo ?? listOfDay(result.date))
       } catch (error) {
         if (hasStatus(error, 404)) {
@@ -392,6 +434,8 @@ export function SaleForm({ sale, startDay, returnTo }: Props) {
 
           if (error.fieldErrors.date) {
             dateRef.current?.focus()
+          } else if (error.fieldErrors.paidNow) {
+            paidNowRef.current?.focus()
           }
         } else if (error instanceof ApiError && error.refusal) {
           showError(error.refusal)
@@ -422,14 +466,22 @@ export function SaleForm({ sale, startDay, returnTo }: Props) {
     const total = formatColones(sale!.total)
 
     if (!sale!.isCredit || !sale!.customer) {
-      return `¿Borrar la venta de ${total} (${summarizeSale(sale!.items)})? Ya no contará en el total del día.`
+      const to = sale!.customer ? ` a ${sale!.customer.name}` : ''
+      return `¿Borrar la venta de ${total}${to} (${summarizeSale(sale!.items)})? Ya no contará en el total del día.`
     }
 
     const question = `¿Borrar la venta fiada de ${total} a ${sale!.customer.name}?`
+    const withAbono =
+      sale!.paidNow > 0
+        ? `${question} También se borra el abono de ${formatColones(sale!.paidNow)} que dio al hacerla.`
+        : question
 
-    return owedNow === null
-      ? question
-      : `${question} Su saldo bajará de ${formatColones(owedNow)} a ${formatColones(owedNow - sale!.total)}.`
+    // Without this sale and its abono, they owe what's left of it less.
+    const after = owedNow === null ? null : owedNow - (sale!.total - sale!.paidNow)
+
+    return after === null
+      ? withAbono
+      : `${withAbono} Su saldo bajará de ${formatColones(owedNow!)} a ${formatColones(after)}.`
   }
 
   const paidWithError = errors.paidWith ?? errors.customerId
@@ -528,17 +580,17 @@ export function SaleForm({ sale, startDay, returnTo }: Props) {
                   {paidWith === 'cash' && <Check size={26} aria-hidden="true" />}
                   Al contado
                 </button>
-                {/* Shows who, and pressing it again changes who: one button, so the row fits a small window. */}
+                {/* Shows who, and pressing it again changes who: one button, so the row stays short. */}
                 <button
                   type="button"
                   className={paidWith === 'credit' ? `${styles.type} ${styles.chosen}` : styles.type}
                   aria-pressed={paidWith === 'credit'}
-                  title={creditTo ? `Fiado a ${creditTo.name}` : undefined}
-                  onClick={() => setPicking(true)}
+                  title={paidWith === 'credit' && customer ? `Fiado a ${customer.name}` : undefined}
+                  onClick={() => setPicking('credit')}
                 >
                   {paidWith === 'credit' && <Check size={26} aria-hidden="true" />}
                   <span className={styles.creditText}>
-                    {paidWith === 'credit' && creditTo ? `Fiado a ${creditTo.name}` : 'Fiado'}
+                    {paidWith === 'credit' && customer ? `Fiado a ${customer.name}` : 'Fiado'}
                   </span>
                 </button>
               </div>
@@ -548,6 +600,65 @@ export function SaleForm({ sale, startDay, returnTo }: Props) {
               <strong>{formatColones(total)}</strong>
             </p>
           </div>
+
+          {/* Optional, and it looks it: plain text, never in the Enter path, and saving never waits for it. */}
+          {paidWith === 'cash' &&
+            (customer ? (
+              <p className={styles.buyer}>
+                <span className={styles.buyerName}>
+                  Compró: <strong>{customer.name}</strong>
+                </span>
+                <button type="button" className={styles.quiet} onClick={() => setPicking('buyer')}>
+                  Cambiar
+                </button>
+                <button
+                  type="button"
+                  className={styles.quiet}
+                  aria-label={`Quitar a ${customer.name} de esta venta`}
+                  onClick={removeBuyer}
+                >
+                  Quitar
+                </button>
+              </p>
+            ) : (
+              <p className={styles.buyer}>
+                <button type="button" className={styles.quiet} onClick={() => setPicking('buyer')}>
+                  ¿Quién compró? (opcional)
+                </button>
+              </p>
+            ))}
+
+          {paidWith === 'credit' && (
+            <div className={styles.paidNow}>
+              <div className={styles.paidNowField}>
+                <MoneyInput
+                  ref={paidNowRef}
+                  label="¿Pagó algo ahora? (opcional)"
+                  value={paidNow}
+                  onChange={changePaidNow}
+                  error={errors.paidNow === PAID_IN_FULL ? undefined : errors.paidNow}
+                  inputProps={{ ...selectOnFocus, onKeyDown: (event) => moveOnEnter(event, saveRef.current) }}
+                />
+              </div>
+              {errors.paidNow === PAID_IN_FULL ? (
+                <div className={styles.paidInFull} role="alert">
+                  <p className={styles.paidInFullText}>{PAID_IN_FULL}</p>
+                  <Button variant="secondary" onClick={switchToCash}>
+                    Cambiar a Al contado
+                  </Button>
+                </div>
+              ) : (
+                paidNow !== null &&
+                paidNow > 0 &&
+                paidNow < total && (
+                  <p className={styles.remaining} aria-live="polite">
+                    Queda debiendo <strong>{formatColones(total - paidNow)}</strong>
+                  </p>
+                )
+              )}
+            </div>
+          )}
+
           {paidWithError && (
             <p className={styles.error} role="alert">
               <CircleAlert size={26} aria-hidden="true" />
@@ -575,7 +686,13 @@ export function SaleForm({ sale, startDay, returnTo }: Props) {
         </div>
       </div>
 
-      {picking && <CustomerPicker onPick={pickCustomer} onCancel={() => setPicking(false)} />}
+      {picking && (
+        <CustomerPicker
+          title={picking === 'credit' ? '¿A quién se le fió?' : '¿Quién compró?'}
+          onPick={pickCustomer}
+          onCancel={() => setPicking(null)}
+        />
+      )}
 
       {removing && (
         <ConfirmDialog

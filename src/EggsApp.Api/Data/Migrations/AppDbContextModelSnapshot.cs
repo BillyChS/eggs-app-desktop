@@ -228,6 +228,9 @@ namespace EggsApp.Api.Data.Migrations
                     b.Property<DateOnly>("PaymentDate")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("SaleId")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("TEXT");
 
@@ -236,6 +239,8 @@ namespace EggsApp.Api.Data.Migrations
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("PaymentDate");
+
+                    b.HasIndex("SaleId");
 
                     b.ToTable("Payments", t =>
                         {
@@ -277,7 +282,7 @@ namespace EggsApp.Api.Data.Migrations
 
                     b.ToTable("Sales", t =>
                         {
-                            t.HasCheckConstraint("CK_Sales_CreditHasCustomer", "(\"IsCredit\" = 0 AND \"CustomerId\" IS NULL) OR (\"IsCredit\" = 1 AND \"CustomerId\" IS NOT NULL)");
+                            t.HasCheckConstraint("CK_Sales_CreditHasCustomer", "\"IsCredit\" = 0 OR \"CustomerId\" IS NOT NULL");
                         });
                 });
 
@@ -338,6 +343,11 @@ namespace EggsApp.Api.Data.Migrations
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("EggsApp.Api.Features.Sales.Sale", null)
+                        .WithMany()
+                        .HasForeignKey("SaleId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("EggsApp.Api.Features.Sales.Sale", b =>

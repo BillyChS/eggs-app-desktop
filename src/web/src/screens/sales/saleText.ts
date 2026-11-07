@@ -1,5 +1,26 @@
+import { formatDateLong } from '../../lib/dates'
 import { formatColones } from '../../lib/money'
-import type { CartonType, SaleItemInput } from '../../services/sales'
+import type { CartonType, Sale, SaleItemInput } from '../../services/sales'
+
+/** Must match SaleValidator.PaidInFullMessage, which the API sends for the same case. */
+export const PAID_IN_FULL = 'Si pagó todo, es una venta al contado.'
+
+/** The success message: the total, who, the day, and for a fiado with a payment, what's still owed for it. */
+export function describeSaved(sale: Sale): string {
+  const total = formatColones(sale.total)
+  const when = formatDateLong(sale.date)
+
+  if (!sale.isCredit) {
+    return sale.customer
+      ? `Venta guardada: ${total} a ${sale.customer.name}, ${when}.`
+      : `Venta guardada: ${total}, ${when}.`
+  }
+
+  const saved = `Venta fiada guardada: ${total} a ${sale.customer!.name}, ${when}.`
+  const left = formatColones(sale.total - sale.paidNow)
+
+  return sale.paidNow > 0 ? `${saved} Pagó ${formatColones(sale.paidNow)} y queda debiendo ${left} de esta venta.` : saved
+}
 
 export const CARTONS: { type: CartonType; eggs: number; label: string }[] = [
   { type: 'A', eggs: 15, label: 'Cartón de 15 huevos' },

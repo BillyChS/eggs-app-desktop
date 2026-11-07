@@ -1,5 +1,6 @@
 using EggsApp.Api.Data;
 using EggsApp.Api.Features.Customers;
+using EggsApp.Api.Features.Sales;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -23,6 +24,13 @@ public sealed class Payment : BaseEntity
     public long Amount { get; set; }
 
     public string? Note { get; set; }
+
+    /// <summary>
+    /// The credit sale this was paid with, when it was paid as the sale was made ("¿Pagó algo ahora?"). Such an abono
+    /// is changed and deleted from its sale only, so it always matches the sale's customer and date and stays below
+    /// its total. Null for an abono entered on its own.
+    /// </summary>
+    public Guid? SaleId { get; set; }
 }
 
 internal sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
@@ -35,6 +43,11 @@ internal sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         builder.HasOne<Customer>()
             .WithMany()
             .HasForeignKey(payment => payment.CustomerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<Sale>()
+            .WithMany()
+            .HasForeignKey(payment => payment.SaleId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.ToTable(table => table.HasCheckConstraint("CK_Payments_AmountIsPositive", "\"Amount\" > 0"));

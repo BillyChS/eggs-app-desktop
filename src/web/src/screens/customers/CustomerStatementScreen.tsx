@@ -6,7 +6,7 @@ import { formatColones } from '../../lib/money'
 import { LoadProblem } from '../../layout/LoadProblem'
 import { Screen } from '../../layout/Screen'
 import { useLoad } from '../../layout/useLoad'
-import { getStatement, type StatementEntry } from '../../services/customers'
+import { getStatement, type CashPurchase, type StatementEntry } from '../../services/customers'
 import { summarizeSale } from '../sales/saleText'
 import { describeBalance, statementOf } from './customerText'
 import styles from './CustomerStatementScreen.module.css'
@@ -17,7 +17,15 @@ function describeEntry(entry: StatementEntry): string {
     return `Fiado · ${summarizeSale(entry.items ?? [])}`
   }
 
-  return entry.note ? `Abono · ${entry.note}` : 'Abono'
+  const abono = entry.saleId ? 'Abono al hacer la venta' : 'Abono'
+  return entry.note ? `${abono} · ${entry.note}` : abono
+}
+
+/** "3 compras · ₡40.500" */
+function describePurchases(purchases: CashPurchase[]): string {
+  const total = purchases.reduce((sum, purchase) => sum + purchase.total, 0)
+  const count = purchases.length === 1 ? '1 compra' : `${purchases.length} compras`
+  return `${count} · ${formatColones(total)}`
 }
 
 /** "+₡5.000" for what adds to the balance, "−₡2.000" for what lowers it. */
@@ -99,6 +107,38 @@ export function CustomerStatementScreen() {
         <p role="status" className={styles.message}>
           {statement.name} no tiene fiados ni abonos.
         </p>
+      )}
+
+      {/* Apart from the account above, under its own heading: these were paid on the spot. */}
+      {statement.cashPurchases.length > 0 && (
+        <section className={styles.cash} aria-labelledby="compras-al-contado">
+          <div className={styles.cashHeading}>
+            <h2 id="compras-al-contado" className={styles.heading}>
+              Compras al contado
+            </h2>
+            <p className={styles.cashNote}>
+              No cuentan en lo que debe. {describePurchases(statement.cashPurchases)}
+            </p>
+          </div>
+          <ul className={styles.list} aria-label="Compras al contado">
+            {statement.cashPurchases.map((purchase) => (
+              <li key={purchase.id}>
+                <button
+                  type="button"
+                  className={styles.row}
+                  onClick={() => navigate(`/ventas/${purchase.id}/editar${here}`)}
+                >
+                  <span className={styles.date}>{formatDateShort(purchase.date)}</span>
+                  <span className={styles.description}>{summarizeSale(purchase.items)}</span>
+                  <span className={styles.amounts}>
+                    <strong className={styles.amount}>{formatColones(purchase.total)}</strong>
+                  </span>
+                  <ChevronRight size={36} aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
     </Screen>
   )

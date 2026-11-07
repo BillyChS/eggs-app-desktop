@@ -21,17 +21,21 @@ export interface Sale {
   total: number
   /** Fiado: owed by the customer instead of paid. */
   isCredit: boolean
-  /** Who owes a credit sale, even if they were deleted since. Null for a cash sale. */
+  /** Who owes a credit sale, or who bought a cash sale, even if deleted since. Null for a cash sale with nobody. */
   customer: CustomerRef | null
   items: SaleItem[]
+  /** Paid when a credit sale was made: an abono tied to the sale. 0 if none. */
+  paidNow: number
 }
 
 export interface SaleInput {
   date: string
   items: SaleItemInput[]
   isCredit: boolean
-  /** Only for a credit sale. */
+  /** Required for a credit sale; optional for a cash sale, where it's who bought. */
   customerId: string | null
+  /** Only for a credit sale: what was paid as it was made, less than the total. 0 for none. */
+  paidNow: number
 }
 
 export interface SaleList {

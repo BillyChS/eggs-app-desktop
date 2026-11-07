@@ -7,8 +7,9 @@ namespace EggsApp.Api.Features.Sales;
 public static class DeleteSale
 {
     /// <summary>
-    /// Soft delete doesn't reach rows that aren't loaded, so the lines are loaded and deleted with the sale. A credit
-    /// sale's customer then owes that much less, which is refused if they've already paid more than the rest.
+    /// Soft delete doesn't reach rows that aren't loaded, so the lines are loaded and deleted with the sale, and so is
+    /// the abono paid when it was made. A credit sale's customer then owes that much less, which is refused if they've
+    /// already paid more than the rest.
     /// </summary>
     public static async Task<Outcome<bool>> HandleAsync(AppDbContext db, Guid id)
     {
@@ -19,13 +20,21 @@ public static class DeleteSale
             return Outcome<bool>.NotFound();
         }
 
-        if (await SaleCredit.CheckChangeAsync(db, sale, stillOwed: 0, "sin esta venta") is { } refusal)
+        var paidNow = await SaleCredit.FindPaidNowAsync(db, sale.Id);
+
+        if (await SaleCredit.CheckChangeAsync(db, sale, paidNow, stillOwed: 0, stillPaid: 0, "sin esta venta") is { } refusal)
         {
             return Outcome<bool>.Refused(refusal);
         }
 
         db.SaleItems.RemoveRange(sale.Items);
         db.Sales.Remove(sale);
+
+        if (paidNow is not null)
+        {
+            db.Payments.Remove(paidNow);
+        }
+
         await db.SaveChangesAsync();
 
         return Outcome<bool>.Done(true);

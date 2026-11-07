@@ -434,6 +434,7 @@ describe('sale form: saving', () => {
       items: [{ cartonType: 'A', quantity: 3, unitPrice: 1000 }],
       isCredit: false,
       customerId: null,
+      paidNow: 0,
     })
     expect(address(router)).toBe(`/ventas?fecha=${OLD_DAY}`)
   })
@@ -963,6 +964,7 @@ describe('sale form: editing', () => {
       ],
       isCredit: false,
       customerId: null,
+      paidNow: 0,
     })
     expect(posted()).toEqual([])
     expect(address(router)).toBe(`/ventas?fecha=${OLD_DAY}`)

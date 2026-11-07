@@ -158,7 +158,9 @@ public sealed class DatabaseMigratorTests : IDisposable
             result.AppliedMigrations,
             applied => Assert.EndsWith("_AddSales", applied),
             applied => Assert.EndsWith("_AddCreditSales", applied),
-            applied => Assert.EndsWith("_AddExpenses", applied));
+            applied => Assert.EndsWith("_AddExpenses", applied),
+            applied => Assert.EndsWith("_LinkAbonosToSales", applied),
+            applied => Assert.EndsWith("_AllowCustomerOnCashSales", applied));
 
         const string HasSales = "SELECT COUNT(*) FROM sqlite_master WHERE name IN ('Sales', 'SaleItems')";
         var backup = Assert.Single(_folder.Backups());
@@ -205,7 +207,9 @@ public sealed class DatabaseMigratorTests : IDisposable
         Assert.Collection(
             result.AppliedMigrations,
             applied => Assert.EndsWith("_AddCreditSales", applied),
-            applied => Assert.EndsWith("_AddExpenses", applied));
+            applied => Assert.EndsWith("_AddExpenses", applied),
+            applied => Assert.EndsWith("_LinkAbonosToSales", applied),
+            applied => Assert.EndsWith("_AllowCustomerOnCashSales", applied));
         Assert.Single(_folder.Backups());
 
         using var migrated = _folder.Connect();
@@ -225,8 +229,8 @@ public sealed class DatabaseMigratorTests : IDisposable
             "VALUES ('{0}', '2024-11-05', 1000, '2024-11-05 09:00:00', '2024-11-05 09:00:00', 0, {1}, {2})";
 
         TestDatabaseFolder.Execute(migrated, string.Format(Insert, "ok", 1, "'c1'"));
+        TestDatabaseFolder.Execute(migrated, string.Format(Insert, "cash-with-buyer", 0, "'c1'"));
         AssertRefused("CHECK", string.Format(Insert, "credit-alone", 1, "NULL"));
-        AssertRefused("CHECK", string.Format(Insert, "cash-with-customer", 0, "'c1'"));
         AssertRefused("FOREIGN KEY", string.Format(Insert, "unknown-customer", 1, "'nobody'"));
 
         void AssertRefused(string constraint, string sql)
@@ -261,7 +265,11 @@ public sealed class DatabaseMigratorTests : IDisposable
 
         var result = await MigrateWithRealContextAsync();
 
-        Assert.EndsWith("_AddExpenses", Assert.Single(result.AppliedMigrations));
+        Assert.Collection(
+            result.AppliedMigrations,
+            applied => Assert.EndsWith("_AddExpenses", applied),
+            applied => Assert.EndsWith("_LinkAbonosToSales", applied),
+            applied => Assert.EndsWith("_AllowCustomerOnCashSales", applied));
         Assert.Single(_folder.Backups());
 
         using (var migrated = _folder.Connect())
@@ -294,6 +302,144 @@ public sealed class DatabaseMigratorTests : IDisposable
         await db.SaveChangesAsync();
         Assert.Equal("Otro", (await db.ExpenseCategories.SingleAsync(
             category => category.Id == db.Expenses.Single().CategoryId)).Name);
+    }
+
+    // The schema of version 1.0.0, with a bit of everything in it.
+    private async Task CreateVersion1DatabaseAsync()
+    {
+        await using (var previous = CreateContext())
+        {
+            await previous.GetService<IMigrator>().MigrateAsync("AddExpenses");
+        }
+
+        using var connection = _folder.Connect();
+        TestDatabaseFolder.Execute(
+            connection,
+            """
+            INSERT INTO Customers (Id, Name, CreatedAt, UpdatedAt, IsDeleted)
+                VALUES ('c1', 'María', '2024-11-01 08:00:00', '2024-11-01 08:00:00', 0);
+            INSERT INTO Sales (Id, SaleDate, Total, IsCredit, CustomerId, CreatedAt, UpdatedAt, IsDeleted) VALUES
+                ('s1', '2024-11-03', 3000, 0, NULL, '2024-11-03 09:00:00', '2024-11-03 09:00:00', 0),
+                ('s2', '2024-11-03', 5000, 1, 'c1', '2024-11-03 10:00:00', '2024-11-03 10:00:00', 0),
+                ('s3', '2024-11-04', 2000, 1, 'c1', '2024-11-04 10:00:00', '2024-11-04 10:00:00', 1);
+            INSERT INTO SaleItems (Id, SaleId, Position, CartonType, Quantity, UnitPrice, LineTotal, CreatedAt,
+                UpdatedAt, IsDeleted) VALUES
+                ('i1', 's1', 0, 'A', 3, 1000, 3000, '2024-11-03 09:00:00', '2024-11-03 09:00:00', 0),
+                ('i2', 's2', 0, 'B', 1, 5000, 5000, '2024-11-03 10:00:00', '2024-11-03 10:00:00', 0),
+                ('i3', 's3', 0, 'A', 2, 1000, 2000, '2024-11-04 10:00:00', '2024-11-04 10:00:00', 1);
+            INSERT INTO Payments (Id, CustomerId, PaymentDate, Amount, CreatedAt, UpdatedAt, IsDeleted) VALUES
+                ('p1', 'c1', '2024-11-04', 1000, '2024-11-04 09:00:00', '2024-11-04 09:00:00', 0);
+            """);
+    }
+
+    private const string SalesRows =
+        """
+        SELECT group_concat(Id || ',' || SaleDate || ',' || Total || ',' || IsCredit || ',' ||
+            ifnull(CustomerId, '') || ',' || CreatedAt || ',' || UpdatedAt || ',' || IsDeleted, '|')
+        FROM (SELECT * FROM Sales ORDER BY Id)
+        """;
+
+    private const string Version1SalesRows =
+        "s1,2024-11-03,3000,0,,2024-11-03 09:00:00,2024-11-03 09:00:00,0|" +
+        "s2,2024-11-03,5000,1,c1,2024-11-03 10:00:00,2024-11-03 10:00:00,0|" +
+        "s3,2024-11-04,2000,1,c1,2024-11-04 10:00:00,2024-11-04 10:00:00,1";
+
+    [Fact]
+    public async Task Version1Database_KeepsEverySaleAndLink_AndThenAllowsABuyerOnCashSales()
+    {
+        await CreateVersion1DatabaseAsync();
+
+        var result = await MigrateWithRealContextAsync();
+
+        Assert.Collection(
+            result.AppliedMigrations,
+            applied => Assert.EndsWith("_LinkAbonosToSales", applied),
+            applied => Assert.EndsWith("_AllowCustomerOnCashSales", applied));
+        Assert.Single(_folder.Backups());
+
+        using var migrated = _folder.Connect();
+        TestDatabaseFolder.Execute(migrated, "PRAGMA foreign_keys = ON;");
+        Assert.Equal(Version1SalesRows, TestDatabaseFolder.Scalar(migrated, SalesRows));
+        Assert.Equal(3L, TestDatabaseFolder.Scalar(migrated, "SELECT COUNT(*) FROM SaleItems"));
+        Assert.Equal("p1,", TestDatabaseFolder.Scalar(migrated, "SELECT Id || ',' || ifnull(SaleId, '') FROM Payments"));
+        Assert.Equal("ok", TestDatabaseFolder.Scalar(migrated, "PRAGMA integrity_check"));
+        Assert.Null(TestDatabaseFolder.Scalar(migrated, "PRAGMA foreign_key_check"));
+        Assert.Equal(0L, TestDatabaseFolder.Scalar(
+            migrated,
+            "SELECT COUNT(*) FROM sqlite_master WHERE name = 'ef_temp_Sales'"));
+        Assert.Equal("IX_Sales_CustomerId,IX_Sales_SaleDate", TestDatabaseFolder.Scalar(
+            migrated,
+            "SELECT group_concat(name) FROM (SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'Sales' AND name LIKE 'IX_%' ORDER BY name)"));
+
+        const string InsertSale =
+            "INSERT INTO Sales (Id, SaleDate, Total, CreatedAt, UpdatedAt, IsDeleted, IsCredit, CustomerId) " +
+            "VALUES ('{0}', '2024-11-05', 1000, '2024-11-05 09:00:00', '2024-11-05 09:00:00', 0, {1}, {2})";
+
+        TestDatabaseFolder.Execute(migrated, string.Format(InsertSale, "cash-with-buyer", 0, "'c1'"));
+        TestDatabaseFolder.Execute(migrated, string.Format(InsertSale, "cash-alone", 0, "NULL"));
+        AssertRefused("CHECK", string.Format(InsertSale, "credit-alone", 1, "NULL"));
+        AssertRefused("FOREIGN KEY", string.Format(InsertSale, "unknown-customer", 0, "'nobody'"));
+
+        // The tables that point at Sales still do, after it was swapped for the rebuilt one.
+        AssertRefused(
+            "FOREIGN KEY",
+            "INSERT INTO SaleItems (Id, SaleId, Position, CartonType, Quantity, UnitPrice, LineTotal, CreatedAt, " +
+            "UpdatedAt, IsDeleted) VALUES ('i9', 'no-sale', 0, 'A', 1, 1, 1, '2024-11-05', '2024-11-05', 0)");
+        AssertRefused(
+            "FOREIGN KEY",
+            "INSERT INTO Payments (Id, CustomerId, PaymentDate, Amount, SaleId, CreatedAt, UpdatedAt, IsDeleted) " +
+            "VALUES ('p9', 'c1', '2024-11-05', 1, 'no-sale', '2024-11-05', '2024-11-05', 0)");
+
+        void AssertRefused(string constraint, string sql)
+        {
+            var exception = Assert.Throws<SqliteException>(() => TestDatabaseFolder.Execute(migrated, sql));
+            Assert.Contains(constraint, exception.Message);
+        }
+    }
+
+    [Fact]
+    public async Task RebuildOfSales_InterruptedBeforeItWasRecorded_RunsAgainCleanly()
+    {
+        await CreateVersion1DatabaseAsync();
+        await MigrateWithRealContextAsync();
+
+        // As if the app had stopped after the rebuild's transaction but before the migration was recorded, with a
+        // leftover table from an earlier attempt too.
+        using (var connection = _folder.Connect())
+        {
+            TestDatabaseFolder.Execute(
+                connection,
+                """
+                DELETE FROM __EFMigrationsHistory WHERE MigrationId LIKE '%_AllowCustomerOnCashSales';
+                CREATE TABLE ef_temp_Sales (Id TEXT);
+                """);
+        }
+
+        var result = await MigrateWithRealContextAsync();
+
+        Assert.EndsWith("_AllowCustomerOnCashSales", Assert.Single(result.AppliedMigrations));
+
+        using var migrated = _folder.Connect();
+        Assert.Equal(Version1SalesRows, TestDatabaseFolder.Scalar(migrated, SalesRows));
+        Assert.Equal("ok", TestDatabaseFolder.Scalar(migrated, "PRAGMA integrity_check"));
+        Assert.Null(TestDatabaseFolder.Scalar(migrated, "PRAGMA foreign_key_check"));
+        Assert.Equal(0L, TestDatabaseFolder.Scalar(
+            migrated,
+            "SELECT COUNT(*) FROM sqlite_master WHERE name = 'ef_temp_Sales'"));
+    }
+
+    [Fact]
+    public async Task AfterTheRebuild_TheAppsConnectionsStillEnforceForeignKeys()
+    {
+        await CreateVersion1DatabaseAsync();
+
+        await using var db = CreateContext();
+        await DatabaseMigrator.MigrateAsync(db);
+
+        var exception = await Assert.ThrowsAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync(
+            "INSERT INTO SaleItems (Id, SaleId, Position, CartonType, Quantity, UnitPrice, LineTotal, CreatedAt, " +
+            "UpdatedAt, IsDeleted) VALUES ('i9', 'no-sale', 0, 'A', 1, 1, 1, '2024-11-05', '2024-11-05', 0)"));
+        Assert.Contains("FOREIGN KEY", exception.Message);
     }
 
     [Fact]

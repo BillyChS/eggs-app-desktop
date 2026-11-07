@@ -9,6 +9,8 @@ export interface Payment {
   date: string
   amount: number
   note: string | null
+  /** The credit sale it was paid with, as the sale was made. It's changed and deleted from that sale only. */
+  saleId: string | null
 }
 
 export interface PaymentInput {

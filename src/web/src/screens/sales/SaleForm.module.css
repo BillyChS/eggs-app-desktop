@@ -198,6 +198,65 @@
   font-size: var(--font-size-title);
 }
 
+/* Who bought a cash sale: optional, so it reads as a quiet line of text rather than a step to complete. */
+.buyer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs) var(--space-md);
+  font-size: var(--font-size-body);
+}
+
+.buyerName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Looks like a link, but keeps a large target. Primary on the page background is 8.5:1. */
+.quiet {
+  min-height: 48px;
+  padding: var(--space-xs) var(--space-xs);
+  border: none;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-primary);
+  font-size: var(--font-size-body);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.quiet:hover {
+  background-color: var(--color-back);
+}
+
+.paidNow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-xs) var(--space-lg);
+}
+
+.paidNowField {
+  width: 340px;
+}
+
+/* Next to the input, at its height, so it costs no extra row. */
+.remaining,
+.paidInFull {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  min-height: var(--size-input);
+  font-size: var(--font-size-input);
+}
+
+.paidInFullText {
+  color: var(--color-danger);
+  font-size: var(--font-size-body);
+  font-weight: 700;
+}
+
 /* Far apart, so aiming for Guardar venta can't land on Borrar venta. */
 .buttons {
   display: flex;

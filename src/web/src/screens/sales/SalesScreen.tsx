@@ -95,11 +95,8 @@ export function SalesScreen() {
             <li key={sale.id}>
               <button type="button" className={styles.row} onClick={() => navigate(`/ventas/${sale.id}/editar${query}`)}>
                 <span className={styles.summary}>
-                  {sale.customer && (
-                    <>
-                      <span className={styles.tag}>Fiado</span> {nameOf(sale.customer)} ·{' '}
-                    </>
-                  )}
+                  {sale.isCredit && <><span className={styles.tag}>Fiado</span> </>}
+                  {sale.customer && <>{nameOf(sale.customer)} · </>}
                   {summarizeSale(sale.items)}
                 </span>
                 <span className={styles.rowEnd}>
@@ -118,6 +115,7 @@ export function SalesScreen() {
               >
                 <span className={styles.summary}>
                   <span className={styles.tag}>Abono</span> {nameOf(payment.customer)}
+                  {payment.saleId && ' · al hacer la venta'}
                 </span>
                 <span className={styles.rowEnd}>
                   <strong className={styles.rowTotal}>{formatColones(payment.amount)}</strong>
