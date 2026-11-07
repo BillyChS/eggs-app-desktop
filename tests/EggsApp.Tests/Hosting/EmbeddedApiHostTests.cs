@@ -49,9 +49,17 @@ public sealed class EmbeddedApiHostTests : IDisposable
             configure?.Invoke(builder);
         });
 
+    // Shared, like FailureLog itself: the background backup can be writing to it while a test reads it.
     private string ReadLog() => Directory.Exists(_log.Directory)
-        ? string.Concat(Directory.GetFiles(_log.Directory).Select(File.ReadAllText))
+        ? string.Concat(Directory.GetFiles(_log.Directory).Select(ReadShared))
         : "";
+
+    private static string ReadShared(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
 
     private static async Task WaitUntilAsync(Func<bool> condition)
     {
