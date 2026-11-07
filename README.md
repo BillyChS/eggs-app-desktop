@@ -84,6 +84,89 @@ The output in `src/EggsApp.Desktop/bin/publish/win-x64` is self-contained: the t
 WebView2 runtime, which Windows 11 includes. Publishing builds the UI, which requires Node.js and pnpm. Add
 `-p:SkipFrontendBuild=true` to publish the existing `wwwroot` without rebuilding it.
 
+The publish leaves out what the shipped app never uses: the API's own `EggsApp.Api.exe` and its runtimeconfig (the
+API only runs in-process), `appsettings.Development.json` (the embedded host is always Production), and the packages'
+IntelliSense `.xml` files. The `.pdb` files stay, so stack traces in the log have line numbers.
+
+The publish folder isn't what gets installed by hand: the installer wraps it. See
+[Instalar y actualizar en la PC de papá](#instalar-y-actualizar-en-la-pc-de-papá).
+
+## Version
+
+The app's version is `<Version>` in `Directory.Build.props`, and only there. It shows in the footer ("Versión 1.0.0",
+bottom right, on every screen), in the startup log line (with the commit: `Started. Version 1.0.0+b21b0da…`), in
+`GET /api/health`, in the installer's name and title, and in Windows' list of installed apps.
+
+Bump it in the pull request that changes what gets shipped: patch for fixes, minor for new features, major for
+anything that changes how the app is used.
+
+## Instalar y actualizar en la PC de papá
+
+This is for Billy. The installer is per-user (no administrator rights), works offline, and puts the program in
+`%LocalAppData%\Programs\Eggs App`. It never touches `%LocalAppData%\EggsApp`, where the data is.
+
+### Building the installer
+
+From a clean checkout, with the .NET SDK, Node.js 24 + pnpm, and Inno Setup 6 (`winget install JRSoftware.InnoSetup`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File installer\build.ps1
+```
+
+It publishes the app (UI included), checks the output, and writes `artifacts\installer\EggsApp-Setup-<version>.exe`
+(about 55 MB), printing its SHA-256. Alternatively, push a version tag and take the installer from the GitHub Release:
+see [Releasing a version](#releasing-a-version).
+
+### Before the first install, on the new PC
+
+1. **Smart App Control.** Open Seguridad de Windows → Control de aplicaciones y del explorador → Smart App Control. If
+   it's **Activado** or **Evaluación**, Windows blocks unsigned apps outright, with no way to run them anyway, and the
+   installer and the app aren't signed. It has to be **Desactivado** for Eggs App to work.
+2. **OneDrive.** Sign in with the account the backups should go to, and leave it set to start with Windows (see
+   [Backups](#backups)).
+3. **Older copies.** If an app folder was ever copied by hand onto this PC (from earlier tests), delete that folder
+   and its shortcuts. Never delete `%LocalAppData%\EggsApp`: that's the data.
+
+### First install
+
+1. Copy `EggsApp-Setup-<version>.exe` to the PC (USB, or download it from the GitHub Release). To be sure it arrived
+   intact, compare `Get-FileHash .\EggsApp-Setup-<version>.exe` with the SHA-256 from the build or the Release.
+2. Run it. SmartScreen says "Windows protegió su PC": click **Más información**, then **Ejecutar de todas formas**.
+   There's no administrator prompt.
+3. If it warns that **Microsoft Edge WebView2 Runtime** is missing (it shouldn't on Windows 11), let it finish, then
+   install the runtime from the link in the message, with internet, before opening the app.
+4. Click **Instalar**, then **Finalizar** with "Abrir Eggs App" checked. The shortcut "Eggs App" is on the desktop and
+   in the Start menu.
+
+### Updating
+
+1. Build the new installer, with the bumped version.
+2. On the PC, close Eggs App (if it's open, setup asks to close it first and waits; it never closes it on its own).
+3. Run the new installer, the same way as the first time. The data, the backups and `settings.json` stay as they are.
+   If the new version changes the database, the app copies it to `backups\` before migrating, at its first start.
+
+An older installer than the version installed is refused ("Ya está instalada la versión…"), and nothing changes.
+
+### What to check after installing or updating
+
+- The footer says **Versión X.Y.Z** at the bottom right. From a distance: "¿qué versión dice abajo a la derecha?"
+- The latest sales, abonos and expenses are there.
+- The footer shows "Último respaldo: hoy …" and no warning.
+- The day's log, `%LocalAppData%\EggsApp\logs\eggsapp-YYYY-MM-DD.log`, has `Started. Version X.Y.Z+…`. After an
+  update that changed the database, it also has `Applied migrations: …` and the path of the copy made before them.
+- If setup itself failed, its log is `%TEMP%\Setup Log YYYY-MM-DD #NNN.txt`.
+
+### Uninstalling and going back
+
+Configuración → Aplicaciones → Eggs App → Desinstalar removes the program and its shortcuts only. The data in
+`%LocalAppData%\EggsApp` stays, and is there again after a reinstall. Deleting the data is never done by the uninstaller;
+it would have to be done by hand.
+
+To go back to an older version: uninstall, then install the older one. If the newer version had changed the database,
+the older app refuses it at startup ("No se pudo abrir Eggs App. No se borró ningún dato.") and changes nothing. Then
+either install the newer version again, or restore the copy made before the migration (see
+[Restoring a backup](#restoring-a-backup)), which loses what was entered since.
+
 ## Where the app writes
 
 Everything goes under `%LocalAppData%\EggsApp`, never next to the exe:
@@ -176,5 +259,18 @@ Pull requests run `.github/workflows/ci.yml`. It detects which parts changed and
 The `ci-gate` job always reports: it passes when every job that ran passed (skipped jobs are fine) and fails
 otherwise, so it is the single status check to require on `main`. Pushes to `main` run Backend CI and Frontend CI
 directly. CodeQL uses GitHub's default code scanning setup. Dependabot opens weekly grouped updates.
+
+Pull request CI never builds the installer, to stay fast.
+
+### Releasing a version
+
+`.github/workflows/installer.yml` runs `installer\build.ps1` on Windows when a `v*` tag is pushed. It fails if the tag
+doesn't match `<Version>`, then creates a GitHub Release with the installer and its SHA-256. Run it by hand
+(workflow_dispatch) for a test build, kept only as a workflow artifact.
+
+```sh
+git switch main && git pull
+git tag v1.0.0 && git push origin v1.0.0
+```
 
 Work tracking: Azure Boards.

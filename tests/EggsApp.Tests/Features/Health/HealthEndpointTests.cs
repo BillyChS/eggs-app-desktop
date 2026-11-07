@@ -22,6 +22,18 @@ public sealed class HealthEndpointTests(EggsAppFactory factory)
     }
 
     [Fact]
+    public async Task GetHealth_ReturnsTheVersionWithoutTheCommit()
+    {
+        var client = factory.CreateClient();
+
+        var body = await client.GetFromJsonAsync<HealthResponse>("/api/health");
+
+        Assert.NotNull(body);
+        Assert.Matches(@"^\d+\.\d+\.\d+$", body.Version);
+        Assert.Equal(typeof(HealthResponse).Assembly.GetName().Version!.ToString(3), body.Version);
+    }
+
+    [Fact]
     public async Task UnknownApiRoute_ReturnsNotFound()
     {
         var client = factory.CreateClient();

@@ -13,7 +13,7 @@ const STATUS_TEXT: Record<ServerStatus, string> = {
 }
 
 export function AppLayout() {
-  const status = useServerStatus()
+  const { status, version } = useServerStatus()
   const backup = useBackupStatus()
 
   return (
@@ -28,6 +28,8 @@ export function AppLayout() {
           {status === 'connected' && backup.status?.enabled && (
             <BackupStatusLine status={backup.status} onRetry={backup.retry} />
           )}
+          {/* For Billy to ask "¿qué versión dice?". Text only, nothing to press. */}
+          {version && <p className={styles.version}>Versión {version}</p>}
         </footer>
       </div>
     </MessagesProvider>

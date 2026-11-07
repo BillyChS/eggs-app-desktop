@@ -10,6 +10,7 @@ namespace EggsApp.Desktop;
 internal sealed class SingleInstance : IDisposable
 {
     // "Local\" scopes these to the Windows session, like the per-user data they protect.
+    // installer\EggsApp.iss uses the mutex name (AppMutex) to ask for the app to be closed: keep them the same.
     private const string MutexName = @"Local\EggsApp.Desktop.SingleInstance";
     private const string ActivateEventName = @"Local\EggsApp.Desktop.Activate";
 
