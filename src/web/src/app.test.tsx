@@ -132,6 +132,98 @@ describe('server status', () => {
     })
 
     await screen.findByText('Conectado')
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls.filter(([input]) => input === '/api/health')).toHaveLength(2)
+  })
+})
+
+describe('backup status', () => {
+  const NOW = new Date()
+  const pad = (value: number) => value.toString().padStart(2, '0')
+  const todayAt = (hours: number, minutes: number) =>
+    `${NOW.getFullYear()}-${pad(NOW.getMonth() + 1)}-${pad(NOW.getDate())}T${pad(hours)}:${pad(minutes)}:00`
+
+  function serve(status: object, afterRetry?: object) {
+    fetchMock.mockImplementation(async (input, init) => {
+      if (input === '/api/backups' && init?.method === 'POST') {
+        return new Response(JSON.stringify(afterRetry))
+      }
+
+      return input === '/api/backups/status' ? new Response(JSON.stringify(status)) : healthy()
+    })
+  }
+
+  const fine = { enabled: true, lastGoodAt: todayAt(8, 15), warning: false, secondCopy: null }
+
+  it('shows the last good backup calmly, with nothing to press', async () => {
+    serve(fine)
+    open()
+
+    await screen.findByText('Último respaldo: hoy 8:15 a. m.')
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Intentar de nuevo' })).toBeNull()
+  })
+
+  it('shows nothing when the API makes no backups, as in development', async () => {
+    serve({ enabled: false, lastGoodAt: null, warning: false, secondCopy: null })
+    open()
+
+    await screen.findByText('Conectado')
+    expect(screen.queryByText(/respaldo/)).toBeNull()
+  })
+
+  it('warns in plain Spanish and retries once per click', async () => {
+    serve({ ...fine, warning: true }, fine)
+    const { user } = open()
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toBe(
+      'No se pudo guardar el respaldo. El último es de hoy 8:15 a. m. Por favor llame a Billy.',
+    )
+
+    await user.dblClick(screen.getByRole('button', { name: 'Intentar de nuevo' }))
+
+    await screen.findByText('Último respaldo: hoy 8:15 a. m.')
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1)
+  })
+
+  it('warns without a date when there has never been a good backup', async () => {
+    serve({ enabled: true, lastGoodAt: null, warning: true, secondCopy: null })
+    open()
+
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'No se pudo guardar el respaldo. Por favor llame a Billy.',
+    )
+  })
+
+  it.each([
+    [true, 'La copia en OneDrive no se está haciendo. Por favor llame a Billy.'],
+    [false, 'La segunda copia del respaldo no se está haciendo. Por favor llame a Billy.'],
+  ])('warns about the second copy (OneDrive: %s)', async (isOneDrive, text) => {
+    serve({ ...fine, secondCopy: { isOneDrive, lastAt: null, warning: true } })
+    open()
+
+    expect((await screen.findByRole('alert')).textContent).toBe(text)
+    expect(screen.getByRole('button', { name: 'Intentar de nuevo' })).toBeTruthy()
+  })
+
+  it('a second copy that is fine adds nothing', async () => {
+    serve({ ...fine, secondCopy: { isOneDrive: true, lastAt: fine.lastGoodAt, warning: false } })
+    open()
+
+    await screen.findByText('Último respaldo: hoy 8:15 a. m.')
+    expect(screen.queryByText(/OneDrive/)).toBeNull()
+  })
+
+  it('hides the backup line while disconnected, since it could be out of date', async () => {
+    fetchMock.mockImplementation(async (input) =>
+      input === '/api/backups/status'
+        ? new Response(JSON.stringify(fine))
+        : Promise.reject(new TypeError('Failed to fetch')),
+    )
+    open()
+
+    await screen.findByText(/Sin conexión/)
+    expect(screen.queryByText(/respaldo/)).toBeNull()
   })
 })

@@ -2,6 +2,8 @@ import { Circle } from 'lucide-react'
 import { Outlet } from 'react-router'
 import { MessagesProvider } from '../components/MessagesProvider'
 import styles from './AppLayout.module.css'
+import { BackupStatusLine } from './BackupStatusLine'
+import { useBackupStatus } from './useBackupStatus'
 import { useServerStatus, type ServerStatus } from './useServerStatus'
 
 const STATUS_TEXT: Record<ServerStatus, string> = {
@@ -12,6 +14,7 @@ const STATUS_TEXT: Record<ServerStatus, string> = {
 
 export function AppLayout() {
   const status = useServerStatus()
+  const backup = useBackupStatus()
 
   return (
     <MessagesProvider>
@@ -22,6 +25,9 @@ export function AppLayout() {
             {status === 'connected' && <Circle size={16} fill="currentColor" aria-hidden="true" />}
             {STATUS_TEXT[status]}
           </p>
+          {status === 'connected' && backup.status?.enabled && (
+            <BackupStatusLine status={backup.status} onRetry={backup.retry} />
+          )}
         </footer>
       </div>
     </MessagesProvider>

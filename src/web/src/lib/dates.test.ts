@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatDateLong, todayLocal, yesterdayLocal } from './dates'
+import { formatDateLong, formatMoment, todayLocal, yesterdayLocal } from './dates'
 
 describe('todayLocal', () => {
   it('is still today in the evening, when UTC is already tomorrow', () => {
@@ -36,4 +36,31 @@ describe('formatDateLong', () => {
   it.each(['', '2026-13-01', '2026-02-30', 'hoy'])('returns null for %j', (text) => {
     expect(formatDateLong(text)).toBeNull()
   })
+})
+
+describe('formatMoment', () => {
+  const now = new Date(2026, 10, 7, 9, 0)
+
+  it.each([
+    ['2026-11-07T08:15:00', 'hoy 8:15 a. m.'],
+    ['2026-11-07T00:05:00', 'hoy 12:05 a. m.'],
+    ['2026-11-07T12:30:00', 'hoy 12:30 p. m.'],
+    ['2026-11-06T17:40:59', 'ayer 5:40 p. m.'],
+    ['2026-11-05T17:40:00', 'jueves 5 de noviembre'],
+    ['2026-09-01T10:00:00', 'martes 1 de setiembre'],
+    ['2025-12-31T10:00:00', 'miércoles 31 de diciembre de 2025'],
+  ])('%s → %s', (text, expected) => {
+    expect(formatMoment(text, now)).toBe(expected)
+  })
+
+  it('says ayer across a month', () => {
+    expect(formatMoment('2026-10-31T18:00:00', new Date(2026, 10, 1, 8, 0))).toBe('ayer 6:00 p. m.')
+  })
+
+  it.each(['', '2026-11-07', '2026-11-07T24:00:00', '2026-02-30T08:00:00', '2026-11-07T08:15:00-06:00'])(
+    'returns null for %j',
+    (text) => {
+      expect(formatMoment(text, now)).toBeNull()
+    },
+  )
 })

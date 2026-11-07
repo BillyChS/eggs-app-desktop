@@ -11,7 +11,8 @@ public partial class App : Application
 {
     private const string LogSource = "Desktop";
 
-    private static readonly TimeSpan HostStopTimeout = TimeSpan.FromSeconds(6);
+    // The API's own 5 seconds, plus the backup made on closing. The window is already gone by then.
+    private static readonly TimeSpan HostStopTimeout = TimeSpan.FromSeconds(10);
 
     private static readonly string? AppVersion = typeof(App).Assembly
         .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;

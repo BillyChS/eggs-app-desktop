@@ -92,9 +92,82 @@ Everything goes under `%LocalAppData%\EggsApp`, never next to the exe:
 | ------------- | --------------------------------------------------------------------------------------- |
 | `eggs.db`     | The app's data. While the app runs, SQLite also keeps `eggs.db-wal` and `eggs.db-shm` next to it. |
 | `eggs.dev.db` | Development data, used by the standalone API and the `dotnet ef` tools                  |
-| `backups`     | A copy of the database made before each migration. Not pruned yet, and not the backup feature. |
+| `backups\daily` | The automatic backups, one per day (`eggs-YYYY-MM-DD.db`). See [Backups](#backups). |
+| `backups`     | A copy made before each migration (`eggs-YYYY-MM-DD_HH-mm-ss-fff.db`), the 5 newest kept, and `backup-state.json`, which the footer's warnings need. |
+| `settings.json` | Optional, written by hand: the backup's second location. See [Backups](#backups).  |
 | `WebView2`    | WebView2 user data                                                                      |
-| `logs`        | One line per startup (version and port) and clean shutdown, plus startup failures and unhandled exceptions. One file per day, kept for 7 days. The Spanish error messages show this path. |
+| `logs`        | One line per startup (version and port), clean shutdown and backup, plus failures and unhandled exceptions. One file per day, kept for 7 days. The Spanish error messages show this path. |
+
+The one exception is the second copy of each backup, which goes off this folder on purpose: by default to
+`%OneDrive%\Respaldos Eggs App`.
+
+## Backups
+
+The desktop app backs up `eggs.db` on its own; nobody has to do anything. The standalone API never does.
+
+**When.** At startup, if there's no backup for today yet (in the background, so the window doesn't wait); every hour
+while open, for the same reason, so an app left open past midnight still gets the new day's; and on every clean
+close, which replaces today's file with the day's final state.
+
+**How.** SQLite's backup API (never a file copy, which could miss what's still in `eggs.db-wal`) writes
+`eggs-YYYY-MM-DD.db.partial`. The copy is checked with `PRAGMA integrity_check`, and only then renamed, so a file with
+its real name is always a complete, valid database. Backups are single files in rollback-journal mode: no `-wal` or
+`-shm` goes with them.
+
+**What's kept.** The 14 newest daily backups, plus the newest of each of the 12 newest months: about a year, a couple
+of MB. Counted in backups, not calendar days, so an app left unused for weeks doesn't lose its old ones. The 5 newest
+pre-migration copies are kept too. Pruning only deletes files whose names match those patterns.
+
+**Second location.** Each verified backup is also copied to a second folder, with the same retention:
+
+- Default: `%OneDrive%\Respaldos Eggs App`, when OneDrive is set up for the Windows user (the `OneDrive` environment
+  variable). OneDrive syncs it to the cloud, which covers a dead disk or a stolen PC, and its version history and
+  Files Restore (30 days) help against ransomware. The app only sees the local folder: it can't tell if OneDrive is
+  signed in and syncing, so check now and then at onedrive.live.com that `Respaldos Eggs App` has recent files.
+- Another folder, like a USB drive, or none: create `%LocalAppData%\EggsApp\settings.json`:
+
+  ```json
+  { "Backup": { "SecondFolder": "E:\\Respaldos Eggs App" } }
+  ```
+
+  Use `"off"` for no second copy. The folder is created if its parent exists. If it doesn't (USB unplugged), the copy
+  is skipped and logged, and made at the next hourly check. A `settings.json` with a mistake is logged and ignored;
+  it never stops the app.
+
+**Installing on a new PC.** Sign in to OneDrive with the account the backups should go to, and leave it set to start
+with Windows. Open the app once, then check that `Respaldos Eggs App` shows up in OneDrive online.
+
+**Failures.** A failed backup never stops the app or touches `eggs.db`: it's logged with the reason, and the next
+check tries again. The footer shows "Último respaldo: hoy 8:15 a. m." and warns only when:
+
+- the most recent attempt failed (remembered across restarts in `backup-state.json`), or
+- the app was used on 3 days with no good backup since. Days it wasn't opened don't count, so a long weekend never
+  causes a warning.
+
+The second copy has the same rule with 7 days of use, and a skipped copy (no OneDrive, USB unplugged) counts as days
+without one, not as a failure. A warning has one button, "Intentar de nuevo", which runs a backup at once
+(`POST /api/backups`).
+
+## Restoring a backup
+
+This is for Billy, not for the person using the app. Nothing is ever deleted until the end.
+
+1. **Close Eggs App.** In Task Manager, check that no `EggsApp.Desktop` process is left.
+2. **Choose the backup.** The newest is in `%LocalAppData%\EggsApp\backups\daily`, named by day. If the PC's disk is
+   gone, take one from OneDrive's `Respaldos Eggs App` (download it first, so it isn't just a cloud placeholder).
+   To restore the state before a migration, take a `backups\eggs-YYYY-MM-DD_HH-mm-ss-fff.db` instead.
+3. **Move the current database aside.** In `%LocalAppData%\EggsApp`, create a folder like
+   `before-restore-2026-11-07` and move `eggs.db` into it, **together with `eggs.db-wal` and `eggs.db-shm` if they
+   exist**. A leftover `-wal` next to the restored file would be applied to it and corrupt it.
+4. **Put the backup in place.** Copy (don't move) the chosen backup into `%LocalAppData%\EggsApp` and rename the copy
+   to `eggs.db`.
+5. **Open Eggs App** and check the latest sales, abonos and expenses. A backup from an older version of the app is
+   migrated at startup, after a copy of it is made. One from a newer version is refused with an error, and nothing is
+   changed: use the newer app.
+6. **When it's all right**, delete the `before-restore-…` folder. If not, close the app and put those files back.
+
+Restoring doesn't remove later backups: the next one is made from the restored data, and today's file is replaced
+when the app closes. To keep today's original, copy it somewhere first.
 
 ## CI
 

@@ -40,6 +40,45 @@ export function formatDateShort(localDate: string): string | null {
     : null
 }
 
+const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
+const MONTHS = [
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'setiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
+]
+
+/**
+ * A local "YYYY-MM-DDTHH:mm:ss" as people say it: "hoy 8:15 a. m.", "ayer 5:40 p. m.", "jueves 5 de noviembre",
+ * adding the year only if it isn't this one. Null if it isn't a real date and time.
+ */
+export function formatMoment(localDateTime: string, now: Date = new Date()): string | null {
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::\d{2})?$/.exec(localDateTime)
+  const date = match ? toLocalDate(match[1]) : null
+  const [hours, minutes] = match ? [Number(match[2]), Number(match[3])] : [NaN, NaN]
+
+  if (!match || !date || hours > 23 || minutes > 59) {
+    return null
+  }
+
+  if (match[1] === todayLocal(now) || match[1] === yesterdayLocal(now)) {
+    const day = match[1] === todayLocal(now) ? 'hoy' : 'ayer'
+    const hour12 = hours % 12 === 0 ? 12 : hours % 12
+    return `${day} ${hour12}:${match[3]} ${hours < 12 ? 'a. m.' : 'p. m.'}`
+  }
+
+  const year = date.getFullYear() === now.getFullYear() ? '' : ` de ${date.getFullYear()}`
+  return `${WEEKDAYS[date.getDay()]} ${date.getDate()} de ${MONTHS[date.getMonth()]}${year}`
+}
+
 function toLocalDate(localDate: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(localDate)
   if (!match) {

@@ -1,4 +1,5 @@
 using EggsApp.Api.Data;
+using EggsApp.Api.Features.Backups;
 using EggsApp.Api.Features.Customers;
 using EggsApp.Api.Features.Expenses;
 using EggsApp.Api.Features.Health;
@@ -6,6 +7,7 @@ using EggsApp.Api.Features.Payments;
 using EggsApp.Api.Features.Reports;
 using EggsApp.Api.Features.Sales;
 using EggsApp.Api.Hosting;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace EggsApp.Api;
 
@@ -25,6 +27,12 @@ public static class EggsAppHostExtensions
         builder.Services.AddDbContext<AppDbContext>((services, options) => AppDbContext.Configure(
             options,
             services.GetRequiredService<IConfiguration>()[DatabasePathKey] ?? AppDataPaths.DevDatabase));
+
+        // Off unless Backup:Enabled is set, which only the desktop host does. See BackupSettings.
+        builder.Services.TryAddSingleton(FailureLog.Default);
+        builder.Services.TryAddSingleton(new BackupClock());
+        builder.Services.AddSingleton<DatabaseBackups>();
+        builder.Services.AddHostedService<BackupWorker>();
 
         return builder;
     }
@@ -56,6 +64,7 @@ public static class EggsAppHostExtensions
         api.MapPayments();
         api.MapExpenses();
         api.MapReports();
+        api.MapBackups();
 
         // Unknown /api routes return 404; every other route falls back to the React app.
         app.MapFallback("/api/{**path}", () => Results.NotFound());
