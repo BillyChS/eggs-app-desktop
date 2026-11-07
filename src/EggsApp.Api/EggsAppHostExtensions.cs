@@ -1,5 +1,6 @@
 using EggsApp.Api.Data;
 using EggsApp.Api.Features.Customers;
+using EggsApp.Api.Features.Expenses;
 using EggsApp.Api.Features.Health;
 using EggsApp.Api.Features.Payments;
 using EggsApp.Api.Features.Sales;
@@ -52,6 +53,7 @@ public static class EggsAppHostExtensions
         api.MapCustomers();
         api.MapSales();
         api.MapPayments();
+        api.MapExpenses();
 
         // Unknown /api routes return 404; every other route falls back to the React app.
         app.MapFallback("/api/{**path}", () => Results.NotFound());
