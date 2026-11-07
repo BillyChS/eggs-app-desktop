@@ -1,5 +1,4 @@
-﻿using System.Reflection;
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Threading;
 using EggsApp.Api.Data;
 using EggsApp.Api.Hosting;
@@ -13,9 +12,6 @@ public partial class App : Application
 
     // The API's own 5 seconds, plus the backup made on closing. The window is already gone by then.
     private static readonly TimeSpan HostStopTimeout = TimeSpan.FromSeconds(10);
-
-    private static readonly string? AppVersion = typeof(App).Assembly
-        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
 
     private readonly FailureLog _log = FailureLog.Default;
     private SingleInstance? _singleInstance;
@@ -113,7 +109,7 @@ public partial class App : Application
             _log);
 
         // Here, not after the await in OnStartup: that continuation never runs if the window closes during startup.
-        _log.Write(LogSource, $"Started. Version {AppVersion}, port {host.Url.Port}.");
+        _log.Write(LogSource, $"Started. Version {AppVersion.Full}, port {host.Url.Port}.");
 
         return host;
     }

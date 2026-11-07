@@ -8,7 +8,8 @@ import { routes } from './routes'
 
 const fetchMock = vi.fn<typeof fetch>()
 
-const healthy = () => new Response(JSON.stringify({ status: 'ok', time: '2026-11-04T10:00:00' }))
+const healthy = () =>
+  new Response(JSON.stringify({ status: 'ok', time: '2026-11-04T10:00:00', version: '1.2.3' }))
 
 function open(path = '/', appRoutes: RouteObject[] = routes) {
   const router = createMemoryRouter(appRoutes, { initialEntries: [path] })
@@ -118,6 +119,32 @@ describe('server status', () => {
 
     const status = await screen.findByText('Sin conexión. Cierre y vuelva a abrir Eggs App.')
     expect(status.textContent).not.toMatch(/HTTP|fetch/)
+  })
+
+  it('shows the version as plain text, and keeps it while disconnected', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    open()
+
+    const version = await screen.findByText('Versión 1.2.3')
+    expect(version.closest('footer')).toBeTruthy()
+    expect(version.closest('button')).toBeNull()
+
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+    await act(async () => {
+      vi.advanceTimersByTime(CHECK_INTERVAL_MS)
+    })
+
+    await screen.findByText(/Sin conexión/)
+    expect(screen.getByText('Versión 1.2.3')).toBeTruthy()
+    vi.useRealTimers()
+  })
+
+  it('shows no version before the first answer', () => {
+    fetchMock.mockImplementation(() => new Promise(() => {}))
+    open()
+
+    expect(screen.getByText('Conectando…')).toBeTruthy()
+    expect(screen.queryByText(/Versión/)).toBeNull()
   })
 
   it('keeps checking, and notices when the server comes back', async () => {

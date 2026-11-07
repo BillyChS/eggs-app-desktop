@@ -18,7 +18,7 @@ src/
   EggsApp.Api/                 ASP.NET Core minimal API (.NET 10)
     EggsAppHostExtensions.cs   AddEggsApp() / UseEggsApp(): host setup shared by standalone and desktop
     Program.cs                 Standalone dev host (Swagger in Development only)
-    Hosting/                   EmbeddedApiHost (in-process host), FailureLog, AppDataPaths
+    Hosting/                   EmbeddedApiHost (in-process host), FailureLog, AppDataPaths, AppVersion
     Data/                      AppDbContext, BaseEntity, DatabaseMigrator (startup migration)
     Data/Migrations/           EF Core migrations
     Features/<Feature>/        Vertical slices (e.g. Features/Customers/: one file per action, plus CustomerEndpoints.cs)
@@ -42,6 +42,8 @@ src/
     vite.config.ts             Dev proxy: /api → http://localhost:5080; Vitest settings
 tests/
   EggsApp.Tests/               xUnit; integration tests via WebApplicationFactory<Program>
+installer/                     EggsApp.iss (Inno Setup, per-user) and build.ps1, which publishes and builds it
+.github/workflows/installer.yml  Builds the installer on v* tags into a GitHub Release; not part of PR CI
 Directory.Build.props          Nullable, ImplicitUsings, TreatWarningsAsErrors
 global.json                    Pins .NET 10 SDK
 ```
@@ -60,6 +62,7 @@ dotnet run --project src/EggsApp.Api       # Swagger: http://localhost:5080/swag
 dotnet run --project src/EggsApp.Desktop
 cd src/web && pnpm dev | pnpm build | pnpm lint | pnpm test   # pnpm build writes to src/EggsApp.Api/wwwroot
 dotnet publish src/EggsApp.Desktop -p:PublishProfile=win-x64   # the shipped app: self-contained, includes the UI
+powershell -ExecutionPolicy Bypass -File installer\build.ps1   # the installer, in artifacts\installer (needs Inno Setup 6)
 ```
 
 `pnpm dev` also serves the base components at `/dev/componentes`. Publishing builds the UI; `-p:SkipFrontendBuild=true` publishes `wwwroot` as is. In Debug, the desktop app uses
@@ -149,5 +152,10 @@ touch the real data; set `Database:Path` to override it for the standalone API.
   saves from a field; only activating the button saves. So these forms have no `<form>` element, and a held-down Enter
   is ignored. All three must keep their save button in sight at 1093×560.
 - **Data safety:** never commit `.db` files or backup JSON files.
+- **Version:** `<Version>` in `Directory.Build.props` is the only place it's set; read it through `AppVersion`. A `v*`
+  tag must match it.
+- **Installer:** it installs to `%LocalAppData%\Programs\Eggs App` and must never touch `%LocalAppData%\EggsApp`: no
+  `[InstallDelete]` or `[UninstallDelete]` outside `{app}`. Keep the `AppId` GUID and the `AppMutex` name in step
+  with `SingleInstance`. An installer older than the installed version is refused. Installer text is Spanish.
 - **Commits:** Conventional Commits with a footer `Refs: AB#<id>` (Azure Boards) when a ticket exists. No co-author or attribution trailers; commits are authored solely by the user.
 - **Screenshots:** never capture the full screen; only capture the app's own windows.

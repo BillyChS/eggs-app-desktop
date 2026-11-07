@@ -29,4 +29,16 @@
 
   <Import Project="..\Frontend.targets" />
 
+  <!-- Files the referenced API project brings that the shipped app never uses: the API's own launcher (it only runs
+       in-process here) and its Development settings (the embedded host is always Production). The .pdb files stay,
+       so logged stack traces have line numbers. installer\build.ps1 checks that none of these are published. -->
+  <Target Name="RemoveUnusedPublishFiles" AfterTargets="ComputeFilesToPublish">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+                             Condition="'%(RelativePath)' == 'EggsApp.Api.exe'
+                                        Or '%(RelativePath)' == 'EggsApp.Api.runtimeconfig.json'
+                                        Or '%(RelativePath)' == 'appsettings.Development.json'" />
+    </ItemGroup>
+  </Target>
+
 </Project>

@@ -1,0 +1,77 @@
+name: Installer
+
+# Builds the installer with installer/build.ps1. Not part of pull request CI, to keep it fast.
+# - A version tag (v1.2.3, matching <Version> in Directory.Build.props) publishes it as a GitHub Release.
+# - Run it by hand (workflow_dispatch) for a test build: it is kept as a workflow artifact only.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write # gh release create
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      # pnpm must be installed before setup-node so its pnpm cache works.
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: src/web/package.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: src/web/pnpm-lock.yaml
+
+      - name: Install Inno Setup if the runner image lacks it
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup --yes --no-progress
+          }
+
+      - name: Check that the tag matches the version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $version = (dotnet msbuild src/EggsApp.Desktop/EggsApp.Desktop.csproj -nologo -getProperty:Version).Trim()
+          if ("v$version" -ne $env:GITHUB_REF_NAME) {
+            throw "Tag $env:GITHUB_REF_NAME does not match <Version> $version in Directory.Build.props."
+          }
+
+      - name: Build the installer
+        shell: pwsh
+        run: ./installer/build.ps1
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installer
+          path: artifacts/installer/EggsApp-Setup-*.exe
+          if-no-files-found: error
+
+      - name: Publish the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $installer = Get-ChildItem artifacts/installer/EggsApp-Setup-*.exe
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash
+          gh release create $env:GITHUB_REF_NAME $installer.FullName `
+            --title "Eggs App $($env:GITHUB_REF_NAME.TrimStart('v'))" `
+            --notes "Instalador: $($installer.Name)`nSHA-256: $hash`n`nVer README: Instalar y actualizar en la PC de papa."
