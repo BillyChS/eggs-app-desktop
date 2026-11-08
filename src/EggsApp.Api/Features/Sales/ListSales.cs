@@ -24,10 +24,12 @@ public static class ListSales
             db,
             sales.Where(sale => sale.CustomerId is not null).Select(sale => sale.CustomerId!.Value));
 
-        var paidNow = await SaleCredit.ReadPaidNowAsync(db, sales.Where(sale => sale.IsCredit).Select(sale => sale.Id));
+        var credit = sales.Where(sale => sale.IsCredit).ToList();
+        var paidNow = await SaleCredit.ReadPaidNowAsync(db, credit.Select(sale => sale.Id));
+        var owed = await SaleStatuses.ReadOwedAsync(db, credit.Select(sale => sale.CustomerId!.Value));
 
         return new SaleListResponse(
-            [.. sales.Select(sale => SaleDetail.From(sale, customers, paidNow))],
+            [.. sales.Select(sale => SaleDetail.From(sale, customers, paidNow, owed))],
             CashTotal: sales.Where(sale => !sale.IsCredit).Sum(sale => sale.Total),
             CreditTotal: sales.Where(sale => sale.IsCredit).Sum(sale => sale.Total));
     }

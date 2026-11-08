@@ -34,12 +34,16 @@ src/
   web/                         React + Vite + TypeScript (pnpm)
     src/routes.tsx             All screens and their addresses
     src/theme/tokens.css       Design tokens: colors, spacing, radii, font sizes
-    src/components/            Button, inputs, DayPicker, ConfirmDialog, useMessages (success and error messages)
-    src/layout/                AppLayout (status footer), Screen (header with "‹ Volver"), useUnsavedChanges, useOneAtATime
+    src/components/            Button, inputs, Dropdown, DayPicker, ConfirmDialog, useMessages (success and error messages)
+    src/layout/                AppLayout + Sidebar (pages, connection, backup, version), Screen (header, "‹ Volver" on inner
+                               screens), useUnsavedChanges, useOneAtATime
     src/lib/                   Money and date helpers, selectOnFocus
     src/screens/               Screens; dev/ is a components page that exists only in pnpm dev
+    src/screens/sales/         Ventas (salesView: day or month and tab, in the address) and the sale form
     src/services/              API calls; http.ts has the timeout and ApiError
+    src/test/                  Test setup, and a fake API (api.tsx) for screen tests
     vite.config.ts             Dev proxy: /api → http://localhost:5080; Vitest settings
+docs/design/                   The design prototypes (Main = Ventas, NuevaVenta = sale form), kept as they came
 tests/
   EggsApp.Tests/               xUnit; integration tests via WebApplicationFactory<Program>
 installer/                     EggsApp.iss (Inno Setup, per-user) and build.ps1, which publishes and builds it
@@ -109,8 +113,13 @@ touch the real data; set `Database:Path` to override it for the standalone API.
   the sale's id and replaces all its lines; deleting soft-deletes the lines too, by loading them.
 - **Income:** cash-basis. A cash sale counts on its sale date, and an abono on its payment date. A credit sale (fiado)
   is never income: it's owed. `cashTotal` skips credit sales; Ventas shows "Entró" as cash sales plus abonos.
+- **Who a sale is for:** the form always has someone chosen once the payment is. "Cliente sin nombre" is a sale with no
+  `CustomerId` (Resúmenes counts these as "Ventas sin cliente"); it's what a cash sale starts with, and a fiado can't be
+  it ("Para fiar hay que elegir un cliente con nombre"). Someone new is added from the form with `newCustomer` in place
+  of `customerId`, checked by `CustomerValidator` and saved in the sale's `SaveChanges` (`SaleCredit.ResolveCustomer`);
+  the form asks about similar names first, as Clientes does.
 - **Credit:** a credit sale has `IsCredit` and always a `CustomerId` (check constraint `IsCredit = 0 OR CustomerId IS
-  NOT NULL`). A cash sale may name who bought it ("¿Quién compró? (opcional)"): that never touches a balance, so every
+  NOT NULL`). A cash sale's customer is only who bought it: that never touches a balance, so every
   balance and credit rule filters on `IsCredit`, never on `CustomerId` alone. Each customer has one running account:
   balance = their credit sales − their abonos (`Payment`), worked out on every read, never stored. The balance never
   goes below 0: an abono can't be more than is owed, and editing, moving or deleting a credit sale is refused (409) if
@@ -121,6 +130,15 @@ touch the real data; set `Database:Path` to override it for the standalone API.
   abono follows its sale (`SaleCredit.ApplyPaidNow`): editing the sale changes it, moving the sale to another customer
   replaces it, switching to cash or deleting the sale deletes it, and its own `PUT`/`DELETE` answer 409. Every other
   abono isn't tied to any sale.
+- **Sale status:** what each fiado still owes ("Debe ₡X" or "Pagado con abonos"; a cash sale is "Pagado") is
+  `SaleDetail.Owed`, from `SaleStatuses`: per customer, a linked abono pays its own sale first, then all their other
+  abonos pay their oldest fiados first (sale date, then `CreatedAt`, then `Id`), from all their history, whatever the
+  period shown. Worked out on every read, never stored, so the sales' `Owed` always add up to the balance; editing or
+  deleting an old fiado or an abono can change the status of newer ones.
+- **Ventas:** one day (Hoy, Ayer, Otro día) or one month (‹ ›, never past the current one, which stops at today), and a
+  tab: Fiado, Contado or Abonos. The view lives in the address (`?fecha=` or `?mes=`, `&pestana=`, see `salesView.ts`)
+  and screens opened from it carry it, to come back to it. The cards are `GetSummary`'s numbers for the same range, so
+  they match Resúmenes; the table and its search are the period's `ListSales` and `ListPayments`.
 - **Expenses:** cash-basis, like income: an `Expense` counts on its `ExpenseDate`. Its category is a row of
   `ExpenseCategory`, not code: the migration seeds them with fixed ids, and a new or renamed one is a data change
   (there's no screen for it yet). A category is never removed, only retired (soft-deleted, with a Restrict FK):
@@ -147,23 +165,32 @@ touch the real data; set `Database:Path` to override it for the standalone API.
   warn. Pruning only deletes names matching `BackupFiles` patterns. Warnings count days the app was used, never
   calendar days. Tests that start `EmbeddedApiHost` must turn the second location off or point it at a temp folder,
   or they write into the real OneDrive. Restore steps are in README.md.
-- **UX for an elderly user:** large targets, 18px+ text, at most 2–3 actions per screen, confirmation dialogs. Inicio
-  is the one exception to the action limit: it has a button per module. Tokens keep text and buttons at 7:1 contrast.
-  Optional fields look optional: quiet text, "(opcional)" in the label, never in the Enter path, never blocking a save.
+- **UX for an elderly user:** large targets (56px controls), 18px+ text, at most 2–3 main actions per screen besides
+  the sidebar and a table's row buttons, confirmation dialogs. Tokens keep text and buttons at 7:1 contrast, and input
+  edges at 3:1 or more. The look follows `docs/design/`. Optional fields look optional: "(opcional)" in the label,
+  never blocking a save; required ones have no mark.
+- **Choices:** a choice with a few options and no room for a row of buttons is a `Dropdown` (¿Cómo pagó?, Tipo de
+  cartón): never a `<select>`, whose list the browser draws small. Where there's room, large buttons that show every
+  option at once (expense categories, periods) stay.
 - **Screen sizes:** the target is a 21" or larger monitor at 1920×1080, 100% scaling. Layouts are checked at
   1920×1080 and 1366×768 (both at 100%), the app maximized.
   The browser's calendar popup is a known exception to the size rule: CSS can't reach it (about 13px text and 28px
-  days at 125% scaling), so `DayPicker` offers Hoy and Ayer as large buttons, and a date can be typed.
+  days at 125% scaling), so a date can always be typed, and Ventas, abonos and expenses offer Hoy and Ayer as large
+  buttons. A new sale starts on the day Ventas was showing.
 - **Dates and money in the UI:** use `lib/dates.ts` and `lib/money.ts`. `new Date("YYYY-MM-DD")` means UTC and shows
   the day before in Costa Rica; `Intl` doesn't give `₡12.500` for `es-CR`.
-- **Navigation:** "‹ Volver" goes to the parent screen, never browser history, so it still works after a reload.
+- **Navigation:** the sidebar is always there with the four pages by name (no submenus), and marks the page a screen
+  is under. The app opens on Ventas. Screens under a page have "‹ Volver" to it (the sale form has Cancelar and ✕),
+  never browser history, so it still works after a reload.
 - **Forms:** use `useUnsavedChanges` so leaving asks first. It also tells the window, which asks before closing. Don't
   disable the button being pressed while saving, because that loses keyboard focus: use `useOneAtATime`.
-- **Sale, abono and expense form keyboard:** Enter moves on (type → quantity → price → "Al contado" until a payment is
-  chosen → "Guardar venta"; "¿Pagó algo ahora?" → "Guardar venta"; amount → note → "Guardar abono"; category → amount
-  → note → "Guardar gasto") and never saves from a field; only activating the button saves. So these forms have no
-  `<form>` element, and a held-down Enter is ignored. All three must keep their save button in sight at both screen
-  sizes above.
+- **Sale, abono and expense form keyboard:** Enter moves on and never saves from a field; only activating the button
+  saves. The sale form opens on ¿Cómo pagó? and asks in this order: Fecha → ¿Cómo pagó? → each line's type → quantity
+  → price → "¿Pagó algo ahora?" (fiado only) → Cliente (skipped once someone is chosen, as "Cliente sin nombre" is for
+  a cash sale; Enter in the search goes to the first name, it doesn't pick it) → "Guardar venta". Abono: amount → note
+  → "Guardar abono". Expense: category → amount → note → "Guardar gasto". So these forms have no `<form>` element, and
+  a held-down Enter is ignored. All three must keep their save button in sight at both screen sizes above: the sale
+  form's header and buttons stay put while its middle scrolls.
 - **Data safety:** never commit `.db` files or backup JSON files.
 - **Version:** `<Version>` in `Directory.Build.props` is the only place it's set; read it through `AppVersion`. A `v*`
   tag must match it.

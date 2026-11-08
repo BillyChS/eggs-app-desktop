@@ -32,7 +32,7 @@ export function ExpensesScreen() {
   const query = `?fecha=${day}`
 
   return (
-    <Screen title="Gastos" backTo="/">
+    <Screen title="Gastos">
       <div className={styles.toolbar}>
         <div className={styles.controls}>
           <div className={styles.picker}>

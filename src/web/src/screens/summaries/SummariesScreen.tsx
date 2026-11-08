@@ -215,7 +215,7 @@ export function SummariesScreen() {
   const isEmpty = summary !== null && summary.days.length === 0
 
   return (
-    <Screen title="Resúmenes" backTo="/">
+    <Screen title="Resúmenes">
       <div className={styles.toolbar}>
         <div className={styles.choices}>
           {CHOICES.map(({ kind, label }) => {

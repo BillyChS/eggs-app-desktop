@@ -1,0 +1,114 @@
+.dropdown {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+/* The list hangs from the button, whatever the label or the error above and below it. */
+.control {
+  position: relative;
+}
+
+.label {
+  font-size: var(--font-size-body);
+  font-weight: 600;
+}
+
+.hiddenLabel {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  width: 100%;
+  min-height: var(--size-input);
+  padding: 0 14px 0 var(--space-md);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-input);
+  text-align: left;
+  cursor: pointer;
+}
+
+.open {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+
+.invalid {
+  border: 3px solid var(--color-danger);
+}
+
+.placeholder {
+  color: var(--color-text-muted);
+}
+
+.chevron {
+  flex-shrink: 0;
+  color: var(--color-text-soft);
+  transition: transform 0.15s;
+}
+
+.open .chevron {
+  transform: rotate(180deg);
+}
+
+.list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  z-index: 5;
+  margin: 0;
+  padding: 6px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-popup);
+  list-style: none;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  min-height: var(--size-option);
+  margin: 2px 0;
+  padding: 0 var(--space-sm);
+  border-radius: 8px;
+  color: var(--color-text);
+  font-size: var(--font-size-input);
+  cursor: pointer;
+}
+
+.active {
+  outline: 2px solid var(--color-text);
+  outline-offset: -2px;
+}
+
+.selected {
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--color-danger);
+  font-size: var(--font-size-body);
+  font-weight: 700;
+}

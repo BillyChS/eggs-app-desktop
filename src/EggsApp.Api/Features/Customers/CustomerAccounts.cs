@@ -6,7 +6,8 @@ using Microsoft.EntityFrameworkCore;
 namespace EggsApp.Api.Features.Customers;
 
 /// <summary>Who a sale or an abono belongs to, as entries show it. A deleted customer still has a name here.</summary>
-public sealed record CustomerRef(Guid Id, string Name, bool IsDeleted);
+/// <param name="Phone">For lists that show it, like Ventas; null when they have none.</param>
+public sealed record CustomerRef(Guid Id, string Name, bool IsDeleted, string? Phone = null);
 
 /// <summary>What a customer owes in the one running account they have.</summary>
 /// <param name="Credit">Their credit sales added up.</param>
@@ -69,7 +70,7 @@ public static class CustomerAccounts
             .IgnoreQueryFilters([AppDbContext.SoftDeleteFilter])
             .AsNoTracking()
             .Where(customer => wanted.Contains(customer.Id))
-            .Select(customer => new CustomerRef(customer.Id, customer.Name, customer.IsDeleted))
+            .Select(customer => new CustomerRef(customer.Id, customer.Name, customer.IsDeleted, customer.Phone))
             .ToDictionaryAsync(customer => customer.Id);
     }
 

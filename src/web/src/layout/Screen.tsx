@@ -1,45 +1,43 @@
-import { Egg } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import styles from './Screen.module.css'
 
 interface Props {
   title: string
-  /** Where "‹ Volver" goes: always the parent screen, never browser history, so it still works after a reload. */
+  /**
+   * Where "‹ Volver" goes, on a screen under one of the sidebar's pages: always that parent, never browser history,
+   * so it still works after a reload. The sidebar's pages themselves have none.
+   */
   backTo?: string
+  /** A line under the title, like the day being looked at. */
+  subtitle?: ReactNode
+  /** The page's main button, at the right of the title. */
+  actions?: ReactNode
   children: ReactNode
 }
 
-const HOME = '/'
-
-/** A screen's header and scrollable content. Without backTo it's Inicio, the one screen with nothing to go back to. */
-export function Screen({ title, backTo, children }: Props) {
+/** A page's header and its scrollable content, next to the sidebar. */
+export function Screen({ title, backTo, subtitle, actions, children }: Props) {
   const navigate = useNavigate()
 
   return (
     <>
       <header className={styles.header}>
-        <div className={styles.side}>
-          {backTo && (
-            <button type="button" className={styles.navButton} onClick={() => navigate(backTo)}>
-              <span className={styles.chevron} aria-hidden="true">‹</span>Volver
-            </button>
-          )}
-        </div>
-        <h1 className={styles.title}>
-          {!backTo && <Egg size={38} aria-hidden="true" />}
-          <span className={styles.titleText} title={title}>
+        {backTo && (
+          <button type="button" className={styles.back} onClick={() => navigate(backTo)}>
+            <span className={styles.chevron} aria-hidden="true">
+              ‹
+            </span>
+            Volver
+          </button>
+        )}
+        <div className={styles.heading}>
+          <h1 className={styles.title} title={title}>
             {title}
-          </span>
-        </h1>
-        <div className={`${styles.side} ${styles.end}`}>
-          {/* From one level down, Volver already goes to Inicio. */}
-          {backTo && backTo !== HOME && (
-            <button type="button" className={styles.navButton} onClick={() => navigate(HOME)}>
-              Inicio
-            </button>
-          )}
+          </h1>
+          {subtitle && <p className={styles.subtitle}>{subtitle}</p>}
         </div>
+        {actions && <div className={styles.actions}>{actions}</div>}
       </header>
       <main className={styles.content}>{children}</main>
     </>

@@ -1,7 +1,7 @@
 import { Button } from '../components/Button'
 import { formatMoment } from '../lib/dates'
 import type { BackupStatus } from '../services/backups'
-import styles from './AppLayout.module.css'
+import styles from './Sidebar.module.css'
 import { useOneAtATime } from './useOneAtATime'
 
 interface Props {
@@ -10,7 +10,7 @@ interface Props {
 }
 
 /**
- * The footer's backup line: calm when all is well, a plain warning with one way to retry when it isn't.
+ * The sidebar's backup line: calm when all is well, a plain warning with one way to retry when it isn't.
  * The backups themselves are automatic, so there is nothing to press in the normal state.
  */
 export function BackupStatusLine({ status, onRetry }: Props) {
@@ -29,7 +29,7 @@ export function BackupStatusLine({ status, onRetry }: Props) {
     )
   }
 
-  return lastGood ? <p className={styles.status}>Último respaldo: {lastGood}</p> : null
+  return lastGood ? <p>Último respaldo: {lastGood}</p> : null
 }
 
 function warningText(status: BackupStatus, lastGood: string | null): string | null {

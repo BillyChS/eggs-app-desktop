@@ -8,8 +8,8 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-sm) var(--space-lg);
-  margin: calc(-1 * var(--space-lg)) calc(-1 * var(--space-lg)) var(--space-md);
-  padding: var(--space-md) var(--space-lg) var(--space-sm);
+  margin: -6px calc(-1 * var(--content-x)) var(--space-md);
+  padding: var(--space-xs) var(--content-x) var(--space-sm);
   background-color: var(--color-background);
 }
 
@@ -69,7 +69,7 @@
 }
 
 .big strong {
-  font-size: var(--font-size-tile);
+  font-size: var(--font-size-number);
   line-height: 1.2;
   overflow-wrap: anywhere;
 }

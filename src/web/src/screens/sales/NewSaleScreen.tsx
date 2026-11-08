@@ -1,13 +1,18 @@
-import { Screen } from '../../layout/Screen'
+import { useSearchParams } from 'react-router'
 import { SaleForm } from './SaleForm'
-import { listOfDay, useSaleDay } from './useSaleDay'
+import { readView, startDayOf, viewAddress, viewAfterSave } from './salesView'
 
+/** Opened from Ventas, whose view is in the address, so Cancelar goes back to it and saving shows the sale in it. */
 export function NewSaleScreen() {
-  const { day } = useSaleDay()
+  const [params] = useSearchParams()
+  const view = readView(params)
 
   return (
-    <Screen title="Nueva venta" backTo={listOfDay(day)}>
-      <SaleForm startDay={day} />
-    </Screen>
+    <SaleForm
+      startDay={startDayOf(view)}
+      closeTo={viewAddress(view)}
+      afterSave={(saved) => viewAfterSave(view, saved.date, saved.isCredit)}
+      afterDelete={viewAddress(view)}
+    />
   )
 }

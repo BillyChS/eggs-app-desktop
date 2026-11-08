@@ -1,16 +1,18 @@
-import { Check, CircleAlert, Plus } from 'lucide-react'
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
+import { X } from 'lucide-react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { Button } from '../../components/Button'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
-import { DayPicker } from '../../components/DayPicker'
+import { DateInput } from '../../components/DateInput'
+import { Dropdown } from '../../components/Dropdown'
 import { useMessages } from '../../components/messages'
 import { MoneyInput } from '../../components/MoneyInput'
 import { useOneAtATime } from '../../layout/useOneAtATime'
 import { useUnsavedChanges } from '../../layout/useUnsavedChanges'
+import { todayLocal } from '../../lib/dates'
 import { formatColones } from '../../lib/money'
 import { selectOnFocus } from '../../lib/selectOnFocus'
-import { getCustomer } from '../../services/customers'
+import { findSimilarCustomers, getCustomer, type CustomerSummary } from '../../services/customers'
 import { ApiError, hasStatus } from '../../services/http'
 import {
   createSale,
@@ -20,87 +22,93 @@ import {
   type CartonType,
   type LastPrices,
   type Sale,
-  type SaleItemInput,
+  type SaleInput,
 } from '../../services/sales'
-import {
-  BLANK_LINE,
-  findProblems,
-  isUntouched,
-  MAX_LINES,
-  shownPrice,
-  subtotal,
-  toItem,
-  type LineProblems,
-  type OpenLine,
-} from './saleLine'
-import { CustomerPicker, type PickedCustomer } from './CustomerPicker'
-import { SaleLineEditor } from './SaleLineEditor'
+import { describeSimilar } from '../customers/customerText'
+import { CustomerChooser } from './CustomerChooser'
+import { cleanName, NO_NAME_FOR_CREDIT, type CustomerChoice } from './customerChoice'
+import { BLANK_LINE, findProblems, isUntouched, MAX_LINES, shownPrice, subtotal, toItem, type LineProblems } from './saleLine'
+import { SaleLines, type FormLine, type LineRefs } from './SaleLines'
 import styles from './SaleForm.module.css'
-import { describeLine, describeSaved, PAID_IN_FULL, summarizeSale } from './saleText'
-import { listOfDay } from './useSaleDay'
+import { deleteQuestion, describeLine, describeSaved, PAID_IN_FULL } from './saleText'
 
 const GONE_MESSAGE = 'Esta venta ya no existe.'
 const PAID_WITH_MISSING = '¿Cómo pagó? Escoja "Al contado" o "Fiado".'
-
-/** A finished line of the form. The key is what lets React tell apart two lines with the same values. */
-interface DoneLine extends SaleItemInput {
-  key: number
-}
+const NEW_NAME_MISSING = 'Escriba el nombre del cliente.'
 
 /** How the sale was paid. A new sale starts with neither, so a forgotten "Fiado" can't become a debt nobody wrote. */
-type PaidWith = 'cash' | 'credit' | null
+type PaidWith = 'cash' | 'credit'
 
-type Errors = Record<string, string | undefined>
-type FocusTarget = 'type' | 'add' | 'save'
+const PAID_WITH_OPTIONS: { value: PaidWith; label: string }[] = [
+  { value: 'cash', label: 'Al contado' },
+  { value: 'credit', label: 'Fiado' },
+]
 
-const itemKey = (index: number, field: keyof LineProblems) => `items[${index}].${field}`
-
-function initialLines(sale: Sale | undefined): { done: DoneLine[]; open: OpenLine } {
-  if (!sale) {
-    return { done: [], open: BLANK_LINE }
-  }
-
-  // The last line opens ready to change. Most sales have just one.
-  const last = sale.items[sale.items.length - 1]
-
-  return {
-    done: sale.items.slice(0, -1).map(({ cartonType, quantity, unitPrice }, key) => ({
-      key,
-      cartonType,
-      quantity,
-      unitPrice,
-    })),
-    open: { cartonType: last.cartonType, quantity: String(last.quantity), price: last.unitPrice, priceTyped: true },
-  }
+interface Errors {
+  date?: string
+  paidWith?: string
+  paidNow?: string
+  customer?: string
+  newName?: string
+  newPhone?: string
+  lines?: string
+  byLine: Record<number, LineProblems | undefined>
 }
 
-/** Who the customer picker is open for: who owes a fiado, or who bought a cash sale. */
-type Picking = 'credit' | 'buyer' | null
+const NO_ERRORS: Errors = { byLine: {} }
+
+function initialLines(sale: Sale | undefined): FormLine[] {
+  if (!sale) {
+    return [{ ...BLANK_LINE, key: 0 }]
+  }
+
+  return sale.items.map(({ cartonType, quantity, unitPrice }, key) => ({
+    key,
+    cartonType,
+    quantity: String(quantity),
+    price: unitPrice,
+    priceTyped: true,
+  }))
+}
+
+function initialChoice(sale: Sale | undefined): CustomerChoice {
+  if (!sale) {
+    return { kind: 'none' }
+  }
+
+  return sale.customer
+    ? { kind: 'existing', customer: { id: sale.customer.id, name: sale.customer.name, isDeleted: sale.customer.isDeleted } }
+    : { kind: 'noName' }
+}
+
+/** The lines that are part of the sale: an untouched one isn't, unless it's the only one, which then shows its errors. */
+function linesToSave(lines: FormLine[]): FormLine[] {
+  const touched = lines.filter((line) => !isUntouched(line))
+  return touched.length > 0 ? touched : lines.slice(0, 1)
+}
 
 interface Values {
   date: string
-  done: DoneLine[]
-  open: OpenLine | null
-  paidWith: PaidWith
-  customer: PickedCustomer | null
+  lines: FormLine[]
+  paidWith: PaidWith | null
+  choice: CustomerChoice
   paidNow: number | null
 }
 
-/** What would be saved, to compare with what's there. An untouched open line isn't part of the sale. */
-function snapshot({ date, done, open, paidWith, customer, paidNow }: Values, lastPrices: LastPrices) {
-  const lines = done.map(({ cartonType, quantity, unitPrice }) => [cartonType, String(quantity), unitPrice])
+/** What would be saved, to compare with what's there. */
+function snapshot({ date, lines, paidWith, choice, paidNow }: Values, lastPrices: LastPrices) {
+  const kept = lines
+    .filter((line) => !isUntouched(line))
+    .map((line) => [line.cartonType ?? '', line.quantity.trim(), shownPrice(line, lastPrices) ?? 0])
 
-  if (open && !isUntouched(open)) {
-    lines.push([open.cartonType ?? '', open.quantity.trim(), shownPrice(open, lastPrices) ?? 0])
-  }
+  const who =
+    choice.kind === 'existing'
+      ? choice.customer.id
+      : choice.kind === 'new'
+        ? `new:${cleanName(choice.name)}|${choice.phone.trim()}`
+        : choice.kind
 
-  return JSON.stringify({
-    date,
-    lines,
-    paidWith,
-    customer: customer?.id ?? null,
-    paidNow: paidWith === 'credit' ? (paidNow ?? 0) : 0,
-  })
+  return JSON.stringify({ date, kept, paidWith, who, paidNow: paidWith === 'credit' ? (paidNow ?? 0) : 0 })
 }
 
 interface Props {
@@ -108,68 +116,75 @@ interface Props {
   sale?: Sale
   /** The day a new sale starts on. */
   startDay: string
-  /** Where to go once saved or deleted, like the customer's account it was opened from. Otherwise, the day's list. */
-  returnTo?: string
+  /** Where Cancelar and ✕ go. */
+  closeTo: string
+  /** Where to go once saved. */
+  afterSave: (saved: Sale) => string
+  /** Where to go once deleted. */
+  afterDelete: string
 }
 
-export function SaleForm({ sale, startDay, returnTo }: Props) {
+/**
+ * A sale, in the order it's told: the day, how it was paid, the cartons, what was paid with a fiado, and who. Enter
+ * moves on and never saves: only Guardar venta does. The header and the buttons stay in sight; the middle scrolls.
+ */
+export function SaleForm({ sale, startDay, closeTo, afterSave, afterDelete }: Props) {
   const navigate = useNavigate()
   const { showSuccess, showError } = useMessages()
 
-  const [initial] = useState(() => initialLines(sale))
   const [date, setDate] = useState(sale?.date ?? startDay)
-  const [done, setDone] = useState(initial.done)
-  const [open, setOpen] = useState<OpenLine | null>(initial.open)
-  const [lineNumber, setLineNumber] = useState(sale?.items.length ?? 0)
-  const [paidWith, setPaidWith] = useState<PaidWith>(sale ? (sale.isCredit ? 'credit' : 'cash') : null)
-  // Who owes a fiado, or who bought a cash sale (optional). Kept when switching between the two: it's the same person.
-  const [customer, setCustomer] = useState<PickedCustomer | null>(sale?.customer ?? null)
+  const [paidWith, setPaidWith] = useState<PaidWith | null>(sale ? (sale.isCredit ? 'credit' : 'cash') : null)
+  const [lines, setLines] = useState(() => initialLines(sale))
+  const [nextKey, setNextKey] = useState(() => lines.length)
+  const [choice, setChoice] = useState<CustomerChoice>(() => initialChoice(sale))
+  const [search, setSearch] = useState('')
   const [paidNow, setPaidNow] = useState<number | null>(sale?.paidNow || null)
-  const [picking, setPicking] = useState<Picking>(null)
   const [lastPrices, setLastPrices] = useState<LastPrices>({})
-  const [errors, setErrors] = useState<Errors>({})
-  const [removing, setRemoving] = useState<DoneLine | null>(null)
+  const [errors, setErrors] = useState<Errors>(NO_ERRORS)
+  const [removing, setRemoving] = useState<FormLine | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [similar, setSimilar] = useState<CustomerSummary[] | null>(null)
   // What the sale's customer owes now, to say what deleting the sale does to it. Unknown until loaded.
   const [owedNow, setOwedNow] = useState<number | null>(null)
 
   const dateRef = useRef<HTMLInputElement>(null)
-  const firstTypeRef = useRef<HTMLButtonElement>(null)
-  const quantityRef = useRef<HTMLInputElement>(null)
-  const priceRef = useRef<HTMLInputElement>(null)
+  const paidWithRef = useRef<HTMLButtonElement>(null)
   const paidNowRef = useRef<HTMLInputElement>(null)
-  const cashRef = useRef<HTMLButtonElement>(null)
-  const saveRef = useRef<HTMLButtonElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const newNameRef = useRef<HTMLInputElement>(null)
   const addRef = useRef<HTMLButtonElement>(null)
-  const linesRef = useRef<HTMLDivElement>(null)
-  const paidWithLabelId = useId()
+  const saveRef = useRef<HTMLButtonElement>(null)
+  const lineRefs = useRef(new Map<number, LineRefs>())
 
-  // Set before a change that adds or removes what's to get focus next, and used once the screen has that change.
-  const focusNext = useRef<FocusTarget | null>(sale ? null : 'type')
+  const refsOf = (key: number): LineRefs => {
+    let refs = lineRefs.current.get(key)
+
+    if (!refs) {
+      refs = { type: { current: null }, quantity: { current: null }, price: { current: null } }
+      lineRefs.current.set(key, refs)
+    }
+
+    return refs
+  }
+
+  // A line added or removed gets its focus once it's on screen.
+  const focusNext = useRef<(() => HTMLElement | null) | null>(sale ? null : () => paidWithRef.current)
+  useEffect(() => {
+    if (focusNext.current) {
+      focusNext.current()?.focus()
+      focusNext.current = null
+    }
+  })
+
   const { run: oneAtATime, finish } = useOneAtATime()
 
   const [saved] = useState(() =>
     snapshot(
-      {
-        date: sale?.date ?? startDay,
-        done: initial.done,
-        open: sale ? initial.open : null,
-        paidWith: sale ? (sale.isCredit ? 'credit' : 'cash') : null,
-        customer: sale?.customer ?? null,
-        paidNow: sale?.paidNow || null,
-      },
+      { date: sale?.date ?? startDay, lines, paidWith, choice, paidNow: sale?.paidNow || null },
       {},
     ),
   )
-  const guard = useUnsavedChanges(snapshot({ date, done, open, paidWith, customer, paidNow }, lastPrices) !== saved)
-
-  useEffect(() => {
-    if (focusNext.current) {
-      const targets = { type: firstTypeRef, add: addRef, save: saveRef }
-      targets[focusNext.current].current?.focus()
-      focusNext.current = null
-    }
-  })
+  const guard = useUnsavedChanges(snapshot({ date, lines, paidWith, choice, paidNow }, lastPrices) !== saved)
 
   const creditCustomerId = sale?.isCredit ? sale.customer?.id : undefined
 
@@ -192,15 +207,6 @@ export function SaleForm({ sale, startDay, returnTo }: Props) {
     return () => controller.abort()
   }, [creditCustomerId])
 
-  // In a short window the line being filled in, or its errors, could otherwise stay below the edge of the list.
-  useEffect(() => {
-    const lines = linesRef.current
-
-    if (lines) {
-      lines.scrollTop = lines.scrollHeight
-    }
-  }, [errors, lineNumber])
-
   // Only a help: without it, the price just starts empty.
   useEffect(() => {
     const controller = new AbortController()
@@ -216,154 +222,140 @@ export function SaleForm({ sale, startDay, returnTo }: Props) {
     return () => controller.abort()
   }, [])
 
-  const openIndex = done.length
-  const price = open ? shownPrice(open, lastPrices) : null
-  const openSubtotal = open ? subtotal(open, lastPrices) : 0
-  const total = done.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0) + openSubtotal
+  const isCredit = paidWith === 'credit'
+  const total = lines.reduce((sum, line) => sum + subtotal(line, lastPrices), 0)
 
-  const clearErrors = (...keys: string[]) =>
-    setErrors((current) => ({ ...current, ...Object.fromEntries(keys.map((key) => [key, undefined])) }))
+  const clearLineError = (key: number, ...fields: (keyof LineProblems)[]) =>
+    setErrors((current) => {
+      const problems = { ...current.byLine[key] }
+      fields.forEach((field) => delete problems[field])
+      return { ...current, byLine: { ...current.byLine, [key]: problems } }
+    })
 
-  const chooseType = (cartonType: CartonType) => {
-    setOpen((current) => ({ ...(current ?? BLANK_LINE), cartonType }))
-    clearErrors(itemKey(openIndex, 'cartonType'), itemKey(openIndex, 'unitPrice'))
-    quantityRef.current?.focus()
-  }
+  const clearErrors = (...fields: (keyof Omit<Errors, 'byLine'>)[]) =>
+    setErrors((current) => ({ ...current, ...Object.fromEntries(fields.map((field) => [field, undefined])) }))
 
-  const changeQuantity = (quantity: string) => {
-    setOpen((current) => ({ ...(current ?? BLANK_LINE), quantity }))
-    clearErrors(itemKey(openIndex, 'quantity'))
-  }
+  const changeLine = (key: number, change: Partial<FormLine>) =>
+    setLines((current) => current.map((line) => (line.key === key ? { ...line, ...change } : line)))
 
-  const changePrice = (next: number | null) => {
-    setOpen((current) => ({ ...(current ?? BLANK_LINE), price: next, priceTyped: true }))
-    clearErrors(itemKey(openIndex, 'unitPrice'))
-  }
+  /** Whether who it's for is settled, so Enter can go on to Guardar venta. */
+  const customerReady = () =>
+    choice.kind === 'existing' ||
+    (choice.kind === 'noName' && !isCredit) ||
+    (choice.kind === 'new' && cleanName(choice.name) !== '')
 
-  const changeDate = (next: string) => {
-    setDate(next)
-    clearErrors('date')
-  }
-
-  /** A fiado's customer stays on as who bought it: it's the same person, and "Quitar" is right there. */
-  const chooseCash = () => {
-    setPaidWith('cash')
-    clearErrors('paidWith', 'customerId', 'paidNow')
-    saveRef.current?.focus()
-  }
-
-  const pickCustomer = (picked: PickedCustomer) => {
-    if (picking === 'credit') {
-      setPaidWith('credit')
+  /** Past the cartons: what was paid with a fiado, then who, then Guardar venta. */
+  const afterLines = () => {
+    if (isCredit) {
+      paidNowRef.current?.focus()
+    } else {
+      afterPaidNow()
     }
-
-    setCustomer(picked)
-    setPicking(null)
-    clearErrors('paidWith', 'customerId')
-    focusNext.current = 'save'
   }
 
-  const removeBuyer = () => {
-    setCustomer(null)
-    clearErrors('customerId')
-    saveRef.current?.focus()
+  const afterPaidNow = () => {
+    if (customerReady()) {
+      saveRef.current?.focus()
+    } else if (choice.kind === 'new') {
+      newNameRef.current?.focus()
+    } else {
+      searchRef.current?.focus()
+    }
   }
 
-  const changePaidNow = (next: number | null) => {
-    setPaidNow(next)
-    clearErrors('paidNow')
-  }
-
-  /** "Si pagó todo": it's a cash sale, still to the same customer. */
-  const switchToCash = () => {
-    setPaidNow(null)
-    chooseCash()
-  }
-
-  /** After the price, the payment comes next until it's been chosen; then it's Guardar venta. */
-  const afterPrice = () => (paidWith ? saveRef : cashRef).current
-
-  /** Enter moves on, and never saves: that takes the button itself. */
-  const moveOnEnter = (event: KeyboardEvent<HTMLInputElement>, next: HTMLElement | null) => {
+  const moveOnEnter = (event: KeyboardEvent<HTMLInputElement>, next: () => void) => {
     if (event.key === 'Enter') {
       event.preventDefault()
 
       if (!event.repeat) {
-        next?.focus()
+        next()
       }
     }
   }
 
-  const showLineProblems = (problems: LineProblems) => {
-    setErrors((current) => ({
-      ...current,
-      [itemKey(openIndex, 'cartonType')]: problems.cartonType,
-      [itemKey(openIndex, 'quantity')]: problems.quantity,
-      [itemKey(openIndex, 'unitPrice')]: problems.unitPrice,
-    }))
+  const choosePaidWith = (next: PaidWith) => {
+    setPaidWith(next)
+    clearErrors('paidWith', 'customer', 'paidNow')
 
-    if (problems.cartonType) {
-      firstTypeRef.current?.focus()
-    } else if (problems.quantity) {
-      quantityRef.current?.focus()
+    // Nobody named is what a cash sale starts with, and what a fiado can't be.
+    if (next === 'cash' && choice.kind === 'none') {
+      setChoice({ kind: 'noName' })
+    } else if (next === 'credit' && choice.kind === 'noName') {
+      setChoice({ kind: 'none' })
+    }
+
+    if (next === 'cash') {
+      setPaidNow(null)
+    }
+
+    const first = lines[0]
+    if (first && first.cartonType === null) {
+      refsOf(first.key).type.current?.focus()
+    }
+  }
+
+  const chooseType = (key: number, cartonType: CartonType) => {
+    changeLine(key, { cartonType })
+    clearLineError(key, 'cartonType', 'unitPrice')
+    refsOf(key).quantity.current?.focus()
+  }
+
+  const priceEnter = (key: number) => {
+    const index = lines.findIndex((line) => line.key === key)
+    const next = lines[index + 1]
+
+    if (next) {
+      refsOf(next.key).type.current?.focus()
     } else {
-      priceRef.current?.focus()
+      afterLines()
     }
   }
 
   const addLine = () => {
-    // The open line may be untouched here, so it isn't one more line yet.
-    if (open && done.length + 1 >= MAX_LINES) {
-      setErrors((current) => ({ ...current, items: `Una venta no puede tener más de ${MAX_LINES} líneas.` }))
+    const blank = lines.find(isUntouched)
+
+    if (blank) {
+      refsOf(blank.key).type.current?.focus()
       return
     }
 
-    if (!open) {
-      setOpen(BLANK_LINE)
-      setLineNumber((current) => current + 1)
-      focusNext.current = 'type'
+    if (lines.length >= MAX_LINES) {
+      setErrors((current) => ({ ...current, lines: `Una venta no puede tener más de ${MAX_LINES} líneas.` }))
       return
     }
 
-    if (done.length > 0 && isUntouched(open)) {
-      firstTypeRef.current?.focus()
-      return
-    }
-
-    const problems = findProblems(open, lastPrices)
-
-    if (Object.keys(problems).length > 0) {
-      showLineProblems(problems)
-      return
-    }
-
-    setDone((current) => [...current, { ...toItem(open, lastPrices), key: lineNumber }])
-    setOpen(BLANK_LINE)
-    setLineNumber((current) => current + 1)
-    setErrors({})
-    focusNext.current = 'type'
+    const key = nextKey
+    setLines((current) => [...current, { ...BLANK_LINE, key }])
+    setNextKey(key + 1)
+    focusNext.current = () => refsOf(key).type.current
   }
 
-  const removeOpenLine = () => {
-    setOpen(null)
-    setErrors({})
-    focusNext.current = 'add'
-  }
+  const askRemove = (key: number) => {
+    const line = lines.find((candidate) => candidate.key === key)!
 
-  const removeDoneLine = (line: DoneLine) => {
-    const remaining = done.filter((other) => other !== line)
-
-    setRemoving(null)
-    setDone(remaining)
-    setErrors({})
-
-    if (remaining.length === 0 && !open) {
-      setOpen(BLANK_LINE)
-      setLineNumber((current) => current + 1)
-      focusNext.current = 'type'
+    if (isUntouched(line)) {
+      removeLine(line)
     } else {
-      focusNext.current = 'add'
+      setRemoving(line)
     }
+  }
+
+  const removeLine = (line: FormLine) => {
+    setRemoving(null)
+    setLines((current) => current.filter((other) => other.key !== line.key))
+    clearErrors('lines')
+    focusNext.current = () => addRef.current
+  }
+
+  const chooseCustomer = (next: CustomerChoice) => {
+    setChoice(next)
+    clearErrors('customer', 'newName', 'newPhone')
+  }
+
+  const switchToCash = () => {
+    setPaidNow(null)
+    choosePaidWith('cash')
+    saveRef.current?.focus()
   }
 
   const leaveTo = (address: string) => {
@@ -374,74 +366,148 @@ export function SaleForm({ sale, startDay, returnTo }: Props) {
 
   const handleGone = () => {
     showError(GONE_MESSAGE)
-    leaveTo(returnTo ?? '/ventas')
+    leaveTo(afterDelete)
   }
 
-  const save = () => {
-    const includesOpen = open !== null && (done.length === 0 || !isUntouched(open))
+  /** Checks what can be checked here, and shows the first problem with focus on it. Null when something's wrong. */
+  const readInput = (): SaleInput | null => {
+    const kept = linesToSave(lines)
+    const byLine: Errors['byLine'] = {}
 
-    if (includesOpen) {
-      const problems = findProblems(open, lastPrices)
+    for (const line of kept) {
+      const problems = findProblems(line, lastPrices)
 
       if (Object.keys(problems).length > 0) {
-        showLineProblems(problems)
-        return
+        byLine[line.key] = problems
       }
     }
 
+    const firstBad = kept.find((line) => byLine[line.key])
+
+    if (firstBad) {
+      setErrors({ ...NO_ERRORS, byLine })
+      const problems = byLine[firstBad.key]!
+      const refs = refsOf(firstBad.key)
+      ;(problems.cartonType ? refs.type : problems.quantity ? refs.quantity : refs.price).current?.focus()
+      return null
+    }
+
     if (!date) {
-      setErrors((current) => ({ ...current, date: 'Escoja la fecha de la venta.' }))
+      setErrors({ ...NO_ERRORS, date: 'Escoja la fecha de la venta.' })
       dateRef.current?.focus()
-      return
+      return null
     }
 
     if (!paidWith) {
-      setErrors((current) => ({ ...current, paidWith: PAID_WITH_MISSING }))
-      cashRef.current?.focus()
-      return
+      setErrors({ ...NO_ERRORS, paidWith: PAID_WITH_MISSING })
+      paidWithRef.current?.focus()
+      return null
     }
 
-    const items = [
-      ...done.map(({ cartonType, quantity, unitPrice }) => ({ cartonType, quantity, unitPrice })),
-      ...(includesOpen ? [toItem(open, lastPrices)] : []),
-    ]
-
-    const isCredit = paidWith === 'credit'
-    const paid = isCredit ? (paidNow ?? 0) : 0
+    const items = kept.map((line) => toItem(line, lastPrices))
     const saleTotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
+    const paid = isCredit ? (paidNow ?? 0) : 0
 
     if (paid > saleTotal || (paid > 0 && paid === saleTotal)) {
-      setErrors((current) => ({
-        ...current,
-        paidNow:
-          paid === saleTotal ? PAID_IN_FULL : `No puede ser mayor que el total de la venta (${formatColones(saleTotal)}).`,
-      }))
+      const message =
+        paid === saleTotal ? PAID_IN_FULL : `No puede ser mayor que el total de la venta (${formatColones(saleTotal)}).`
+      setErrors({ ...NO_ERRORS, paidNow: message })
       paidNowRef.current?.focus()
+      return null
+    }
+
+    if (isCredit && (choice.kind === 'none' || choice.kind === 'noName')) {
+      setErrors({ ...NO_ERRORS, customer: NO_NAME_FOR_CREDIT })
+      searchRef.current?.focus()
+      return null
+    }
+
+    if (choice.kind === 'new' && cleanName(choice.name) === '') {
+      setErrors({ ...NO_ERRORS, newName: NEW_NAME_MISSING })
+      newNameRef.current?.focus()
+      return null
+    }
+
+    return {
+      date,
+      items,
+      isCredit,
+      customerId: choice.kind === 'existing' ? choice.customer.id : null,
+      paidNow: paid,
+      ...(choice.kind === 'new' && { newCustomer: { name: cleanName(choice.name), phone: choice.phone.trim() } }),
+    }
+  }
+
+  /** The API's messages, each next to its field. A line's index is its place among the lines that were sent. */
+  const showFieldErrors = (fieldErrors: Record<string, string>) => {
+    const kept = linesToSave(lines)
+    const byLine: Errors['byLine'] = {}
+
+    for (const [field, message] of Object.entries(fieldErrors)) {
+      const match = /^items\[(\d+)\]\.(cartonType|quantity|unitPrice)$/.exec(field)
+      const line = match ? kept[Number(match[1])] : undefined
+
+      if (line) {
+        byLine[line.key] = { ...byLine[line.key], [match![2]]: message }
+      }
+    }
+
+    setErrors({
+      byLine,
+      date: fieldErrors.date,
+      paidNow: fieldErrors.paidNow,
+      customer: fieldErrors.customerId,
+      newName: fieldErrors['newCustomer.name'],
+      newPhone: fieldErrors['newCustomer.phone'],
+      lines: fieldErrors.items,
+    })
+
+    if (fieldErrors.date) {
+      dateRef.current?.focus()
+    } else if (fieldErrors.paidNow) {
+      paidNowRef.current?.focus()
+    } else if (fieldErrors['newCustomer.name'] || fieldErrors['newCustomer.phone']) {
+      newNameRef.current?.focus()
+    } else if (fieldErrors.customerId) {
+      searchRef.current?.focus()
+    }
+  }
+
+  /** Only from inside oneAtATime. */
+  const sendNow = async (input: SaleInput) => {
+    try {
+      const result = await (sale ? updateSale(sale.id, input) : createSale(input))
+      showSuccess(describeSaved(result))
+      leaveTo(afterSave(result))
+    } catch (error) {
+      if (hasStatus(error, 404)) {
+        handleGone()
+      } else if (hasStatus(error, 400) && Object.keys(error.fieldErrors).length > 0) {
+        showFieldErrors(error.fieldErrors)
+      } else if (error instanceof ApiError && error.refusal) {
+        showError(error.refusal)
+      } else {
+        showError('No se pudo guardar la venta. Intente de nuevo.')
+      }
+    }
+  }
+
+  const save = () => {
+    const input = readInput()
+
+    if (!input) {
       return
     }
 
     void oneAtATime(async () => {
-      try {
-        const input = { date, items, isCredit, customerId: customer?.id ?? null, paidNow: paid }
-        const result = await (sale ? updateSale(sale.id, input) : createSale(input))
-        showSuccess(describeSaved(result))
-        leaveTo(returnTo ?? listOfDay(result.date))
-      } catch (error) {
-        if (hasStatus(error, 404)) {
-          handleGone()
-        } else if (hasStatus(error, 400) && Object.keys(error.fieldErrors).length > 0) {
-          setErrors(error.fieldErrors)
+      // Someone new is asked about first, if there's already someone with a name like theirs. The warning only
+      // helps; if it can't be checked, that's no reason not to add them.
+      const found = input.newCustomer ? await findSimilarCustomers(input.newCustomer.name).catch(() => []) : []
 
-          if (error.fieldErrors.date) {
-            dateRef.current?.focus()
-          } else if (error.fieldErrors.paidNow) {
-            paidNowRef.current?.focus()
-          }
-        } else if (error instanceof ApiError && error.refusal) {
-          showError(error.refusal)
-        } else {
-          showError('No se pudo guardar la venta. Intente de nuevo.')
-        }
+      if (found.length > 0) {
+        setSimilar(found)
+      } else {
+        await sendNow(input)
       }
     })
   }
@@ -450,7 +516,7 @@ export function SaleForm({ sale, startDay, returnTo }: Props) {
     try {
       await deleteSale(sale!.id)
       showSuccess('Venta borrada.')
-      leaveTo(returnTo ?? listOfDay(sale!.date))
+      leaveTo(afterDelete)
     } catch (error) {
       if (hasStatus(error, 404)) {
         handleGone()
@@ -462,245 +528,173 @@ export function SaleForm({ sale, startDay, returnTo }: Props) {
     }
   }
 
-  const deleteQuestion = () => {
-    const total = formatColones(sale!.total)
+  const describeRemoving = (line: FormLine) =>
+    Object.keys(findProblems(line, lastPrices)).length === 0
+      ? `¿Quitar ${describeLine(toItem(line, lastPrices))}?`
+      : '¿Quitar esta línea?'
 
-    if (!sale!.isCredit || !sale!.customer) {
-      const to = sale!.customer ? ` a ${sale!.customer.name}` : ''
-      return `¿Borrar la venta de ${total}${to} (${summarizeSale(sale!.items)})? Ya no contará en el total del día.`
-    }
-
-    const question = `¿Borrar la venta fiada de ${total} a ${sale!.customer.name}?`
-    const withAbono =
-      sale!.paidNow > 0
-        ? `${question} También se borra el abono de ${formatColones(sale!.paidNow)} que dio al hacerla.`
-        : question
-
-    // Without this sale and its abono, they owe what's left of it less.
-    const after = owedNow === null ? null : owedNow - (sale!.total - sale!.paidNow)
-
-    return after === null
-      ? withAbono
-      : `${withAbono} Su saldo bajará de ${formatColones(owedNow!)} a ${formatColones(after)}.`
-  }
-
-  const paidWithError = errors.paidWith ?? errors.customerId
-
-  const lineError = (index: number) =>
-    errors[itemKey(index, 'cartonType')] ?? errors[itemKey(index, 'quantity')] ?? errors[itemKey(index, 'unitPrice')]
+  const showRemaining = isCredit && paidNow !== null && paidNow > 0 && paidNow < total
 
   return (
     <>
-      <div
-        className={styles.form}
-        // Holding Enter down must not run through the fields and press Guardar venta.
-        onKeyDownCapture={(event) => {
-          if (event.key === 'Enter' && event.repeat) {
-            event.preventDefault()
-          }
-        }}
-      >
-        <DayPicker
-          dateRef={dateRef}
-          value={date}
-          onChange={changeDate}
-          error={errors.date}
-          onDateKeyDown={(event) => moveOnEnter(event, open ? firstTypeRef.current : afterPrice())}
-        />
+      <div className={styles.page}>
+        <section
+          className={styles.panel}
+          aria-labelledby="sale-form-title"
+          // Holding Enter down must not run through the fields and press Guardar venta.
+          onKeyDownCapture={(event) => {
+            if (event.key === 'Enter' && event.repeat) {
+              event.preventDefault()
+            }
+          }}
+        >
+          <header className={styles.header}>
+            <h1 id="sale-form-title" className={styles.title}>
+              {sale ? 'Editar venta' : 'Nueva venta'}
+            </h1>
+            <button type="button" className={styles.close} aria-label="Cerrar" onClick={() => navigate(closeTo)}>
+              <X size={28} aria-hidden="true" />
+            </button>
+          </header>
 
-        <div ref={linesRef} className={styles.lines}>
-          {done.length > 0 && (
-            <ul className={styles.doneLines} aria-label="Cartones de esta venta">
-              {done.map((line, index) => (
-                <li key={line.key} className={styles.doneLine}>
-                  <span className={styles.doneText}>
-                    {describeLine(line)}
-                    {lineError(index) && (
-                      <span className={styles.error} role="alert">
-                        {lineError(index)}
-                      </span>
-                    )}
-                  </span>
-                  <Button
-                    variant="secondary"
-                    className={styles.remove}
-                    aria-label={`Quitar ${describeLine(line)}`}
-                    onClick={() => setRemoving(line)}
-                  >
-                    Quitar
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {open && (
-            <SaleLineEditor
-              key={lineNumber}
-              line={open}
-              price={price}
-              subtotal={openSubtotal}
-              errors={{
-                cartonType: errors[itemKey(openIndex, 'cartonType')],
-                quantity: errors[itemKey(openIndex, 'quantity')],
-                unitPrice: errors[itemKey(openIndex, 'unitPrice')],
-              }}
-              onChooseType={chooseType}
-              onQuantityChange={changeQuantity}
-              onPriceChange={changePrice}
-              onRemove={done.length > 0 ? removeOpenLine : undefined}
-              onQuantityEnter={(event) => moveOnEnter(event, priceRef.current)}
-              onPriceEnter={(event) => moveOnEnter(event, afterPrice())}
-              firstTypeRef={firstTypeRef}
-              quantityRef={quantityRef}
-              priceRef={priceRef}
-            />
-          )}
-        </div>
-
-        <div className={styles.bottom}>
-          {errors.items && (
-            <p className={styles.error} role="alert">
-              {errors.items}
-            </p>
-          )}
-          <div className={styles.summary}>
-            <div className={styles.payment}>
-              <span id={paidWithLabelId} className={styles.paymentLabel}>
-                ¿Cómo pagó?
-              </span>
-              <div role="group" aria-labelledby={paidWithLabelId} className={styles.paidWith}>
-                <button
-                  ref={cashRef}
-                  type="button"
-                  className={paidWith === 'cash' ? `${styles.type} ${styles.chosen}` : styles.type}
-                  aria-pressed={paidWith === 'cash'}
-                  onClick={chooseCash}
-                >
-                  {paidWith === 'cash' && <Check size={26} aria-hidden="true" />}
-                  Al contado
-                </button>
-                {/* Shows who, and pressing it again changes who: one button, so the row stays short. */}
-                <button
-                  type="button"
-                  className={paidWith === 'credit' ? `${styles.type} ${styles.chosen}` : styles.type}
-                  aria-pressed={paidWith === 'credit'}
-                  title={paidWith === 'credit' && customer ? `Fiado a ${customer.name}` : undefined}
-                  onClick={() => setPicking('credit')}
-                >
-                  {paidWith === 'credit' && <Check size={26} aria-hidden="true" />}
-                  <span className={styles.creditText}>
-                    {paidWith === 'credit' && customer ? `Fiado a ${customer.name}` : 'Fiado'}
-                  </span>
-                </button>
-              </div>
+          <div className={styles.body}>
+            <div className={styles.firstRow}>
+              <DateInput
+                ref={dateRef}
+                label="Fecha"
+                value={date}
+                onChange={(next) => {
+                  setDate(next)
+                  clearErrors('date')
+                }}
+                error={errors.date}
+                max={todayLocal()}
+                onKeyDown={(event) => moveOnEnter(event, () => paidWithRef.current?.focus())}
+              />
+              <Dropdown
+                label="¿Cómo pagó?"
+                value={paidWith}
+                options={PAID_WITH_OPTIONS}
+                onChange={choosePaidWith}
+                error={errors.paidWith}
+                buttonRef={paidWithRef}
+              />
             </div>
+
+            <SaleLines
+              lines={lines}
+              lastPrices={lastPrices}
+              errors={errors.byLine}
+              linesError={errors.lines}
+              refsOf={refsOf}
+              onChooseType={chooseType}
+              onQuantityChange={(key, quantity) => {
+                changeLine(key, { quantity })
+                clearLineError(key, 'quantity')
+              }}
+              onPriceChange={(key, price) => {
+                changeLine(key, { price, priceTyped: true })
+                clearLineError(key, 'unitPrice')
+              }}
+              onRemove={askRemove}
+              onAdd={addLine}
+              addRef={addRef}
+              onPriceEnter={priceEnter}
+            />
+
+            {isCredit && (
+              <div className={styles.paidNow}>
+                <div className={styles.paidNowRow}>
+                  <MoneyInput
+                    ref={paidNowRef}
+                    label="¿Pagó algo ahora? (opcional)"
+                    value={paidNow}
+                    onChange={(next) => {
+                      setPaidNow(next)
+                      clearErrors('paidNow')
+                    }}
+                    error={errors.paidNow === PAID_IN_FULL ? undefined : errors.paidNow}
+                    inputProps={{ ...selectOnFocus, onKeyDown: (event) => moveOnEnter(event, afterPaidNow) }}
+                  />
+                  <p className={styles.remaining} aria-live="polite">
+                    <span>Queda debiendo</span>
+                    <strong>{formatColones(showRemaining ? total - paidNow! : total)}</strong>
+                  </p>
+                </div>
+                {errors.paidNow === PAID_IN_FULL && (
+                  <div className={styles.paidInFull} role="alert">
+                    <p>{PAID_IN_FULL}</p>
+                    <Button variant="secondary" onClick={switchToCash}>
+                      Cambiar a Al contado
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <CustomerChooser
+              choice={choice}
+              onChoose={chooseCustomer}
+              search={search}
+              onSearch={setSearch}
+              isCredit={isCredit}
+              error={errors.customer}
+              newErrors={{ name: errors.newName, phone: errors.newPhone }}
+              searchRef={searchRef}
+              newNameRef={newNameRef}
+              onDone={() => saveRef.current?.focus()}
+            />
+          </div>
+
+          <footer className={styles.footer}>
             <p className={styles.total}>
               <span>Total de la venta</span>
               <strong>{formatColones(total)}</strong>
             </p>
-          </div>
-
-          {/* Optional, and it looks it: plain text, never in the Enter path, and saving never waits for it. */}
-          {paidWith === 'cash' &&
-            (customer ? (
-              <p className={styles.buyer}>
-                <span className={styles.buyerName}>
-                  Compró: <strong>{customer.name}</strong>
-                </span>
-                <button type="button" className={styles.quiet} onClick={() => setPicking('buyer')}>
-                  Cambiar
-                </button>
-                <button
-                  type="button"
-                  className={styles.quiet}
-                  aria-label={`Quitar a ${customer.name} de esta venta`}
-                  onClick={removeBuyer}
-                >
-                  Quitar
-                </button>
-              </p>
-            ) : (
-              <p className={styles.buyer}>
-                <button type="button" className={styles.quiet} onClick={() => setPicking('buyer')}>
-                  ¿Quién compró? (opcional)
-                </button>
-              </p>
-            ))}
-
-          {paidWith === 'credit' && (
-            <div className={styles.paidNow}>
-              <div className={styles.paidNowField}>
-                <MoneyInput
-                  ref={paidNowRef}
-                  label="¿Pagó algo ahora? (opcional)"
-                  value={paidNow}
-                  onChange={changePaidNow}
-                  error={errors.paidNow === PAID_IN_FULL ? undefined : errors.paidNow}
-                  inputProps={{ ...selectOnFocus, onKeyDown: (event) => moveOnEnter(event, saveRef.current) }}
-                />
-              </div>
-              {errors.paidNow === PAID_IN_FULL ? (
-                <div className={styles.paidInFull} role="alert">
-                  <p className={styles.paidInFullText}>{PAID_IN_FULL}</p>
-                  <Button variant="secondary" onClick={switchToCash}>
-                    Cambiar a Al contado
-                  </Button>
-                </div>
-              ) : (
-                paidNow !== null &&
-                paidNow > 0 &&
-                paidNow < total && (
-                  <p className={styles.remaining} aria-live="polite">
-                    Queda debiendo <strong>{formatColones(total - paidNow)}</strong>
-                  </p>
-                )
+            <div className={styles.buttons}>
+              {sale && (
+                <Button variant="danger" onClick={() => setConfirmingDelete(true)}>
+                  Borrar venta
+                </Button>
               )}
-            </div>
-          )}
-
-          {paidWithError && (
-            <p className={styles.error} role="alert">
-              <CircleAlert size={26} aria-hidden="true" />
-              {paidWithError}
-            </p>
-          )}
-          <div className={styles.buttons}>
-            <div className={styles.mainButtons}>
+              <Button variant="secondary" onClick={() => navigate(closeTo)}>
+                Cancelar
+              </Button>
               <Button ref={saveRef} onClick={save}>
                 Guardar venta
               </Button>
-              <Button ref={addRef} variant="secondary" onClick={addLine}>
-                <span className={styles.buttonContent}>
-                  <Plus size={28} aria-hidden="true" />
-                  Agregar otro cartón
-                </span>
-              </Button>
             </div>
-            {sale && (
-              <Button variant="danger" onClick={() => setConfirmingDelete(true)}>
-                Borrar venta
-              </Button>
-            )}
-          </div>
-        </div>
+          </footer>
+        </section>
       </div>
-
-      {picking && (
-        <CustomerPicker
-          title={picking === 'credit' ? '¿A quién se le fió?' : '¿Quién compró?'}
-          onPick={pickCustomer}
-          onCancel={() => setPicking(null)}
-        />
-      )}
 
       {removing && (
         <ConfirmDialog
           title="¿Quitar este cartón?"
-          message={`¿Quitar ${describeLine(removing)}?`}
+          message={describeRemoving(removing)}
           confirmLabel="Sí, quitar"
           onCancel={() => setRemoving(null)}
-          onConfirm={() => removeDoneLine(removing)}
+          onConfirm={() => removeLine(removing)}
+        />
+      )}
+
+      {similar && (
+        <ConfirmDialog
+          title="Ya existe un cliente parecido"
+          message={describeSimilar(similar)}
+          cancelLabel="No, revisar"
+          confirmLabel="Sí, es otra persona"
+          onCancel={() => {
+            setSimilar(null)
+            searchRef.current?.focus()
+          }}
+          onConfirm={() => {
+            setSimilar(null)
+            const input = readInput()
+            if (input) {
+              void oneAtATime(() => sendNow(input))
+            }
+          }}
         />
       )}
 
@@ -708,7 +702,7 @@ export function SaleForm({ sale, startDay, returnTo }: Props) {
         <ConfirmDialog
           danger
           title="¿Borrar esta venta?"
-          message={deleteQuestion()}
+          message={deleteQuestion(sale!, owedNow)}
           confirmLabel="Sí, borrar"
           onCancel={() => setConfirmingDelete(false)}
           onConfirm={() => {

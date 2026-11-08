@@ -8,7 +8,6 @@ import { ErrorScreen } from './screens/ErrorScreen'
 import { EditExpenseScreen } from './screens/expenses/EditExpenseScreen'
 import { ExpensesScreen } from './screens/expenses/ExpensesScreen'
 import { NewExpenseScreen } from './screens/expenses/NewExpenseScreen'
-import { HomeScreen } from './screens/HomeScreen'
 import { EditPaymentScreen } from './screens/payments/EditPaymentScreen'
 import { NewPaymentScreen } from './screens/payments/NewPaymentScreen'
 import { EditSaleScreen } from './screens/sales/EditSaleScreen'
@@ -31,7 +30,7 @@ export const routes: RouteObject[] = [
     element: <AppLayout />,
     errorElement: <ErrorScreen />,
     children: [
-      { index: true, element: <HomeScreen /> },
+      { index: true, element: <Navigate to="/ventas" replace /> },
       { path: 'ventas', element: <SalesScreen /> },
       { path: 'ventas/nueva', element: <NewSaleScreen /> },
       { path: 'ventas/:id/editar', element: <EditSaleScreen /> },
@@ -46,8 +45,8 @@ export const routes: RouteObject[] = [
       { path: 'gastos/:id/editar', element: <EditExpenseScreen /> },
       { path: 'resumenes', element: <SummariesScreen /> },
       ...devRoutes,
-      // The API serves index.html for any address, so an unknown one lands here.
-      { path: '*', element: <Navigate to="/" replace /> },
+      // The API serves index.html for any address, so an unknown one goes to Ventas.
+      { path: '*', element: <Navigate to="/ventas" replace /> },
     ],
   },
 ]

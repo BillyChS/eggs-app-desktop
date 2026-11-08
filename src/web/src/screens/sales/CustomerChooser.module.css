@@ -1,0 +1,225 @@
+.chooser {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-xs);
+}
+
+.label {
+  font-size: var(--font-size-body);
+  font-weight: 600;
+}
+
+.chosenLabel {
+  color: var(--color-text-soft);
+  font-size: var(--font-size-body);
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--size-input);
+  padding: 0 var(--space-md);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.search:focus-within {
+  box-shadow: var(--focus-ring);
+}
+
+.invalid {
+  border: 3px solid var(--color-danger);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--font-size-input);
+}
+
+.search input:focus-visible {
+  box-shadow: none;
+}
+
+.search input::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* Always in sight, so who's there can be seen without opening anything. Shorter on a 768-pixel screen. */
+.results {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 0 6px 6px;
+  border: 2px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background-color: #fbfcfe;
+}
+
+@media (max-height: 800px) {
+  .results {
+    max-height: 200px;
+  }
+}
+
+.sticky {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--space-xs) 0;
+  border-bottom: 1px solid var(--color-divider);
+  background-color: #fbfcfe;
+}
+
+.add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  width: 100%;
+  min-height: var(--size-option);
+  padding: 0 var(--space-md);
+  border: 2px dashed var(--color-primary-dashed);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-primary-faint);
+  color: var(--color-primary);
+  font-size: var(--font-size-button);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.add:hover {
+  background-color: var(--color-primary-soft);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  width: 100%;
+  min-height: 60px;
+  margin: 2px 0;
+  padding: var(--space-xs) 14px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--font-size-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.row:hover:enabled {
+  background-color: var(--color-surface-sunken);
+}
+
+.chosen {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary-soft);
+}
+
+.chosen svg {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.disabled {
+  cursor: not-allowed;
+}
+
+.who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+}
+
+.noName {
+  font-style: italic;
+}
+
+.detail {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-md) 14px 10px;
+  color: var(--color-text-muted);
+}
+
+.error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--color-danger);
+  font-size: var(--font-size-body);
+  font-weight: 700;
+}
+
+.newPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #d6dce8;
+  border-radius: var(--radius-md);
+  background-color: var(--color-background);
+}
+
+.newTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.newTitle {
+  font-weight: 600;
+}
+
+.newFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+
+.newNote {
+  color: var(--color-text-muted);
+}
+
+.quiet {
+  min-height: 44px;
+  padding: 0 14px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-primary);
+  font-size: var(--font-size-button);
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}

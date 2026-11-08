@@ -12,6 +12,7 @@ import { Field } from './Field'
 
 interface Props {
   label: string
+  hideLabel?: boolean
   /** Whole colones, or null when empty or not a valid amount yet. */
   value: number | null
   onChange: (value: number | null) => void
@@ -45,7 +46,7 @@ function errorFor(parsed: ParsedColones): string | undefined {
  * Normally only digits count, and the dots are the field's own. Once someone types a separator themselves, the
  * text stays as typed until they leave the field, so "12500,50" gets an error instead of becoming ₡1.250.050.
  */
-export function MoneyInput({ label, value, onChange, error, inputProps, ref }: Props) {
+export function MoneyInput({ label, hideLabel, value, onChange, error, inputProps, ref }: Props) {
   const [text, setText] = useState(() => display(value))
   const [asTyped, setAsTyped] = useState(false)
   const [ownError, setOwnError] = useState<string>()
@@ -144,7 +145,7 @@ export function MoneyInput({ label, value, onChange, error, inputProps, ref }: P
   }
 
   return (
-    <Field label={label} error={error ?? ownError} prefix="₡">
+    <Field label={label} hideLabel={hideLabel} error={error ?? ownError} prefix="₡">
       {(input) => (
         <input
           {...input}

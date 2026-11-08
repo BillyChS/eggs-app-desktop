@@ -19,6 +19,8 @@ export interface CustomerRef {
   id: string
   name: string
   isDeleted: boolean
+  /** Null when they have none. */
+  phone?: string | null
 }
 
 export interface CustomerInput {

@@ -1,68 +1,83 @@
 .header {
-  display: grid;
-  /* The title gives way first, so a long customer name can't push Volver or Inicio aside. */
-  grid-template-columns: 1fr minmax(0, auto) 1fr;
-  align-items: center;
-  gap: var(--space-md);
-  min-height: 88px;
-  padding: var(--space-sm) var(--space-lg);
-  background-color: var(--color-primary);
-  color: var(--color-on-primary);
-}
-
-.side {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-md) var(--space-lg);
+  padding: 36px var(--space-page) var(--space-lg);
 }
 
-.end {
-  justify-content: flex-end;
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* Gives way first, so a long customer name can't push Volver or the page's button aside. */
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  min-width: 0;
+  overflow: hidden;
   font-size: var(--font-size-title);
   font-weight: 700;
-}
-
-.titleText {
-  overflow: hidden;
+  letter-spacing: -0.5px;
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.title svg {
-  flex-shrink: 0;
+.subtitle {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-body);
 }
 
-.navButton {
+.actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.back {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
   min-height: var(--size-button);
-  padding: var(--space-xs) var(--space-lg);
-  border: none;
+  padding: 0 var(--space-lg) 0 var(--space-md);
+  border: 2px solid var(--color-border);
   border-radius: var(--radius-md);
-  background-color: var(--color-back);
+  background-color: var(--color-surface);
   color: var(--color-primary);
   font-size: var(--font-size-button);
   font-weight: 700;
   cursor: pointer;
 }
 
+.back:hover {
+  background-color: var(--color-back);
+}
+
 .chevron {
-  margin-right: var(--space-xs);
-  font-size: 40px;
+  font-size: 34px;
   line-height: 0;
-  vertical-align: -3px;
 }
 
-.navButton:hover {
-  background-color: var(--color-back-hover);
-}
-
+/* --content-x is the page's side margin, for a sticky bar inside that reaches the edges (margin: 0 calc(-1 * …)). */
 .content {
+  --content-x: var(--space-page);
+
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--space-lg);
+  /* A little at the top, so a focus ring or a box's edge isn't cut by the scrolling area. */
+  padding: 6px var(--content-x) 36px;
+}
+
+/* Narrower margins at 1366×768, where every column of a table counts. */
+@media (max-width: 1500px) {
+  .header {
+    padding-right: var(--space-lg);
+    padding-left: var(--space-lg);
+  }
+
+  .content {
+    --content-x: var(--space-lg);
+  }
 }

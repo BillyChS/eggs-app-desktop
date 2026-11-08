@@ -3,6 +3,7 @@ import { Field } from './Field'
 
 interface Props {
   label: string
+  hideLabel?: boolean
   value: string
   onChange: (value: string) => void
   error?: string
@@ -12,9 +13,9 @@ interface Props {
   ref?: Ref<HTMLInputElement>
 }
 
-export function TextInput({ label, value, onChange, error, maxLength, inputProps, ref }: Props) {
+export function TextInput({ label, hideLabel, value, onChange, error, maxLength, inputProps, ref }: Props) {
   return (
-    <Field label={label} error={error}>
+    <Field label={label} hideLabel={hideLabel} error={error}>
       {(input) => (
         <input
           {...input}

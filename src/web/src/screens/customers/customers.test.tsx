@@ -388,7 +388,8 @@ describe('customer form: unsaved changes', () => {
     expect(router.state.location.pathname).toBe('/clientes/1')
   })
 
-  it.each(['Volver', 'Inicio'])('%s asks first; No, seguir aquí stays with the text intact', async (exit) => {
+  // Ventas is the sidebar's: leaving for another page is stopped the same way.
+  it.each(['Volver', 'Ventas'])('%s asks first; No, seguir aquí stays with the text intact', async (exit) => {
     const { router, user } = open('/clientes/nuevo')
     await user.type(screen.getByLabelText('Nombre'), 'Ana')
 

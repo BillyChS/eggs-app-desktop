@@ -229,7 +229,8 @@ public sealed class DatabaseBackupsTests : IDisposable
 
         var status = backups.GetStatus();
         Assert.True(status.Warning);
-        Assert.StartsWith("2026-11-07T", status.LastGoodAt);
+        // The file's real write time, not the test clock's, so only its shape is known.
+        Assert.Matches(@"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d$", status.LastGoodAt!);
     }
 
     [Fact]

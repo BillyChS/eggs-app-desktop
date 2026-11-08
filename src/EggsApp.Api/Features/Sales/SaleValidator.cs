@@ -1,4 +1,5 @@
 using EggsApp.Api.Features.Common;
+using EggsApp.Api.Features.Customers;
 
 namespace EggsApp.Api.Features.Sales;
 
@@ -18,8 +19,10 @@ public static class SaleValidator
         var date = CalendarDays.Read(command.Date, "Escoja la fecha de la venta.", errors);
         var items = ReadItems(command.Items, errors);
 
+        var newCustomer = ReadNewCustomer(command, errors);
+
         // A cash sale may name who bought it, or not: it moves no balance either way.
-        if (command.IsCredit && command.CustomerId is null)
+        if (command.IsCredit && command.CustomerId is null && command.NewCustomer is null)
         {
             errors["customerId"] = ["Escoja a quién se le fió."];
         }
@@ -27,8 +30,32 @@ public static class SaleValidator
         var paidNow = ReadPaidNow(command, items, errors);
 
         return (errors, errors.Count == 0
-            ? new SaleFields(date, items, command.IsCredit, command.CustomerId, paidNow)
+            ? new SaleFields(date, items, command.IsCredit, command.CustomerId, paidNow, newCustomer)
             : null);
+    }
+
+    /// <summary>A customer added from the sale form, checked like one added in Clientes.</summary>
+    private static CustomerFields? ReadNewCustomer(SaleCommand command, Dictionary<string, string[]> errors)
+    {
+        if (command.NewCustomer is not { } added)
+        {
+            return null;
+        }
+
+        if (command.CustomerId is not null)
+        {
+            errors["customerId"] = ["Escoja un cliente o agregue uno nuevo, no los dos."];
+            return null;
+        }
+
+        var fields = CustomerValidator.Clean(new CustomerCommand(added.Name, added.Phone, Notes: null));
+
+        foreach (var (field, messages) in CustomerValidator.Validate(fields))
+        {
+            errors[$"newCustomer.{field}"] = messages;
+        }
+
+        return fields;
     }
 
     /// <summary>

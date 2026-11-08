@@ -119,9 +119,27 @@ internal static class SaleCredit
         });
     }
 
+    /// <summary>
+    /// Gives the sale to the customer the command named, adding them first if they're new. The new customer is only
+    /// added to the context, so the SaveChanges that writes the sale writes them too: both or neither.
+    /// </summary>
+    public static Guid? ResolveCustomer(AppDbContext db, SaleFields fields)
+    {
+        if (fields.NewCustomer is not { } added)
+        {
+            return fields.CustomerId;
+        }
+
+        var customer = new Customer { Name = added.Name, Phone = added.Phone };
+        db.Customers.Add(customer);
+
+        return customer.Id;
+    }
+
     public static async Task<SaleDetail> DescribeAsync(AppDbContext db, Sale sale) =>
         SaleDetail.From(
             sale,
             await CustomerAccounts.FindRefsAsync(db, sale.CustomerId is { } id ? [id] : []),
-            await ReadPaidNowAsync(db, [sale.Id]));
+            await ReadPaidNowAsync(db, [sale.Id]),
+            sale.IsCredit ? await SaleStatuses.ReadOwedAsync(db, [sale.CustomerId!.Value]) : []);
 }
