@@ -77,6 +77,12 @@ const button = (name: string | RegExp) => screen.getByRole('button', { name })
 const field = (label: string) => screen.getByLabelText<HTMLInputElement>(label)
 const alertDialog = () => screen.findByRole('alertdialog')
 
+/**
+ * A new abono's form, once it has focus on the amount. The form shows when the customer loads, and takes focus in an
+ * effect just after, so finding the field isn't enough to type into it.
+ */
+const amountFocused = () => waitFor(() => expect(document.activeElement).toBe(field('Monto del abono')))
+
 beforeEach(() => {
   calls.length = 0
   handlers = {
@@ -110,6 +116,9 @@ beforeEach(() => {
     'GET /api/customers/similar': () => json({ items: [], owedTotal: 0 }),
     'GET /api/customers/1': () => json(MARIA),
     'GET /api/customers/2': () => json(MARIO),
+    // Where a saved abono goes back to.
+    'GET /api/customers/1/statement': () =>
+      json({ id: '1', name: MARIA.name, phone: null, balance: 8000, entries: [], cashPurchases: [] }),
     'POST /api/customers': ({ body }) =>
       json({ id: '3', name: (body as { name: string }).name, phone: null, notes: null, balance: 0 }, 201),
     'POST /api/customers/1/payments': ({ body }) => json({ id: '8', customer: MARIA_REF, ...(body as object) }, 201),
@@ -124,10 +133,9 @@ describe('abono form', () => {
   it('shows who and what they owe, and what they will owe after it', async () => {
     const { user } = open('/clientes/1/abonos/nuevo')
 
-    await screen.findByLabelText('Monto del abono')
+    await amountFocused()
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Abono de María Rodríguez')
     expect(screen.getByText('Debe ₡8.000.')).toBeTruthy()
-    expect(document.activeElement).toBe(field('Monto del abono'))
     expect(button('Hoy').getAttribute('aria-pressed')).toBe('true')
 
     await user.type(field('Monto del abono'), '3000')
@@ -157,7 +165,7 @@ describe('abono form', () => {
 
   it('Enter goes amount → note → Guardar abono, and only the button saves', async () => {
     const { router, user } = open('/clientes/1/abonos/nuevo')
-    await screen.findByLabelText('Monto del abono')
+    await amountFocused()
 
     await user.keyboard('3000{Enter}')
     expect(document.activeElement).toBe(field('Nota (opcional)'))
@@ -330,6 +338,8 @@ describe('account statement', () => {
           { id: '8', date: OLD_DAY, total: 2500, items: [line('A', 1, 2500)] },
         ],
       })
+    handlers['GET /api/sales/9'] = () =>
+      json({ ...CASH_SALE, id: '9', date: PAID_DAY, total: 13500, customer: MARIA_REF, items: [line('B', 3, 4500)] })
     const { router, user } = open('/clientes/1')
 
     const account = await screen.findByRole('list', { name: 'Fiados y abonos' })

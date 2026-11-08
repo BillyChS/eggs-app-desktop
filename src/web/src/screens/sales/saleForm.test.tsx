@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { formatDateLong, todayLocal } from '../../lib/dates'
-import { addressOf, fakeApi, json, noContent, openApp, type User } from '../../test/api'
+import { addressOf, EMPTY_SUMMARY, fakeApi, json, noContent, openApp, type User } from '../../test/api'
 
 const TODAY = todayLocal()
 const OLD_DAY = '2026-01-05'
@@ -74,7 +74,7 @@ beforeEach(() => {
     'GET /api/health': () => json({ status: 'ok', time: '2026-11-04T10:00:00' }),
     'GET /api/sales': () => json({ sales: [], cashTotal: 0, creditTotal: 0 }),
     'GET /api/payments': () => json({ payments: [], total: 0 }),
-    'GET /api/reports/summary': () => json({}),
+    'GET /api/reports/summary': () => json(EMPTY_SUMMARY),
     'GET /api/sales/last-prices': () => json({}),
     'GET /api/sales/5': () => json(CASH_SALE),
     'GET /api/sales/6': () => json(CREDIT_SALE),
@@ -509,25 +509,19 @@ describe('sale form: lines', () => {
     expect(document.activeElement).toBe(button('Agregar otro cartón'))
   })
 
-  it('stops at 20 lines', { timeout: 30_000 }, async () => {
-    const { user } = openApp('/ventas/nueva')
+  it('stops at 20 lines', async () => {
+    // A sale that already has 20, rather than 20 typed in one by one.
+    const lines = Array.from({ length: 20 }, () => ({ cartonType: 'A', quantity: 1, unitPrice: 1000, lineTotal: 1000 }))
+    handlers['GET /api/sales/7'] = () => json({ ...CASH_SALE, id: '7', total: 20000, items: lines })
+    const { user } = openApp('/ventas/7/editar')
 
-    // A line needs only its carton to count as touched, so Agregar opens a new one after it.
-    for (let number = 1; number <= 20; number++) {
-      await choose(user, number === 1 ? typeOf() : typeOf(number), 'Cartón de 15 huevos')
-
-      if (number < 20) {
-        await user.click(button('Agregar otro cartón'))
-      }
-    }
-
-    await user.click(button('Agregar otro cartón'))
+    await user.click(await screen.findByRole('button', { name: 'Agregar otro cartón' }))
 
     expect(screen.getByText('Una venta no puede tener más de 20 líneas.')).toBeTruthy()
     expect(screen.getAllByRole('button', { name: /^Tipo de cartón/ })).toHaveLength(20)
   })
 
-  it('what the API refuses shows on the right line', { timeout: 15_000 }, async () => {
+  it('what the API refuses shows on the right line', async () => {
     handlers['POST /api/sales'] = () =>
       json({ errors: { 'items[1].unitPrice': ['El precio no puede ser mayor que ₡1.000.000.'] } }, 400)
     const { user } = openApp('/ventas/nueva')

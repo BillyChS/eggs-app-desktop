@@ -341,6 +341,7 @@ describe('editing an expense', () => {
     const { router } = open(`/gastos/e1/editar?fecha=${OLD_DAY}`)
 
     expect((await alertDialog()).textContent).toContain('Este gasto ya no existe.')
-    expect(address(router)).toBe(`/gastos?fecha=${OLD_DAY}`)
+    // The message shows first; <Navigate> leaves in an effect after that render.
+    await waitFor(() => expect(address(router)).toBe(`/gastos?fecha=${OLD_DAY}`))
   })
 })
