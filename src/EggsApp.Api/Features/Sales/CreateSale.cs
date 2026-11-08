@@ -7,7 +7,7 @@ public static class CreateSale
 {
     /// <summary>
     /// The sale, its lines and the abono paid when it was made (if any) are written by one SaveChanges, which is one
-    /// transaction: both or neither.
+    /// transaction: all or nothing. So is a new customer added with it.
     /// </summary>
     public static async Task<Outcome<SaleDetail>> HandleAsync(AppDbContext db, SaleFields fields)
     {
@@ -20,7 +20,7 @@ public static class CreateSale
         {
             SaleDate = fields.Date,
             IsCredit = fields.IsCredit,
-            CustomerId = fields.CustomerId,
+            CustomerId = SaleCredit.ResolveCustomer(db, fields),
         };
 
         db.Sales.Add(sale);

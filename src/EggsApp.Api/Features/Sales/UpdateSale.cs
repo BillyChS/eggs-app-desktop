@@ -21,7 +21,7 @@ public static class UpdateSale
         }
 
         var paidNow = await SaleCredit.FindPaidNowAsync(db, sale.Id);
-        var sameCreditCustomer = fields.IsCredit && fields.CustomerId == sale.CustomerId;
+        var sameCreditCustomer = fields.IsCredit && fields.NewCustomer is null && fields.CustomerId == sale.CustomerId;
 
         if (await SaleCredit.CheckChangeAsync(
                 db,
@@ -46,7 +46,7 @@ public static class UpdateSale
         SaleLines.Add(db, sale, fields.Items);
         sale.SaleDate = fields.Date;
         sale.IsCredit = fields.IsCredit;
-        sale.CustomerId = fields.CustomerId;
+        sale.CustomerId = SaleCredit.ResolveCustomer(db, fields);
         SaleCredit.ApplyPaidNow(db, sale, paidNow, fields.PaidNow);
 
         // Marked by hand: a new set of lines with the same date and total wouldn't otherwise touch UpdatedAt.

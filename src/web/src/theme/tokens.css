@@ -1,26 +1,53 @@
 /*
- * Design tokens. Sized for an elderly user on a normal monitor; light theme only.
- * Text and button colors are at least 7:1 (WCAG AAA) against the background they sit on.
- * The blue and the page colors come from the old mobile app; its green, red and muted gray were below 7:1.
+ * Design tokens, from the Ventas design (docs/design). Sized for an elderly user on a 21" monitor at 1920×1080; light
+ * theme only. Text and button colors are at least 7:1 (WCAG AAA) against the background they sit on; where the
+ * design's own color was below that, it's darkened just enough, and the comment says so.
  */
 :root {
   /* Colors */
   --color-primary: #1e40af; /* white text: 8.7:1 */
-  --color-primary-hover: #1e3a8a;
+  --color-primary-hover: #162f80;
   --color-on-primary: #ffffff;
-  --color-back: #dbeafe; /* "‹ Volver" on the header; primary text: 7.2:1 */
-  --color-back-hover: #ffffff;
-  --color-background: #f8fafc;
+  --color-primary-soft: #e6ecfb; /* a chosen option or period; primary text on it: 7.4:1 */
+  --color-primary-faint: #f3f6fe; /* "Agregar …" buttons; primary text: 8.1:1 */
+  --color-primary-dashed: #9db4f2; /* their dashed edge, decoration only */
+  --color-back: #e6ecfb; /* "‹ Volver" and secondary hover; primary text: 7.4:1 */
+  --color-background: #f4f6fa;
   --color-surface: #ffffff;
-  --color-text: #0f172a; /* on background: 17:1 */
-  --color-text-muted: #475569; /* on background: 7.2:1 */
-  --color-border: #475569; /* input and secondary button edges */
-  --color-divider: #e2e8f0; /* decoration only, it carries no meaning */
+  --color-surface-muted: #f7f8fb; /* table header and footer; muted text: 7.2:1 */
+  --color-surface-sunken: #eef1f7; /* the tabs' track and the month arrows */
+  --color-text: #141b2d; /* on background: 16:1 */
+  --color-text-soft: #2a3347; /* on white: 12.6:1 */
+  --color-text-muted: #4a5468; /* on white: 7.6:1 */
+  /* Input and secondary button edges. The design's #cbd2e1 is 1.5:1, too faint to find a field by; this is 4.4:1. */
+  --color-border: #6e788c;
+  --color-divider: #e3e7ef; /* decoration only, it carries no meaning */
   --color-success: #14632b; /* white text: 7.4:1 */
   --color-success-hover: #0f4d21;
   --color-danger: #a31515; /* white text: 7.8:1 */
   --color-danger-hover: #821010;
+  --color-danger-edge: #e8c4c4; /* edge of a quiet delete button, decoration only */
+  --color-owed: #7a3a00; /* a fiado amount; the design's #9a4a00 was 6.3:1 on white, this is 8.6:1 */
   --color-backdrop: rgb(0 0 0 / 55%);
+
+  /* Status badges. The design's text colors were 6.5–6.8:1 on their backgrounds; these are darker, all above 7:1. */
+  --badge-paid-text: #0f5223;
+  --badge-paid-background: #e3f4e8;
+  --badge-paid-edge: #a9d9b6;
+  --badge-abonos-text: #0b4a54;
+  --badge-abonos-background: #e2f2f5;
+  --badge-abonos-edge: #a7d6de;
+  --badge-owed-text: #733500;
+  --badge-owed-background: #fff1dc;
+  --badge-owed-edge: #f2c98a;
+
+  /* The sidebar */
+  --color-nav: #0f1b3d;
+  --color-nav-current: #22336b; /* white text: 12:1 */
+  --color-nav-text: #c3cbe0; /* on the navy: 10.4:1 */
+  --color-nav-accent: #f5b942; /* the logo and the current page's dot */
+  --color-nav-dot: #5b6a94;
+  --color-nav-connected: #4ade80;
 
   /* Spacing */
   --space-xs: 8px;
@@ -28,24 +55,34 @@
   --space-md: 16px;
   --space-lg: 24px;
   --space-xl: 32px;
+  --space-page: 40px;
 
   /* Radii */
+  --radius-sm: 10px;
   --radius-md: 12px;
-  --radius-lg: 22px;
+  --radius-lg: 18px;
 
   /* Font sizes: nothing below 18px */
   --font-size-small: 18px;
-  --font-size-body: 20px;
-  --font-size-input: 24px;
-  --font-size-button: 24px;
-  --font-size-title: 32px;
-  --font-size-tile: 36px;
+  --font-size-body: 18px;
+  --font-size-input: 18px;
+  --font-size-button: 18px;
+  --font-size-nav: 20px;
+  --font-size-heading: 28px;
+  --font-size-number: 34px;
+  --font-size-title: 38px;
 
   /* Sizes */
-  --size-button: 64px;
-  --size-input: 64px;
+  --size-button: 56px;
+  --size-input: 56px;
+  --size-small-button: 48px;
+  --size-option: 52px;
   --size-dialog-icon: 72px;
+  --size-sidebar: 260px;
 
-  /* Visible on both light surfaces (dark ring) and the blue header (white ring). */
-  --focus-ring: 0 0 0 3px #ffffff, 0 0 0 7px var(--color-text);
+  --shadow-card: 0 1px 2px rgb(15 27 61 / 6%);
+  --shadow-popup: 0 10px 24px rgb(15 27 61 / 14%);
+
+  /* Visible on light surfaces (dark ring) and on the navy sidebar (white ring). */
+  --focus-ring: 0 0 0 3px #ffffff, 0 0 0 6px var(--color-text);
 }

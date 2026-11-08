@@ -1,0 +1,117 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  flex: 0 0 var(--size-sidebar);
+  min-height: 0;
+  overflow-y: auto;
+  padding: 28px 18px;
+  background-color: var(--color-nav);
+  color: var(--color-on-primary);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 0 10px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.logo svg {
+  flex-shrink: 0;
+  stroke: var(--color-nav-accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.page {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 60px;
+  padding: 0 var(--space-md);
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-nav-text);
+  font-size: var(--font-size-nav);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.page:hover {
+  background-color: var(--color-nav-current);
+  color: var(--color-on-primary);
+}
+
+.current {
+  background-color: var(--color-nav-current);
+  color: var(--color-on-primary);
+  font-weight: 700;
+}
+
+.dot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--color-nav-dot);
+}
+
+.current .dot {
+  background-color: var(--color-nav-accent);
+}
+
+.status {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: auto;
+  padding: 0 10px;
+  color: var(--color-nav-text);
+  font-size: var(--font-size-small);
+}
+
+.connection {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.connected {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--color-nav-connected);
+}
+
+/* White and bold on the navy, so it can't be mistaken for the calm lines. 17:1. */
+.disconnected {
+  color: var(--color-on-primary);
+  font-weight: 700;
+}
+
+.backupWarning {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  color: var(--color-on-primary);
+  font-weight: 700;
+}

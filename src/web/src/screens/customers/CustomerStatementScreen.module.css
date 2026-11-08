@@ -7,8 +7,8 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-md) var(--space-lg);
-  margin: calc(-1 * var(--space-lg)) calc(-1 * var(--space-lg)) var(--space-sm);
-  padding: var(--space-md) var(--space-lg);
+  margin: -6px calc(-1 * var(--content-x)) var(--space-sm);
+  padding: var(--space-xs) var(--content-x) var(--space-md);
   background-color: var(--color-background);
 }
 

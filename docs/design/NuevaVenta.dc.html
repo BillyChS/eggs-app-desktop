@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Eggs App · Nueva venta</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#E9EDF4;font-family:Inter,system-ui,sans-serif;color:#141B2D}
+a{color:#1E40AF}a:hover{color:#162F80}
+input::placeholder,textarea::placeholder{color:#6B7486}
+select:focus,input:focus,button:focus-visible{outline:3px solid #9DB4F2;outline-offset:1px}
+</style>
+</helmet>
+<div style="width: 820px; min-height: 1360px; box-sizing: border-box; padding: 40px; background: #E9EDF4">
+  <section role="dialog" aria-labelledby="nv-title" style="background: #FFFFFF; border-radius: 18px; box-shadow: 0 12px 32px rgba(15,27,61,0.14); display: flex; flex-direction: column">
+
+    <header style="display: flex; align-items: center; justify-content: space-between; padding: 24px 32px; border-bottom: 1px solid #E3E7EF">
+      <h1 id="nv-title" style="margin: 0; font-size: 28px; font-weight: 700">Nueva venta</h1>
+      <a href="Main.dc.html" aria-label="Cerrar" style="width: 48px; height: 48px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #2A3347; text-decoration: none">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+      </a>
+    </header>
+
+    <div style="padding: 28px 32px; display: flex; flex-direction: column; gap: 26px">
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px">
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <label for="nv-fecha" style="font-size: 18px; font-weight: 600">Fecha <span style="color: #B42318">*</span></label>
+          <div style="position: relative">
+            <input id="nv-fecha" type="text" inputMode="numeric" value="{{date}}" onChange="{{onDate}}" placeholder="dd/mm/aaaa" style="width: 100%; box-sizing: border-box; height: 56px; padding: 0 52px 0 16px; border: 1.5px solid #CBD2E1; border-radius: 10px; font: 400 18px Inter, sans-serif; color: #141B2D; background: #FFFFFF">
+            <button type="button" aria-label="Abrir calendario" style="position: absolute; right: 6px; top: 6px; width: 44px; height: 44px; border: none; border-radius: 8px; background: transparent; color: #2A3347; cursor: pointer; display: flex; align-items: center; justify-content: center">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M3 11h18"></path></svg>
+            </button>
+          </div>
+          <span style="font-size: 16px; color: #4A5468">{{dateLong}}</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <label for="nv-pago" style="font-size: 18px; font-weight: 600">¿Cómo pagó? <span style="color: #B42318">*</span></label>
+          <div style="position: relative">
+            <button id="nv-pago" type="button" aria-haspopup="listbox" aria-expanded="{{payExpanded}}" onClick="{{togglePay}}" style="{{payButtonStyle}}">
+              <span>{{payLabel}}</span>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2A3347" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0; transform: {{payChevron}}"><path d="M6 9l6 6 6-6"></path></svg>
+            </button>
+            <sc-if value="{{payOpen}}" hint-placeholder-val="{{false}}">
+              <div role="listbox" aria-label="¿Cómo pagó?" style="position: absolute; top: 62px; left: 0; right: 0; z-index: 5; padding: 6px; background: #FFFFFF; border: 1.5px solid #CBD2E1; border-radius: 10px; box-shadow: 0 10px 24px rgba(15,27,61,0.14)">
+                <sc-for list="{{payOptions}}" as="o" hint-placeholder-count="2">
+                  <button type="button" role="option" aria-selected="{{o.selected}}" onClick="{{o.pick}}" style="{{o.style}}">
+                    <span>{{o.label}}</span>
+                    <sc-if value="{{o.isSelected}}" hint-placeholder-val="{{false}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></sc-if>
+                  </button>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+
+      <fieldset style="margin: 0; padding: 0; border: none; display: flex; flex-direction: column; gap: 12px">
+        <legend style="padding: 0; margin-bottom: 12px; font-size: 18px; font-weight: 600">Cartones <span style="color: #B42318">*</span></legend>
+        <div aria-hidden="true" style="display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.75fr) minmax(0, 1.1fr) minmax(0, 0.9fr) 48px; gap: 12px; font-size: 16px; font-weight: 500; color: #4A5468">
+          <span>Tipo de cartón</span><span>Cantidad</span><span>Precio por cartón</span><span style="text-align: right">Subtotal</span><span></span>
+        </div>
+        <sc-for list="{{lines}}" as="line" hint-placeholder-count="2">
+          <div style="display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.75fr) minmax(0, 1.1fr) minmax(0, 0.9fr) 48px; gap: 12px; align-items: center">
+            <div style="position: relative">
+              <button type="button" aria-label="Tipo de cartón" aria-haspopup="listbox" aria-expanded="{{line.typeExpanded}}" onClick="{{line.toggleType}}" style="{{line.typeButtonStyle}}">
+                <span style="color: {{line.typeLabelColor}}">{{line.typeLabel}}</span>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2A3347" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0; transform: {{line.typeChevron}}"><path d="M6 9l6 6 6-6"></path></svg>
+              </button>
+              <sc-if value="{{line.typeOpen}}" hint-placeholder-val="{{false}}">
+                <div role="listbox" aria-label="Tipo de cartón" style="position: absolute; top: 62px; left: 0; right: 0; z-index: 5; padding: 6px; background: #FFFFFF; border: 1.5px solid #CBD2E1; border-radius: 10px; box-shadow: 0 10px 24px rgba(15,27,61,0.14)">
+                  <sc-for list="{{line.typeOptions}}" as="o" hint-placeholder-count="2">
+                    <button type="button" role="option" aria-selected="{{o.selected}}" onClick="{{o.pick}}" style="{{o.style}}">
+                      <span>{{o.label}}</span>
+                      <sc-if value="{{o.isSelected}}" hint-placeholder-val="{{false}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></sc-if>
+                    </button>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+            <input aria-label="Cantidad" type="text" inputMode="numeric" value="{{line.qty}}" onChange="{{line.onQty}}" style="height: 56px; min-width: 0; padding: 0 14px; border: 1.5px solid #CBD2E1; border-radius: 10px; font: 400 18px Inter, sans-serif; color: #141B2D; background: #FFFFFF">
+            <div style="display: flex; align-items: center; height: 56px; border: 1.5px solid #CBD2E1; border-radius: 10px; background: #FFFFFF; box-sizing: border-box; overflow: hidden">
+              <span style="padding: 0 4px 0 14px; font-size: 18px; color: #4A5468">₡</span>
+              <input aria-label="Precio por cartón" type="text" inputMode="numeric" value="{{line.price}}" onChange="{{line.onPrice}}" style="flex: 1; min-width: 0; height: 100%; padding: 0 12px 0 2px; border: none; outline: none; font: 400 18px Inter, sans-serif; color: #141B2D; background: transparent">
+            </div>
+            <span style="text-align: right; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums">{{line.subtotal}}</span>
+            <sc-if value="{{line.canRemove}}" hint-placeholder-val="{{false}}">
+              <button type="button" aria-label="Quitar este cartón" onClick="{{line.remove}}" style="width: 48px; height: 48px; border-radius: 10px; border: 1.5px solid #E8C4C4; background: #FFFFFF; color: #A31515; cursor: pointer; display: flex; align-items: center; justify-content: center">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"></path></svg>
+              </button>
+            </sc-if>
+          </div>
+        </sc-for>
+        <button type="button" onClick="{{addLine}}" style="align-self: flex-start; min-height: 48px; padding: 0 16px; border-radius: 10px; border: 1.5px dashed #9DB4F2; background: #F3F6FE; color: #1E40AF; font: 600 17px Inter, sans-serif; cursor: pointer; display: flex; align-items: center; gap: 8px">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          Agregar otro cartón
+        </button>
+      </fieldset>
+
+      <sc-if value="{{isFiado}}" hint-placeholder-val="{{false}}">
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: end; padding: 18px; border-radius: 12px; background: #FFF7EC; border: 1px solid #F2D6AE">
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <label for="nv-pagado" style="font-size: 18px; font-weight: 600">¿Pagó algo ahora? (opcional)</label>
+            <div style="display: flex; align-items: center; height: 56px; border: 1.5px solid {{paidBorder}}; border-radius: 10px; background: #FFFFFF; box-sizing: border-box; overflow: hidden">
+              <span style="padding: 0 4px 0 14px; font-size: 18px; color: #4A5468">₡</span>
+              <input id="nv-pagado" type="text" inputMode="numeric" value="{{paidNow}}" onChange="{{onPaid}}" placeholder="0" style="flex: 1; min-width: 0; height: 100%; padding: 0 12px 0 2px; border: none; outline: none; font: 400 18px Inter, sans-serif; color: #141B2D; background: transparent">
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px; padding-bottom: 6px">
+            <span style="font-size: 16px; color: #4A5468">Queda debiendo</span>
+            <span style="font-size: 26px; font-weight: 700; color: #8A4100">{{remaining}}</span>
+          </div>
+          <sc-if value="{{paidError}}" hint-placeholder-val="{{false}}">
+            <span style="grid-column: 1 / -1; font-size: 16px; font-weight: 500; color: #B42318">{{paidErrorText}}</span>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px">
+          <label for="nv-buscar" style="font-size: 18px; font-weight: 600">Cliente <span style="color: #B42318">*</span></label>
+          <span style="font-size: 17px; color: #2A3347">Elegido: <strong>{{chosenLabel}}</strong></span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 16px; border: 1.5px solid {{searchBorder}}; border-radius: 10px; background: #FFFFFF; box-sizing: border-box">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A5468" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+          <input id="nv-buscar" type="search" value="{{query}}" onChange="{{onQuery}}" placeholder="Buscar cliente por nombre" style="flex: 1; min-width: 0; border: none; outline: none; font: 400 18px Inter, sans-serif; color: #141B2D; background: transparent">
+        </div>
+
+        <div role="group" aria-label="Resultados de clientes" style="border: 1.5px solid #E3E7EF; border-radius: 12px; background: #FBFCFE; max-height: 300px; overflow-y: auto; padding: 0 6px 6px">
+          <div style="position: sticky; top: 0; z-index: 1; padding: 8px 0 8px; background: #FBFCFE; border-bottom: 1px solid #E3E7EF">
+            <button type="button" onClick="{{startNew}}" style="width: 100%; min-height: 52px; padding: 0 16px; border-radius: 10px; border: 1.5px dashed #9DB4F2; background: #F3F6FE; color: #1E40AF; font: 600 17px Inter, sans-serif; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+              {{newButtonLabel}}
+            </button>
+          </div>
+          <sc-if value="{{showAnon}}" hint-placeholder-val="{{true}}">
+            <button type="button" aria-pressed="{{anonPressed}}" disabled="{{anonDisabled}}" onClick="{{pickAnon}}" style="{{anonStyle}}">
+              <span style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px">
+                <span style="font-weight: 600; font-style: italic">Cliente sin nombre</span>
+                <span style="font-size: 15px; color: #4A5468">{{anonHint}}</span>
+              </span>
+              <sc-if value="{{anonChosen}}" hint-placeholder-val="{{true}}">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1E40AF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg>
+              </sc-if>
+            </button>
+          </sc-if>
+          <sc-for list="{{results}}" as="r" hint-placeholder-count="4">
+            <button type="button" aria-pressed="{{r.pressed}}" onClick="{{r.pick}}" style="{{r.style}}">
+              <span style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px">
+                <span style="font-weight: 600">{{r.name}}</span>
+                <span style="font-size: 15px; color: #4A5468">{{r.detail}}</span>
+              </span>
+              <sc-if value="{{r.chosen}}" hint-placeholder-val="{{false}}">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1E40AF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg>
+              </sc-if>
+            </button>
+          </sc-for>
+          <sc-if value="{{noResults}}" hint-placeholder-val="{{false}}">
+            <p style="margin: 0; padding: 18px 14px 10px; font-size: 17px; color: #4A5468">No se encontró ningún cliente con «{{query}}».</p>
+          </sc-if>
+        </div>
+
+        <sc-if value="{{customerError}}" hint-placeholder-val="{{false}}">
+          <span style="font-size: 16px; font-weight: 500; color: #B42318">Para fiar hay que elegir un cliente con nombre.</span>
+        </sc-if>
+
+        <sc-if value="{{isNew}}" hint-placeholder-val="{{false}}">
+          <div style="padding: 18px; border-radius: 12px; background: #F4F6FA; border: 1px solid #D6DCE8; display: flex; flex-direction: column; gap: 14px">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+              <span style="font-size: 18px; font-weight: 600">Cliente nuevo</span>
+              <button type="button" onClick="{{cancelNew}}" style="min-height: 44px; padding: 0 14px; border-radius: 10px; border: none; background: transparent; color: #2A3347; font: 600 16px Inter, sans-serif; cursor: pointer">Cancelar</button>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+              <div style="display: flex; flex-direction: column; gap: 6px">
+                <label for="nv-nombre" style="font-size: 17px; font-weight: 600">Nombre <span style="color: #B42318">*</span></label>
+                <input id="nv-nombre" type="text" value="{{newName}}" onChange="{{onNewName}}" placeholder="Ej.: Ana Solano" style="height: 48px; padding: 0 14px; border: 1.5px solid #CBD2E1; border-radius: 10px; font: 400 18px Inter, sans-serif; color: #141B2D; background: #FFFFFF">
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 6px">
+                <label for="nv-tel" style="font-size: 17px; font-weight: 600">Teléfono (opcional)</label>
+                <input id="nv-tel" type="tel" value="{{newPhone}}" onChange="{{onNewPhone}}" placeholder="8888-8888" style="height: 48px; padding: 0 14px; border: 1.5px solid #CBD2E1; border-radius: 10px; font: 400 18px Inter, sans-serif; color: #141B2D; background: #FFFFFF">
+              </div>
+            </div>
+            <span style="font-size: 15px; color: #4A5468">Se guarda en Clientes junto con la venta.</span>
+          </div>
+        </sc-if>
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-radius: 14px; background: #F4F6FA">
+        <span style="font-size: 20px; font-weight: 600">Total de la venta</span>
+        <span style="font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums">{{total}}</span>
+      </div>
+    </div>
+
+    <footer style="display: flex; justify-content: flex-end; gap: 14px; padding: 20px 32px 28px; border-top: 1px solid #E3E7EF">
+      <a href="Main.dc.html" style="min-height: 56px; padding: 0 28px; border-radius: 12px; background: #E9EDF4; color: #141B2D; font: 600 18px Inter, sans-serif; text-decoration: none; display: flex; align-items: center">Cancelar</a>
+      <a href="Main.dc.html" style="min-height: 56px; padding: 0 32px; border-radius: 12px; background: #1E40AF; color: #FFFFFF; font: 700 18px Inter, sans-serif; text-decoration: none; display: flex; align-items: center">Guardar venta</a>
+    </footer>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":820,"height":1360}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      date: '07/11/2026',
+      pay: 'contado',
+      customer: 'anon',
+      query: '',
+      newName: '',
+      newPhone: '',
+      paidNow: '',
+      openMenu: null,
+      lines: [{ type: '15', qty: '3', price: '1000' }, { type: '30', qty: '1', price: '2000' }]
+    };
+  }
+  renderVals() {
+    var self = this;
+    var st = this.state;
+    var digits = function (v) { return String(v || '').replace(/\D/g, ''); };
+    var fmt = function (n) { return '₡' + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); };
+    var group = function (d) { return d ? d.replace(/\B(?=(\d{3})+(?!\d))/g, '.') : ''; };
+    var norm = function (s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim(); };
+    var menuBtn = function (open) { return 'width: 100%; box-sizing: border-box; height: 56px; padding: 0 14px 0 16px; border: 1.5px solid ' + (open ? '#1E40AF' : '#CBD2E1') + '; border-radius: 10px; font: 400 18px Inter, sans-serif; color: #141B2D; background: #FFFFFF; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left' + (open ? '; box-shadow: 0 0 0 3px #DCE5FB' : ''); };
+    var optStyle = function (on) { return 'width: 100%; min-height: 52px; padding: 0 12px; margin: 2px 0; border-radius: 8px; border: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; font: ' + (on ? '600' : '400') + ' 18px Inter, sans-serif; cursor: pointer; color: ' + (on ? '#1E40AF' : '#141B2D') + '; background: ' + (on ? '#E6ECFB' : 'transparent'); };
+    var toggle = function (id) { self.setState({ openMenu: st.openMenu === id ? null : id }); };
+    var customers = [
+      { id: 'rosa', name: 'Doña Rosa Vargas', phone: '8812-4455', owes: 0 },
+      { id: 'luis', name: 'Don Luis Mora', phone: '8703-2291', owes: 6000 },
+      { id: 'maria', name: 'María Rodríguez', phone: '8888-1020', owes: 6000 },
+      { id: 'mario', name: 'Mario Solís', phone: '', owes: 0 },
+      { id: 'carlos', name: 'Carlos Jiménez', phone: '8455-7301', owes: 0 },
+      { id: 'pulperia', name: 'Pulpería La Esquina', phone: '2260-1180', owes: 0 }
+    ];
+    var isFiado = st.pay === 'fiado';
+    var q = norm(st.query);
+    var matches = customers.filter(function (c) { return !q || norm(c.name).indexOf(q) >= 0; });
+
+    var rowStyle = function (on, disabled) {
+      return 'width: 100%; min-height: 60px; padding: 8px 14px; margin: 2px 0; border-radius: 10px; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; font: 400 18px Inter, sans-serif; cursor: ' + (disabled ? 'not-allowed' : 'pointer') + '; ' +
+        (on ? 'background: #E6ECFB; border: 1.5px solid #1E40AF; color: #141B2D' : 'background: transparent; border: 1.5px solid transparent; color: ' + (disabled ? '#8A93A6' : '#141B2D'));
+    };
+    var results = matches.map(function (c) {
+      var on = st.customer === c.id;
+      var detail = [c.phone || 'Sin teléfono', c.owes ? 'debe ' + fmt(c.owes) : 'al día'].join(' · ');
+      return {
+        name: c.name,
+        detail: detail,
+        chosen: on,
+        pressed: on ? 'true' : 'false',
+        style: rowStyle(on, false),
+        pick: function () { self.setState({ customer: c.id }); }
+      };
+    });
+
+    var chosen = customers.filter(function (c) { return c.id === st.customer; })[0];
+    var chosenLabel = st.customer === 'anon' ? 'Cliente sin nombre'
+      : st.customer === 'new' ? (st.newName.trim() || 'Cliente nuevo')
+      : chosen ? chosen.name : 'ninguno';
+
+    var setLine = function (i, key, val) {
+      var lines = st.lines.map(function (l, j) {
+        if (j !== i) return l;
+        var copy = { type: l.type, qty: l.qty, price: l.price };
+        copy[key] = val;
+        return copy;
+      });
+      self.setState({ lines: lines });
+    };
+    var total = 0;
+    var lines = st.lines.map(function (l, i) {
+      var sub = (parseInt(digits(l.qty), 10) || 0) * (parseInt(digits(l.price), 10) || 0);
+      total += sub;
+      return {
+        type: l.type,
+        qty: l.qty,
+        price: group(digits(l.price)),
+        subtotal: fmt(sub),
+        canRemove: st.lines.length > 1,
+        typeLabel: l.type ? 'Cartón de ' + l.type + ' huevos' : 'Elija uno',
+        typeLabelColor: l.type ? '#141B2D' : '#6B7486',
+        typeOpen: st.openMenu === 'line' + i,
+        typeExpanded: st.openMenu === 'line' + i ? 'true' : 'false',
+        typeButtonStyle: menuBtn(st.openMenu === 'line' + i),
+        typeChevron: st.openMenu === 'line' + i ? 'rotate(180deg)' : 'none',
+        toggleType: function () { toggle('line' + i); },
+        typeOptions: ['15', '30'].map(function (v) {
+          var on = l.type === v;
+          return {
+            label: 'Cartón de ' + v + ' huevos',
+            selected: on ? 'true' : 'false',
+            isSelected: on,
+            style: optStyle(on),
+            pick: function () {
+              var ls = st.lines.map(function (x, j) { return j === i ? { type: v, qty: x.qty, price: x.price } : x; });
+              self.setState({ lines: ls, openMenu: null });
+            }
+          };
+        }),
+        onQty: function (e) { setLine(i, 'qty', digits(e.target.value)); },
+        onPrice: function (e) { setLine(i, 'price', digits(e.target.value)); },
+        remove: function () { self.setState({ lines: st.lines.filter(function (_, j) { return j !== i; }) }); }
+      };
+    });
+
+    var paid = parseInt(digits(st.paidNow), 10) || 0;
+    var paidError = isFiado && paid > 0 && paid >= total;
+    var customerError = isFiado && (st.customer === 'anon' || st.customer === '');
+    var anonChosen = st.customer === 'anon';
+
+    return {
+      date: st.date,
+      dateLong: 'sábado, 7 de noviembre de 2026',
+      onDate: function (e) { self.setState({ date: e.target.value }); },
+      payLabel: isFiado ? 'Fiado' : 'Al contado',
+      payOpen: st.openMenu === 'pay',
+      payExpanded: st.openMenu === 'pay' ? 'true' : 'false',
+      payButtonStyle: menuBtn(st.openMenu === 'pay'),
+      payChevron: st.openMenu === 'pay' ? 'rotate(180deg)' : 'none',
+      togglePay: function () { toggle('pay'); },
+      payOptions: [{ v: 'contado', l: 'Al contado' }, { v: 'fiado', l: 'Fiado' }].map(function (o) {
+        var on = st.pay === o.v;
+        return {
+          label: o.l,
+          selected: on ? 'true' : 'false',
+          isSelected: on,
+          style: optStyle(on),
+          pick: function () {
+            var next = { pay: o.v, openMenu: null };
+            if (o.v === 'fiado' && st.customer === 'anon') next.customer = '';
+            if (o.v === 'contado') next.paidNow = '';
+            self.setState(next);
+          }
+        };
+      }),
+      query: st.query,
+      onQuery: function (e) { self.setState({ query: e.target.value }); },
+      searchBorder: customerError ? '#B42318' : '#CBD2E1',
+      chosenLabel: chosenLabel,
+      showAnon: !q,
+      anonChosen: anonChosen,
+      anonPressed: anonChosen ? 'true' : 'false',
+      anonDisabled: isFiado,
+      anonHint: isFiado ? 'No se puede fiar a un cliente sin nombre' : 'Para ventas al contado de paso',
+      anonStyle: rowStyle(anonChosen, isFiado),
+      pickAnon: function () { self.setState({ customer: 'anon' }); },
+      results: results,
+      noResults: !!q && matches.length === 0,
+      newButtonLabel: q && matches.length === 0 ? 'Agregar «' + st.query.trim() + '» como cliente nuevo' : 'Agregar cliente nuevo',
+      startNew: function () { self.setState({ customer: 'new', newName: matches.length === 0 ? st.query.trim() : st.newName }); },
+      cancelNew: function () { self.setState({ customer: isFiado ? '' : 'anon', newName: '', newPhone: '' }); },
+      customerError: customerError,
+      isNew: st.customer === 'new',
+      newName: st.newName,
+      newPhone: st.newPhone,
+      onNewName: function (e) { self.setState({ newName: e.target.value }); },
+      onNewPhone: function (e) { self.setState({ newPhone: e.target.value }); },
+      lines: lines,
+      addLine: function () { self.setState({ lines: st.lines.concat([{ type: '', qty: '1', price: '' }]) }); },
+      isFiado: isFiado,
+      paidNow: group(digits(st.paidNow)),
+      onPaid: function (e) { self.setState({ paidNow: digits(e.target.value) }); },
+      paidBorder: paidError ? '#B42318' : '#CBD2E1',
+      paidError: paidError,
+      paidErrorText: paid > total ? 'No puede ser mayor que el total de la venta (' + fmt(total) + ').' : 'Si pagó todo, cambie «¿Cómo pagó?» a «Al contado».',
+      remaining: fmt(Math.max(total - paid, 0)),
+      total: fmt(total)
+    };
+  }
+}
+</script>
+</body>
+</html>

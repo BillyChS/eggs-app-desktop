@@ -8,24 +8,33 @@ namespace EggsApp.Api.Features.Sales;
 /// <param name="PaidNow">
 /// What a credit sale's customer paid when it was made, saved as an abono tied to the sale. Null or 0 for none.
 /// </param>
+/// <param name="NewCustomer">
+/// A customer to create with the sale, in place of CustomerId: both are saved in one transaction, or neither.
+/// </param>
 public sealed record SaleCommand(
     string? Date,
     IReadOnlyList<SaleItemCommand?>? Items,
     bool IsCredit = false,
     Guid? CustomerId = null,
-    long? PaidNow = null);
+    long? PaidNow = null,
+    NewCustomerCommand? NewCustomer = null);
 
 public sealed record SaleItemCommand(string? CartonType, long? Quantity, long? UnitPrice);
+
+/// <summary>Someone new, added from the sale form: just a name and maybe a phone.</summary>
+public sealed record NewCustomerCommand(string? Name, string? Phone);
 
 /// <summary>A command that passed validation.</summary>
 /// <param name="CustomerId">Who owes a credit sale, or who bought a cash sale; null for a cash sale with nobody.</param>
 /// <param name="PaidNow">Paid when a credit sale was made, less than its total. Always 0 for a cash sale.</param>
+/// <param name="NewCustomer">A customer to create and give the sale to. CustomerId is null when it's set.</param>
 public sealed record SaleFields(
     DateOnly Date,
     IReadOnlyList<SaleItemFields> Items,
     bool IsCredit,
     Guid? CustomerId,
-    long PaidNow)
+    long PaidNow,
+    CustomerFields? NewCustomer = null)
 {
     public long Total => Items.Sum(item => item.Quantity * item.UnitPrice);
 }
@@ -47,6 +56,9 @@ public sealed record SaleItemDetail(string CartonType, long Quantity, long UnitP
 /// Who owes a credit sale, or who bought a cash sale, even if they were deleted since; null for a cash sale with nobody.
 /// </param>
 /// <param name="PaidNow">The abono given when the credit sale was made (see Payment.SaleId); 0 if none.</param>
+/// <param name="Owed">
+/// What a credit sale still owes once the customer's abonos are shared out (see SaleStatuses); 0 for a cash sale.
+/// </param>
 public sealed record SaleDetail(
     Guid Id,
     DateOnly Date,
@@ -54,19 +66,22 @@ public sealed record SaleDetail(
     bool IsCredit,
     CustomerRef? Customer,
     IReadOnlyList<SaleItemDetail> Items,
-    long PaidNow = 0)
+    long PaidNow = 0,
+    long Owed = 0)
 {
     public static SaleDetail From(
         Sale sale,
         IReadOnlyDictionary<Guid, CustomerRef> customers,
-        IReadOnlyDictionary<Guid, long> paidNow) => new(
+        IReadOnlyDictionary<Guid, long> paidNow,
+        IReadOnlyDictionary<Guid, long> owed) => new(
         sale.Id,
         sale.SaleDate,
         sale.Total,
         sale.IsCredit,
         sale.CustomerId is { } customerId ? customers[customerId] : null,
         SaleItemDetail.ListFrom(sale),
-        paidNow.GetValueOrDefault(sale.Id));
+        paidNow.GetValueOrDefault(sale.Id),
+        sale.IsCredit ? owed.GetValueOrDefault(sale.Id) : 0);
 }
 
 /// <param name="CashTotal">The income from sales in the period: cash sales only.</param>

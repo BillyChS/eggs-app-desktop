@@ -1,7 +1,7 @@
 import { useSearchParams } from 'react-router'
 import { todayLocal } from '../../lib/dates'
 // Expenses happen on the same days as sales: real ones, from 2000 to today.
-import { canHaveSales as canHaveExpenses } from '../sales/useSaleDay'
+import { canHaveSales as canHaveExpenses } from '../sales/salesView'
 
 const LIST = '/gastos'
 const PARAM = 'fecha'

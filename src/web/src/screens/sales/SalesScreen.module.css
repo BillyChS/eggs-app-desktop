@@ -1,130 +1,444 @@
-/* Stays visible while the rows scroll under it. */
-.toolbar {
-  position: sticky;
-  top: calc(-1 * var(--space-lg));
-  z-index: 1;
+.page {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
-  margin: calc(-1 * var(--space-lg)) calc(-1 * var(--space-lg)) var(--space-sm);
-  padding: var(--space-md) var(--space-lg) var(--space-sm);
-  background-color: var(--color-background);
-}
-
-.controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--space-md) var(--space-lg);
-}
-
-.picker {
-  flex: 1;
-  min-width: 0;
+  gap: var(--space-lg);
 }
 
 .buttonContent {
-  display: inline-flex;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── Period ─────────────────────────────────────────────────────────────────────────────────────────────────────── */
+
+.periodBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-md);
+}
+
+.periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.period {
+  display: flex;
   align-items: center;
   gap: var(--space-xs);
-  white-space: nowrap;
-}
-
-.totals {
-  display: flex;
-  flex-direction: column;
-}
-
-.total {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-md);
-  font-size: var(--font-size-input);
-  font-weight: 700;
-}
-
-.total strong {
-  font-size: var(--font-size-title);
-}
-
-.parts {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-body);
-  text-align: right;
-}
-
-/* Says in words what kind of row it is, not just with color. */
-.tag {
-  display: inline-block;
-  padding: 0 var(--space-xs);
+  min-height: var(--size-button);
+  padding: 0 22px;
   border: 2px solid var(--color-border);
-  border-radius: 8px;
-  font-size: var(--font-size-body);
-  font-weight: 700;
-  vertical-align: 2px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-button);
+  font-weight: 600;
+  cursor: pointer;
 }
 
-.list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.period:hover {
+  background-color: var(--color-back);
+}
+
+.pressed {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.dateField {
+  width: 240px;
+}
+
+.months {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 4px;
   border: 2px solid var(--color-border);
   border-radius: var(--radius-md);
   background-color: var(--color-surface);
 }
 
-.list li + li {
-  border-top: 2px solid var(--color-divider);
-}
-
-.row {
+.arrow {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
-  width: 100%;
-  min-height: 80px;
-  padding: var(--space-sm) var(--space-md);
+  justify-content: center;
+  width: var(--size-small-button);
+  height: var(--size-small-button);
   border: none;
-  border-radius: var(--radius-md);
-  background: none;
-  color: var(--color-text);
-  font-size: var(--font-size-input);
-  text-align: left;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-sunken);
+  color: var(--color-primary);
   cursor: pointer;
-  /* Tabbing to a row must not leave it hidden under the toolbar. */
-  scroll-margin-top: 250px;
 }
 
-.row:hover {
+/* Not just paler: dashed too, so it reads as "not now" without relying on color. */
+.arrow:disabled {
+  outline: 2px dashed var(--color-border);
+  outline-offset: -2px;
+  background-color: var(--color-background);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+.monthName {
+  min-width: 200px;
+  font-size: 19px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* ── Cards ──────────────────────────────────────────────────────────────────────────────────────────────────────── */
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 22px var(--space-lg);
+  border-radius: 16px;
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.cardLabel,
+.cardDetail {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.cardNumber {
+  font-size: var(--font-size-number);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+
+.owedNumber {
+  color: var(--color-owed);
+}
+
+/* ── List ───────────────────────────────────────────────────────────────────────────────────────────────────────── */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+  box-shadow: 0 1px 3px rgb(15 27 61 / 8%);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding: 20px var(--space-lg);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.search {
+  display: flex;
+  flex: 1 1 320px;
+  align-items: center;
+  gap: 10px;
+  max-width: 460px;
+  min-height: var(--size-input);
+  padding: 0 var(--space-md);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.search:focus-within {
+  box-shadow: var(--focus-ring);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--font-size-input);
+}
+
+/* The field shows a focus ring around the whole box instead. */
+.search input:focus-visible {
+  box-shadow: none;
+}
+
+.search input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.tabs {
+  display: flex;
+  gap: var(--space-xs);
+  padding: 6px;
+  border-radius: 14px;
+  background-color: var(--color-surface-sunken);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 140px;
+  min-height: var(--size-small-button);
+  padding: 0 20px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-soft);
+  font-size: var(--font-size-button);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.currentTab {
+  background-color: var(--color-surface);
+  color: var(--color-primary);
+  box-shadow: 0 1px 3px rgb(15 27 61 / 15%);
+}
+
+.count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background-color: #d9deea;
+  color: var(--color-text-soft);
+  font-size: var(--font-size-small);
+}
+
+.currentTab .count {
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.tableScroll {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-body);
+}
+
+.table th {
+  padding: 14px var(--space-md);
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: var(--space-md);
+  border-top: 1px solid var(--color-divider);
+  vertical-align: middle;
+}
+
+.table th:first-child,
+.table td:first-child {
+  padding-left: var(--space-lg);
+}
+
+.table th:last-child,
+.table td:last-child {
+  padding-right: var(--space-lg);
+}
+
+.date {
+  color: var(--color-text-soft);
+  white-space: nowrap;
+}
+
+.name {
+  display: block;
+  font-weight: 600;
+}
+
+.noName {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.detail {
+  display: block;
+  margin-top: 2px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.phone,
+.note {
+  color: var(--color-text-soft);
+}
+
+.phone {
+  white-space: nowrap;
+}
+
+.number {
+  text-align: right !important;
+}
+
+.amount {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: var(--font-size-small);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.paid {
+  border-color: var(--badge-paid-edge);
+  background-color: var(--badge-paid-background);
+  color: var(--badge-paid-text);
+}
+
+.abonos {
+  border-color: var(--badge-abonos-edge);
+  background-color: var(--badge-abonos-background);
+  color: var(--badge-abonos-text);
+}
+
+.owed {
+  border-color: var(--badge-owed-edge);
+  background-color: var(--badge-owed-background);
+  color: var(--badge-owed-text);
+}
+
+.actionsHead {
+  text-align: right !important;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.edit,
+.remove {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: var(--size-small-button);
+  padding: 0 var(--space-md);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  color: var(--color-primary);
+  font-size: var(--font-size-button);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.edit:hover {
   background-color: var(--color-back);
 }
 
-.row svg {
-  flex-shrink: 0;
+.remove {
+  border-color: var(--color-danger-edge);
+  color: var(--color-danger);
 }
 
-.summary {
-  min-width: 0;
+.remove:hover {
+  background-color: #fdf1f1;
 }
 
-.rowEnd {
+.empty {
+  padding: 40px var(--space-lg);
+  color: var(--color-text-muted);
+  font-size: 19px;
+  text-align: center;
+}
+
+.footer {
   display: flex;
-  align-items: center;
-  gap: var(--space-md);
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--color-divider);
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-muted);
 }
 
-.rowTotal {
-  white-space: nowrap;
+.footer strong {
+  color: var(--color-text);
+}
+
+/* At 1366×768 the month's six columns must fit without scrolling sideways: tighter cells, and headings may wrap. */
+@media (max-width: 1500px) {
+  .table th,
+  .table td {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .table th {
+    white-space: normal;
+  }
+
+  .actions {
+    gap: var(--space-xs);
+  }
+
+  .edit,
+  .remove {
+    padding: 0 var(--space-sm);
+  }
 }
 
 .message {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-lg);
-  padding: var(--space-xl) 0;
-  font-size: var(--font-size-input);
+  gap: var(--space-md);
+  padding: var(--space-xl);
   text-align: center;
 }

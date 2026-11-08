@@ -93,8 +93,8 @@ The publish folder isn't what gets installed by hand: the installer wraps it. Se
 
 ## Version
 
-The app's version is `<Version>` in `Directory.Build.props`, and only there. It shows in the footer ("Versión 1.0.0",
-bottom right, on every screen), in the startup log line (with the commit: `Started. Version 1.0.0+b21b0da…`), in
+The app's version is `<Version>` in `Directory.Build.props`, and only there. It shows at the bottom of the sidebar ("Versión 1.0.0",
+bottom left, on every screen), in the startup log line (with the commit: `Started. Version 1.0.0+b21b0da…`), in
 `GET /api/health`, in the installer's name and title, and in Windows' list of installed apps.
 
 Bump it in the pull request that changes what gets shipped: patch for fixes, minor for new features, major for
@@ -149,9 +149,9 @@ An older installer than the version installed is refused ("Ya está instalada la
 
 ### What to check after installing or updating
 
-- The footer says **Versión X.Y.Z** at the bottom right. From a distance: "¿qué versión dice abajo a la derecha?"
+- The dark sidebar says **Versión X.Y.Z** at the bottom left. From a distance: "¿qué versión dice abajo a la izquierda?"
 - The latest sales, abonos and expenses are there.
-- The footer shows "Último respaldo: hoy …" and no warning.
+- The sidebar shows "Último respaldo: hoy …" and no warning.
 - The day's log, `%LocalAppData%\EggsApp\logs\eggsapp-YYYY-MM-DD.log`, has `Started. Version X.Y.Z+…`. After an
   update that changed the database, it also has `Applied migrations: …` and the path of the copy made before them.
 - If setup itself failed, its log is `%TEMP%\Setup Log YYYY-MM-DD #NNN.txt`.
@@ -176,7 +176,7 @@ Everything goes under `%LocalAppData%\EggsApp`, never next to the exe:
 | `eggs.db`     | The app's data. While the app runs, SQLite also keeps `eggs.db-wal` and `eggs.db-shm` next to it. |
 | `eggs.dev.db` | Development data, used by the standalone API and the `dotnet ef` tools                  |
 | `backups\daily` | The automatic backups, one per day (`eggs-YYYY-MM-DD.db`). See [Backups](#backups). |
-| `backups`     | A copy made before each migration (`eggs-YYYY-MM-DD_HH-mm-ss-fff.db`), the 5 newest kept, and `backup-state.json`, which the footer's warnings need. |
+| `backups`     | A copy made before each migration (`eggs-YYYY-MM-DD_HH-mm-ss-fff.db`), the 5 newest kept, and `backup-state.json`, which the sidebar's warnings need. |
 | `settings.json` | Optional, written by hand: the backup's second location. See [Backups](#backups).  |
 | `WebView2`    | WebView2 user data                                                                      |
 | `logs`        | One line per startup (version and port), clean shutdown and backup, plus failures and unhandled exceptions. One file per day, kept for 7 days. The Spanish error messages show this path. |
@@ -221,7 +221,7 @@ pre-migration copies are kept too. Pruning only deletes files whose names match 
 with Windows. Open the app once, then check that `Respaldos Eggs App` shows up in OneDrive online.
 
 **Failures.** A failed backup never stops the app or touches `eggs.db`: it's logged with the reason, and the next
-check tries again. The footer shows "Último respaldo: hoy 8:15 a. m." and warns only when:
+check tries again. The sidebar shows "Último respaldo: hoy 8:15 a. m." and warns only when:
 
 - the most recent attempt failed (remembered across restarts in `backup-state.json`), or
 - the app was used on 3 days with no good backup since. Days it wasn't opened don't count, so a long weekend never

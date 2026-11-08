@@ -26,16 +26,29 @@ export interface Sale {
   items: SaleItem[]
   /** Paid when a credit sale was made: an abono tied to the sale. 0 if none. */
   paidNow: number
+  /**
+   * What a credit sale still owes, once the customer's abonos are shared out: its own abono first, then the others to
+   * the oldest sales first. Worked out by the API on every read. 0 for a cash sale.
+   */
+  owed: number
+}
+
+/** Someone new, saved together with the sale. */
+export interface NewCustomerInput {
+  name: string
+  phone: string
 }
 
 export interface SaleInput {
   date: string
   items: SaleItemInput[]
   isCredit: boolean
-  /** Required for a credit sale; optional for a cash sale, where it's who bought. */
+  /** Required for a credit sale, unless newCustomer is given; optional for a cash sale, where it's who bought. */
   customerId: string | null
   /** Only for a credit sale: what was paid as it was made, less than the total. 0 for none. */
   paidNow: number
+  /** In place of customerId: someone to add, in the same transaction as the sale. */
+  newCustomer?: NewCustomerInput
 }
 
 export interface SaleList {

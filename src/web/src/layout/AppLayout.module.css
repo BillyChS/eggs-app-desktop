@@ -1,48 +1,12 @@
 .app {
   display: flex;
-  flex-direction: column;
   height: 100%;
 }
 
-.footer {
+.page {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-xs) var(--space-lg);
-  padding: var(--space-xs) var(--space-lg);
-  border-top: 1px solid var(--color-divider);
-  background-color: var(--color-surface);
-  font-size: var(--font-size-small);
-}
-
-.status {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  color: var(--color-text-muted);
-}
-
-.status svg {
-  color: var(--color-success);
-}
-
-/* Always at the right end, whether or not the backup line is there. */
-.version {
-  margin-left: auto;
-  color: var(--color-text-muted);
-}
-
-.disconnected {
-  color: var(--color-danger);
-  font-weight: 700;
-}
-
-.backupWarning {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-sm);
-  color: var(--color-danger);
-  font-weight: 700;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
 }

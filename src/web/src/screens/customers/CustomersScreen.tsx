@@ -20,7 +20,7 @@ export function CustomersScreen() {
   const shown = result && (onlyOwing ? result.customers.filter((customer) => customer.balance > 0) : result.customers)
 
   return (
-    <Screen title="Clientes" backTo="/">
+    <Screen title="Clientes">
       <div className={styles.toolbar}>
         <div className={styles.controls}>
           <div className={styles.search}>

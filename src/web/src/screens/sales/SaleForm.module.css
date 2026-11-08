@@ -1,289 +1,244 @@
-/* Fills the screen, so that the total and the buttons stay at the bottom and only the lines scroll: a Guardar venta
-   below the fold might never be found. */
-.form {
+/* The form is a page next to the sidebar: a panel as tall as the window, whose middle scrolls, so the title and
+   Guardar venta are always in sight, whatever the screen size. */
+.page {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-  height: 100%;
-  max-width: 1180px;
-  margin: 0 auto;
-}
-
-.lines {
-  display: flex;
+  justify-content: center;
   flex: 1;
-  flex-direction: column;
-  gap: var(--space-md);
-  min-height: 120px;
-  overflow-y: auto;
-  /* Room for the focus ring, which the scrolling would otherwise cut off. */
-  margin: -8px;
-  padding: 8px;
+  min-height: 0;
+  padding: var(--space-lg) var(--space-page);
+  background-color: #e9edf4;
 }
 
-.doneLines {
+.panel {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  width: 100%;
+  max-width: 920px;
+  min-height: 0;
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+  box-shadow: 0 12px 32px rgb(15 27 61 / 14%);
 }
 
-.doneLine {
+.header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-md);
-  padding: var(--space-xs) var(--space-md);
-  border: 2px solid var(--color-divider);
-  border-radius: var(--radius-md);
-  background-color: var(--color-surface);
-  font-size: var(--font-size-input);
+  padding: 20px var(--space-xl);
+  border-bottom: 1px solid var(--color-divider);
 }
 
-.doneText {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-/* Inside a line, to win over the width every other button has. */
-.doneLine .remove,
-.editor .remove {
-  flex-shrink: 0;
-  min-width: 110px;
-  padding: var(--space-xs) var(--space-md);
-}
-
-.editor {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--space-sm) var(--space-md);
-}
-
-.fieldLabel {
-  display: block;
-  margin-bottom: var(--space-xs);
-  font-size: var(--font-size-body);
+.title {
+  font-size: var(--font-size-heading);
   font-weight: 700;
 }
 
-.typeField {
-  flex: 1 1 400px;
-  min-width: 0;
-}
-
-.types {
+.close {
   display: flex;
-  gap: var(--space-sm);
-}
-
-.type {
-  display: flex;
-  flex: 1;
   align-items: center;
   justify-content: center;
-  gap: var(--space-xs);
-  min-height: var(--size-button);
-  padding: var(--space-xs);
-  border: 2px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background-color: var(--color-surface);
-  color: var(--color-text);
-  font-size: var(--font-size-body);
-  font-weight: 700;
-  line-height: 1.2;
+  width: var(--size-small-button);
+  height: var(--size-small-button);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-soft);
   cursor: pointer;
 }
 
-.type:hover {
-  background-color: var(--color-back);
+.close:hover {
+  background-color: var(--color-surface-sunken);
 }
 
-.type svg {
-  flex-shrink: 0;
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 28px var(--space-xl);
 }
 
-.chosen,
-.chosen:hover {
-  background-color: var(--color-primary);
-  color: var(--color-on-primary);
+.firstRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 20px;
 }
 
-.quantity {
-  width: 120px;
+/* ── Lines ──────────────────────────────────────────────────────────────────────────────────────────────────────── */
+
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
 }
 
-.price {
-  width: 220px;
+.legend {
+  margin-bottom: var(--space-sm);
+  padding: 0;
+  font-size: var(--font-size-body);
+  font-weight: 600;
+}
+
+.lineHeadings,
+.line {
+  display: grid;
+  grid-template-columns: minmax(230px, 1.6fr) minmax(0, 0.6fr) minmax(0, 1.1fr) minmax(0, 0.8fr) 118px;
+  gap: var(--space-sm);
+}
+
+.lineHeadings {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+  font-weight: 500;
+}
+
+.line {
+  align-items: start;
+}
+
+.right {
+  text-align: right;
 }
 
 .subtotal {
-  min-width: 130px;
-}
-
-.subtotal strong {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   min-height: var(--size-input);
-  font-size: var(--font-size-input);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Lines up with the inputs, which have a label above them. */
-.editor .remove {
-  margin-top: 36px;
+.removeLine {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--size-input);
+  padding: 0 var(--space-sm);
+  border: 2px solid var(--color-danger-edge);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  color: var(--color-danger);
+  font-size: var(--font-size-button);
+  font-weight: 600;
+  cursor: pointer;
 }
 
-.bottom {
+.removeLine:hover {
+  background-color: #fdf1f1;
+}
+
+.addLine {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: var(--space-xs);
+  min-height: var(--size-small-button);
+  padding: 0 var(--space-md);
+  border: 2px dashed var(--color-primary-dashed);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-primary-faint);
+  color: var(--color-primary);
+  font-size: var(--font-size-button);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.addLine:hover {
+  background-color: var(--color-primary-soft);
+}
+
+.error {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+/* ── Paid with a fiado ──────────────────────────────────────────────────────────────────────────────────────────── */
+
+.paidNow {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
+  padding: 18px;
+  border: 1px solid #f2d6ae;
+  border-radius: var(--radius-md);
+  background-color: #fff7ec;
 }
 
-/* How it was paid and the total share a row, so the choice costs the form almost no height. */
-.summary {
+.paidNowRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 20px;
+}
+
+.remaining {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 6px;
+  color: var(--color-text-muted);
+}
+
+.remaining strong {
+  color: var(--color-owed);
+  font-size: 26px;
+}
+
+.paidInFull {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-md);
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────────────────────────────────────────────────── */
+
+.footer {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-xs) var(--space-lg);
-  padding-top: var(--space-xs);
-  border-top: 2px solid var(--color-divider);
-}
-
-.payment {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-xs) var(--space-md);
-  min-width: 0;
-}
-
-.paymentLabel {
-  font-size: var(--font-size-body);
-  font-weight: 700;
-}
-
-.paidWith {
-  display: flex;
-  gap: var(--space-sm);
-}
-
-.paidWith .type {
-  flex: none;
-  padding: var(--space-xs) var(--space-lg);
-}
-
-/* A long name is cut short, so the row still fits; the button's title has it whole. */
-.creditText {
-  max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  gap: var(--space-md);
+  padding: 18px var(--space-xl) 22px;
+  border-top: 1px solid var(--color-divider);
 }
 
 .total {
   display: flex;
-  flex: 1 0 auto;
   align-items: baseline;
-  justify-content: flex-end;
   gap: var(--space-md);
-  font-size: var(--font-size-input);
-  font-weight: 700;
+}
+
+.total span {
+  font-size: 20px;
+  font-weight: 600;
 }
 
 .total strong {
-  font-size: var(--font-size-title);
-}
-
-/* Who bought a cash sale: optional, so it reads as a quiet line of text rather than a step to complete. */
-.buyer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-xs) var(--space-md);
-  font-size: var(--font-size-body);
-}
-
-.buyerName {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-/* Looks like a link, but keeps a large target. Primary on the page background is 8.5:1. */
-.quiet {
-  min-height: 48px;
-  padding: var(--space-xs) var(--space-xs);
-  border: none;
-  border-radius: var(--radius-md);
-  background: none;
-  color: var(--color-primary);
-  font-size: var(--font-size-body);
-  text-decoration: underline;
-  text-underline-offset: 4px;
-  cursor: pointer;
-}
-
-.quiet:hover {
-  background-color: var(--color-back);
-}
-
-.paidNow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--space-xs) var(--space-lg);
-}
-
-.paidNowField {
-  width: 340px;
-}
-
-/* Next to the input, at its height, so it costs no extra row. */
-.remaining,
-.paidInFull {
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  min-height: var(--size-input);
-  font-size: var(--font-size-input);
-}
-
-.paidInFullText {
-  color: var(--color-danger);
-  font-size: var(--font-size-body);
+  font-size: 32px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Far apart, so aiming for Guardar venta can't land on Borrar venta. */
 .buttons {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
-  gap: var(--space-sm) var(--space-xl);
+  gap: 14px;
 }
 
-.mainButtons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm) var(--space-md);
-}
-
-.buttonContent {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  white-space: nowrap;
-}
-
-.error {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  margin-top: var(--space-xs);
-  color: var(--color-danger);
-  font-size: var(--font-size-body);
-  font-weight: 700;
+.buttons > button {
+  min-width: 0;
+  padding: 0 28px;
 }

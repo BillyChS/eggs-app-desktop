@@ -54,7 +54,10 @@ export function EditPaymentScreen() {
             onClick={() =>
               navigate(
                 `/ventas/${load.value.payment.saleId}/editar` +
-                  (returnTo.startsWith('/clientes') ? `?${new URLSearchParams({ cliente: id })}` : ''),
+                  // The sale goes back where this abono would have: the account, or the same view of Ventas.
+                  (returnTo.startsWith('/clientes')
+                    ? `?${new URLSearchParams({ cliente: id })}`
+                    : returnTo.slice(returnTo.indexOf('?'))),
               )
             }
           >

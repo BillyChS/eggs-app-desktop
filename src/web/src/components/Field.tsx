@@ -11,6 +11,8 @@ interface InputProps {
 
 interface Props {
   label: string
+  /** For a field under a column heading that already says what it is. Screen readers still read the label. */
+  hideLabel?: boolean
   error?: string
   /** Shown under the input, for text that helps confirm the value. */
   hint?: ReactNode
@@ -20,7 +22,7 @@ interface Props {
 }
 
 /** The parts every input shares: a label that's always visible, and an error in words, not just color. */
-export function Field({ label, error, hint, prefix, children }: Props) {
+export function Field({ label, hideLabel, error, hint, prefix, children }: Props) {
   const id = useId()
   const hintId = hint ? `${id}-hint` : undefined
   const errorId = error ? `${id}-error` : undefined
@@ -28,7 +30,7 @@ export function Field({ label, error, hint, prefix, children }: Props) {
 
   return (
     <div className={styles.field}>
-      <label htmlFor={id} className={styles.label}>
+      <label htmlFor={id} className={hideLabel ? styles.hiddenLabel : styles.label}>
         {label}
       </label>
       <div className={styles.row}>
