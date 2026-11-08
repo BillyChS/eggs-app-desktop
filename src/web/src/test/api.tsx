@@ -17,6 +17,18 @@ export const json = (body: unknown, status = 200) => new Response(JSON.stringify
 
 export const noContent = () => new Response(null, { status: 204 })
 
+/** GET /api/reports/summary of a period with nothing in it: what Ventas shows after a test leaves a form. */
+export const EMPTY_SUMMARY = {
+  cameIn: { cash: 0, payments: 0, total: 0 },
+  spent: { total: 0, byCategory: [] },
+  net: 0,
+  creditSold: 0,
+  owedTotal: 0,
+  cartons: [],
+  days: [],
+  bestCustomers: { top: [], othersCount: 0, othersTotal: 0, withoutCustomer: 0 },
+}
+
 /**
  * A fake API: answers by "METHOD /path" from the handlers given, and remembers every call. Anything without a
  * handler answers {}.

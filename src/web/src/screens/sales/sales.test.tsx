@@ -289,6 +289,7 @@ describe('Ventas: the list', () => {
 
   it('Abonos lists the abonos; one paid with its sale opens that sale instead', async () => {
     serveDay()
+    handlers['GET /api/sales/3'] = () => json(CREDIT_LUIS)
     const { router, user } = openApp('/ventas?pestana=abonos')
     await screen.findByRole('table')
 
