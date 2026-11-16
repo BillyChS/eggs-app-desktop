@@ -6,6 +6,7 @@ import { DateInput } from '../../components/DateInput'
 import { Dropdown } from '../../components/Dropdown'
 import { useMessages } from '../../components/messages'
 import { MoneyInput } from '../../components/MoneyInput'
+import { FormFooter } from '../../layout/FormFooter'
 import { Screen } from '../../layout/Screen'
 import { useOneAtATime } from '../../layout/useOneAtATime'
 import { useUnsavedChanges } from '../../layout/useUnsavedChanges'
@@ -610,28 +611,15 @@ export function SaleForm({ sale, startDay, closeTo, afterSave, afterDelete }: Pr
       <Screen
         title={sale ? 'Editar venta' : 'Nueva venta'}
         footer={
-          <>
-            {sale && (
-              // Away from Guardar venta, and it always asks first.
-              <Button variant="dangerOutline" onClick={() => setConfirmingDelete(true)}>
-                Borrar venta
-              </Button>
-            )}
-            <div className={styles.end}>
-              <p className={styles.total}>
-                <span>Total de la venta</span>
-                <strong>{formatColones(total)}</strong>
-              </p>
-              <div className={styles.buttons}>
-                <Button variant="secondary" onClick={() => navigate(closeTo)}>
-                  Cancelar
-                </Button>
-                <Button ref={saveRef} onClick={save}>
-                  Guardar venta
-                </Button>
-              </div>
-            </div>
-          </>
+          <FormFooter
+            totalLabel="Total de la venta"
+            total={total}
+            saveLabel="Guardar venta"
+            saveRef={saveRef}
+            onSave={save}
+            onCancel={() => navigate(closeTo)}
+            {...(sale && { deleteLabel: 'Borrar venta', onDelete: () => setConfirmingDelete(true) })}
+          />
         }
       >
         <div className={styles.columns}>

@@ -23,13 +23,25 @@ export interface ExpenseInput {
   date: string
   categoryId: string
   amount: number
+  /** For "Otro", what the expense was ("¿Qué gasto fue?"), which it requires. */
   note: string
+}
+
+/** What went to one category in a period. */
+export interface CategoryTotal {
+  id: string
+  name: string
+  total: number
+  /** How many expenses. */
+  count: number
 }
 
 export interface ExpenseList {
   expenses: Expense[]
   /** What went out in the period, on the days it was spent. */
   total: number
+  /** The same expenses by category, largest first: what Resúmenes shows too. */
+  byCategory: CategoryTotal[]
 }
 
 const BASE = '/api/expenses'

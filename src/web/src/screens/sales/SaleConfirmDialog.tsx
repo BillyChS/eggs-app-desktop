@@ -1,6 +1,4 @@
-import { useRef } from 'react'
-import { Button } from '../../components/Button'
-import { Modal } from '../../components/Modal'
+import { ConfirmationWindow } from '../../components/ConfirmationWindow'
 import { formatDateLong } from '../../lib/dates'
 import { formatColones } from '../../lib/money'
 import type { SaleItemInput } from '../../services/sales'
@@ -27,56 +25,35 @@ interface Props {
   onConfirm: () => void
 }
 
-/**
- * What's about to be saved, one thing per line, before anything is saved. Focus starts on Editar, so a stray Enter
- * only goes back to the form.
- */
+/** The sale's Ventana de confirmación: who, when, how it was paid, each carton line, and the total. */
 export function SaleConfirmDialog({ summary, error, onEdit, onConfirm }: Props) {
-  const editRef = useRef<HTMLButtonElement>(null)
   const total = summary.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
 
   return (
-    <Modal
-      title="Ventana de confirmación"
-      onEscape={onEdit}
-      initialFocus={editRef}
-      body={
-        <>
-          <dl className={styles.summary}>
-            <dt>Cliente</dt>
-            <dd>{summary.customer}</dd>
-            <dt>Fecha</dt>
-            <dd>{formatDateLong(summary.date) ?? summary.date}</dd>
-            <dt>Cómo pagó</dt>
-            <dd>{describePaidWith(summary.isCredit, summary.paidNow, total)}</dd>
-            <dt>Cartones</dt>
-            <dd>
-              <ul className={styles.items}>
-                {summary.items.map((item, index) => (
-                  <li key={index}>
-                    <span>{describeItem(item)}</span>
-                    <span className={styles.subtotal}>{formatColones(item.quantity * item.unitPrice)}</span>
-                  </li>
-                ))}
-              </ul>
-            </dd>
-          </dl>
-          <p className={styles.total}>
-            <span>Total</span>
-            <strong>{formatColones(total)}</strong>
-          </p>
-          {error && (
-            <p role="alert" className={styles.error}>
-              {error}
-            </p>
-          )}
-        </>
-      }
-    >
-      <Button ref={editRef} variant="secondary" onClick={onEdit}>
-        Editar
-      </Button>
-      <Button onClick={onConfirm}>Listo</Button>
-    </Modal>
+    <ConfirmationWindow
+      rows={[
+        { label: 'Cliente', value: summary.customer },
+        { label: 'Fecha', value: formatDateLong(summary.date) ?? summary.date },
+        { label: 'Cómo pagó', value: describePaidWith(summary.isCredit, summary.paidNow, total) },
+        {
+          label: 'Cartones',
+          value: (
+            <ul className={styles.items}>
+              {summary.items.map((item, index) => (
+                <li key={index}>
+                  <span>{describeItem(item)}</span>
+                  <span className={styles.subtotal}>{formatColones(item.quantity * item.unitPrice)}</span>
+                </li>
+              ))}
+            </ul>
+          ),
+        },
+      ]}
+      amountLabel="Total"
+      amount={total}
+      error={error}
+      onEdit={onEdit}
+      onConfirm={onConfirm}
+    />
   )
 }

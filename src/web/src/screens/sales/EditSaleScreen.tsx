@@ -8,6 +8,7 @@ import { getSale } from '../../services/sales'
 import centered from '../CenteredMessage.module.css'
 import { statementOf } from '../customers/customerText'
 import { SaleForm } from './SaleForm'
+import { hasListPeriod } from '../periodView'
 import { listOfDay, readView, viewAddress, viewAfterSave } from './salesView'
 
 export function EditSaleScreen() {
@@ -18,7 +19,7 @@ export function EditSaleScreen() {
   // Opened from a customer's account ("?cliente="), it goes back there. Opened from Ventas, back to the view it was
   // opened from; from anywhere else, to the day of the sale.
   const fromCustomer = params.get('cliente')
-  const hasView = params.has('fecha') || params.has('mes')
+  const hasView = hasListPeriod(params)
   const view = readView(params)
   const sale = load.state === 'ready' ? load.value : null
 

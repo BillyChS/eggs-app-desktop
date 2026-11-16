@@ -36,10 +36,12 @@ src/
     src/theme/tokens.css       Design tokens: colors, spacing, radii, font sizes
     src/components/            Button, inputs, Dropdown, DayPicker, ConfirmDialog, useMessages (success and error messages)
     src/layout/                AppLayout + Sidebar (pages, connection, backup, version), Screen (header, "‹ Volver" on inner
-                               screens), useUnsavedChanges, useOneAtATime
+                               screens), FormFooter (the sale and expense forms' bar), useUnsavedChanges, useOneAtATime
     src/lib/                   Money and date helpers, selectOnFocus
-    src/screens/               Screens; dev/ is a components page that exists only in pnpm dev
-    src/screens/sales/         Ventas (salesView: day or month and tab, in the address) and the sale form
+    src/screens/               Screens; dev/ is a components page that exists only in pnpm dev. PeriodBar and periodView:
+                               the period of Ventas and Gastos (day, week or month, in the address)
+    src/screens/sales/         Ventas (salesView: the period and the tab) and the sale form
+    src/screens/expenses/      Gastos (its period, cards and table) and the expense form
     src/services/              API calls; http.ts has the timeout and ApiError
     src/test/                  Test setup, and a fake API (api.tsx) for screen tests
     vite.config.ts             Dev proxy: /api → http://localhost:5080; Vitest settings
@@ -142,19 +144,26 @@ touch the real data; set `Database:Path` to override it for the standalone API.
   their oldest fiados first (sale date, then `CreatedAt`, then `Id`), from all their history, whatever the
   period shown. Worked out on every read, never stored, so the sales' `Owed` always add up to the balance; editing or
   deleting an old fiado or an abono can change the status of newer ones.
-- **Ventas:** one day (Hoy, Ayer, Otro día) or one month (‹ ›, never past the current one, which stops at today), and a
-  tab: Fiado, Contado or Abonos. The view lives in the address (`?fecha=` or `?mes=`, `&pestana=`, see `salesView.ts`)
-  and screens opened from it carry it, to come back to it. The cards are `GetSummary`'s numbers for the same range, so
+- **Ventas and Gastos periods:** both use `PeriodBar`: one day (Hoy, Ayer, Otro día), one week (Esta semana, Monday
+  to Sunday) or one month (Este mes); weeks and months have ‹ ›, never past the current one, which stops at today. The
+  period lives in the address (`?fecha=`, `?semana=` with its Monday, or `?mes=`; see `periodView.ts`), and screens
+  opened from it carry it, to come back to it; saving goes back to that week or month if the date is in it, otherwise
+  to that day. A week or a month adds a Fecha column.
+- **Ventas:** the period and a tab: Fiado, Contado or Abonos (`&pestana=`, see `salesView.ts`). The cards are `GetSummary`'s numbers for the same range, so
   they match Resúmenes; the table and its search are the period's `ListSales` and `ListPayments`.
 - **Expenses:** cash-basis, like income: an `Expense` counts on its `ExpenseDate`. Its category is a row of
   `ExpenseCategory`, not code: the migration seeds them with fixed ids, and a new or renamed one is a data change
   (there's no screen for it yet). A category is never removed, only retired (soft-deleted, with a Restrict FK):
   its old expenses keep showing its name (`ExpenseCategories.FindRefsAsync`) and can keep it when edited, but it's
-  no longer offered. A category with `NeedsDescription` ("Otro") requires the note. A new expense starts with no
-  category chosen.
+  no longer offered. A category with `NeedsDescription` ("Otro") requires the note, which says what it was: the form
+  asks for it as "¿Qué gasto fue?" (shown only for "Otro", and cleared when another type is chosen) and has no other
+  note for it; Gastos shows that text as its Tipo. A new expense starts with no category chosen.
+- **Gastos:** the period's `ListExpenses`: the card "Gastado hoy / esta semana…" (total and how many), "En qué se
+  gastó" (its `ByCategory`, at most four lines: past four, the top three and "Lo demás (N tipos)"), and a table with
+  Editar and Eliminar (which asks first) and a footer with how many and the total.
 - **Summaries:** `GetSummary` never adds anything up on its own: it calls `ListSales`, `ListPayments`,
   `ListExpenses` and `ListCustomers` and combines their results, so Resúmenes can't disagree with Ventas, Gastos or
-  Clientes. Entró = cash sales + abonos; Gastado = expenses; Quedó = Entró − Gastado (it can be negative). Fiado is
+  Clientes. Spending by category is `ListExpenses`' `ByCategory`, grouped there once for Gastos and Resúmenes. Entró = cash sales + abonos; Gastado = expenses; Quedó = Entró − Gastado (it can be negative). Fiado is
   shown apart, and "Por cobrar en total" is today's, whatever the period. Weeks start on Monday, and the current week
   or month stops at today. "Mejores clientes" ranks only sales with a customer (cash with a buyer and fiado) and always
   shows "Ventas sin cliente" next to it: ranked + others + without customer = cash + fiado of the period.
@@ -176,31 +185,34 @@ touch the real data; set `Database:Path` to override it for the standalone API.
   the sidebar and a table's row buttons, confirmation dialogs. Tokens keep text and buttons at 7:1 contrast, and input
   edges at 3:1 or more. The look follows `docs/design/`. Optional fields look optional: "(opcional)" in the label,
   never blocking a save; required ones have no mark.
-- **Choices:** a choice with a few options and no room for a row of buttons is a `Dropdown` (¿Cómo pagó?, Tipo de
-  cartón): never a `<select>`, whose list the browser draws small. Where there's room, large buttons that show every
-  option at once (expense categories, periods) stay.
+- **Choices:** a choice among a few options in a form is a `Dropdown` (¿Cómo pagó?, Tipo de cartón, ¿Qué tipo de
+  gasto?): never a `<select>`, whose list the browser draws small. The periods stay large buttons that show every
+  option at once.
 - **Screen sizes:** the target is a 21" or larger monitor at 1920×1080, 100% scaling. Layouts are checked at
   1920×1080 and 1366×768 (both at 100%), the app maximized.
   The browser's calendar popup is a known exception to the size rule: CSS can't reach it (about 13px text and 28px
   days at 125% scaling), so a date can always be typed, and Ventas, abonos and expenses offer Hoy and Ayer as large
-  buttons. A new sale starts on the day Ventas was showing.
+  buttons. A new sale or expense starts on the day its page was showing, or today from a week or a month.
 - **Dates and money in the UI:** use `lib/dates.ts` and `lib/money.ts`. `new Date("YYYY-MM-DD")` means UTC and shows
   the day before in Costa Rica; `Intl` doesn't give `₡12.500` for `es-CR`.
 - **Navigation:** the sidebar is always there with the four pages by name (no submenus), and marks the page a screen
-  is under. The app opens on Ventas. Screens under a page have "‹ Volver" to it (the sale form has Cancelar instead),
-  never browser history, so it still works after a reload. Every page, the sale form included, is a `Screen`.
+  is under. The app opens on Ventas. Screens under a page have "‹ Volver" to it (the sale and expense forms have
+  Cancelar instead), never browser history, so it still works after a reload. Every page, the forms included, is a
+  `Screen`.
 - **Forms:** use `useUnsavedChanges` so leaving asks first. It also tells the window, which asks before closing. Don't
   disable the button being pressed while saving, because that loses keyboard focus: use `useOneAtATime`.
 - **Sale, abono and expense form keyboard:** Enter moves on and never saves from a field; only activating the button
   saves. The sale form opens on ¿Cómo pagó? and asks in this order: Fecha → ¿Cómo pagó? → each line's type → quantity
   → price → "¿Pagó algo ahora?" (fiado only) → Cliente (skipped once someone is chosen, as "Cliente sin nombre" is for
   a cash sale; Enter in the search goes to the first name, it doesn't pick it) → "Guardar venta", which saves nothing:
-  it opens the "Ventana de confirmación" (`SaleConfirmDialog`, also when editing), focused on Editar, and only its
+  it opens the "Ventana de confirmación" (`ConfirmationWindow`, also when editing), focused on Editar, and only its
   Listo saves; a failure stays in it, saying what to do. Abono: amount → note → "Guardar abono"; in the Abonar dialog,
-  amount → "Guardar abono", which asks "Sí, guardar" / "No" first. Expense: category → amount → note → "Guardar
-  gasto". So these forms have no `<form>` element, and a held-down Enter is ignored (also inside any `Modal`). All of
-  them must keep their save button in sight at both screen sizes above: the sale form's total and buttons are
-  `Screen`'s `footer`, which stays put while the content scrolls, with Borrar venta apart on its left.
+  amount → "Guardar abono", which asks "Sí, guardar" / "No" first. Expense: it opens on ¿Qué tipo de gasto?; Fecha →
+  ¿Qué tipo de gasto? → "¿Qué gasto fue?" ("Otro" only) → Monto → Nota (not for "Otro") → "Guardar gasto", which
+  opens the same Ventana de confirmación. So these forms have no `<form>` element, and a held-down Enter is ignored
+  (also inside any `Modal`). All of them must keep their save button in sight at both screen sizes above: the sale and
+  expense forms' total and buttons are `FormFooter`, in `Screen`'s `footer`, which stays put while the content
+  scrolls, with Borrar venta or Borrar gasto apart on its left.
 - **Data safety:** never commit `.db` files or backup JSON files.
 - **Version:** `<Version>` in `Directory.Build.props` is the only place it's set; read it through `AppVersion`. A `v*`
   tag must match it.

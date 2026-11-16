@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { formatDateLong, todayLocal } from '../../lib/dates'
 import { addressOf, EMPTY_SUMMARY, fakeApi, json, noContent, openApp, type User } from '../../test/api'
+import { periodOf } from '../summaries/periods'
 
 const TODAY = todayLocal()
 const OLD_DAY = '2026-01-05'
@@ -816,6 +817,19 @@ describe('sale form: leaving', () => {
     await confirmSale(user)
 
     await waitFor(() => expect(postMessage).toHaveBeenLastCalledWith('no-unsaved-changes'))
+  })
+
+  it('from a week, a new sale starts on today and Listo goes back to that week, on its tab', async () => {
+    const week = periodOf('week', TODAY).start
+    const { router, user } = openApp(`/ventas/nueva?semana=${week}`)
+    await fillLine(user)
+    expect(field('Fecha').value).toBe(TODAY)
+    await choose(user, paidWith(), 'Al contado')
+
+    await user.click(save())
+    await confirmSale(user)
+
+    await waitFor(() => expect(addressOf(router)).toBe(`/ventas?semana=${week}`))
   })
 
   it('a double click on Listo saves once', async () => {

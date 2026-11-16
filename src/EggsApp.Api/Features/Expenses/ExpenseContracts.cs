@@ -27,5 +27,15 @@ public sealed record ExpenseDetail(Guid Id, DateOnly Date, CategoryRef Category,
         new(expense.Id, expense.ExpenseDate, category, expense.Amount, expense.Note);
 }
 
+/// <summary>What went to one category in a period.</summary>
+/// <param name="Count">How many expenses.</param>
+public sealed record CategoryTotal(Guid Id, string Name, long Total, int Count);
+
 /// <param name="Total">The expenses added up: what went out in the period, on the days it was spent.</param>
-public sealed record ExpenseListResponse(IReadOnlyList<ExpenseDetail> Expenses, long Total);
+/// <param name="ByCategory">
+/// The same expenses by category, largest first, then by name. Resúmenes shows these, so the two can't disagree.
+/// </param>
+public sealed record ExpenseListResponse(
+    IReadOnlyList<ExpenseDetail> Expenses,
+    long Total,
+    IReadOnlyList<CategoryTotal> ByCategory);

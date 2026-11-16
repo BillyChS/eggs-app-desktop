@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using EggsApp.Api.Data;
 using EggsApp.Api.Features.Expenses;
+using EggsApp.Api.Features.Reports;
 using EggsApp.Tests.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -18,6 +19,7 @@ public sealed class ExpenseEndpointsTests : IDisposable
 
     private static readonly Guid Alimento = Guid.Parse("5d1f3c0e-6a51-4c39-9a0b-0f0c1e5a0001");
     private static readonly Guid Cartones = Guid.Parse("5d1f3c0e-6a51-4c39-9a0b-0f0c1e5a0005");
+    private static readonly Guid Equipo = Guid.Parse("5d1f3c0e-6a51-4c39-9a0b-0f0c1e5a0007");
     private static readonly Guid Otro = Guid.Parse("5d1f3c0e-6a51-4c39-9a0b-0f0c1e5a0008");
 
     private readonly EggsAppFactory _factory = new();
@@ -90,8 +92,8 @@ public sealed class ExpenseEndpointsTests : IDisposable
         var errors = await ReadErrorsAsync(await PostAsync(null, null, null));
 
         Assert.Equal(["Escoja la fecha del gasto."], errors["date"]);
-        Assert.Equal(["Escoja en qué gastó."], errors["categoryId"]);
-        Assert.Equal(["Escriba el monto del gasto."], errors["amount"]);
+        Assert.Equal(["Elija el tipo de gasto."], errors["categoryId"]);
+        Assert.Equal(["Escriba el monto."], errors["amount"]);
     }
 
     [Theory]
@@ -101,7 +103,7 @@ public sealed class ExpenseEndpointsTests : IDisposable
     {
         var errors = await ReadErrorsAsync(await PostAsync(Nov3, Alimento, amount));
 
-        Assert.Equal(["Escriba el monto del gasto."], errors["amount"]);
+        Assert.Equal(["Escriba el monto."], errors["amount"]);
     }
 
     [Theory]
@@ -140,7 +142,7 @@ public sealed class ExpenseEndpointsTests : IDisposable
     {
         var errors = await ReadErrorsAsync(await PostAsync(Nov3, Otro, 5000, note));
 
-        Assert.Equal(["Escriba en qué gastó."], errors["note"]);
+        Assert.Equal(["Escriba qué gasto fue."], errors["note"]);
     }
 
     [Fact]
@@ -186,6 +188,80 @@ public sealed class ExpenseEndpointsTests : IDisposable
 
         Assert.Empty(list.Expenses);
         Assert.Equal(0, list.Total);
+        Assert.Empty(list.ByCategory);
+    }
+
+    [Fact]
+    public async Task List_AddsUpEachCategory_LargestFirst_WithHowManyExpenses_AndOtroUnderOneName()
+    {
+        await CreateAsync(Nov3, Alimento, 31000);
+        await CreateAsync(Nov4, Alimento, 4000);
+        await CreateAsync(Nov3, Otro, 5000, "Gasolina");
+        await CreateAsync(Nov4, Otro, 2500, "Candado");
+        await CreateAsync(Nov4, Cartones, 7500);
+        // Outside the range.
+        await CreateAsync(Nov5, Cartones, 90000);
+
+        var list = await ListAsync(Nov3, Nov4);
+
+        Assert.Equal(
+            [
+                new CategoryTotal(Alimento, "Alimento", 35000, 2),
+                // A tie goes by name.
+                new CategoryTotal(Cartones, "Cartones", 7500, 1),
+                new CategoryTotal(Otro, "Otro", 7500, 2),
+            ],
+            list.ByCategory);
+        Assert.Equal(list.Total, list.ByCategory.Sum(category => category.Total));
+        // "Otro" says what each one was in its note.
+        Assert.Equal(
+            ["Candado", "Gasolina"],
+            list.Expenses.Where(expense => expense.Category.Id == Otro).Select(expense => expense.Note));
+    }
+
+    // Gastos' "Esta semana": Monday 28 October to Sunday 3 November 2024, across the end of a month.
+    [Fact]
+    public async Task List_OfAWeekAcrossTheEndOfAMonth_IncludesBothMonthsAndNothingOutside()
+    {
+        await CreateAsync("2024-10-27", Alimento, 100000);
+        var monday = await CreateAsync("2024-10-28", Alimento, 1000);
+        var lastOfMonth = await CreateAsync("2024-10-31", Cartones, 2000);
+        var sunday = await CreateAsync(Nov3, Otro, 4000, "Gasolina");
+        await CreateAsync(Nov4, Alimento, 100000);
+
+        var week = await ListAsync("2024-10-28", Nov3);
+
+        Assert.Equal([sunday.Id, lastOfMonth.Id, monday.Id], week.Expenses.Select(expense => expense.Id));
+        Assert.Equal(7000, week.Total);
+        Assert.Equal(
+            [
+                new CategoryTotal(Otro, "Otro", 4000, 1),
+                new CategoryTotal(Cartones, "Cartones", 2000, 1),
+                new CategoryTotal(Alimento, "Alimento", 1000, 1),
+            ],
+            week.ByCategory);
+    }
+
+    [Fact]
+    public async Task Gastos_AndResumenes_ShowTheSameTotals_ForTheSameMonth()
+    {
+        await CreateAsync("2024-10-31", Alimento, 100000);
+        await CreateAsync("2024-11-01", Alimento, 31000);
+        await CreateAsync("2024-11-15", Otro, 5000, "Gasolina");
+        await CreateAsync("2024-11-15", Cartones, 5000);
+        var deleted = await CreateAsync("2024-11-20", Equipo, 9000);
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.DeleteAsync($"/api/expenses/{deleted.Id}")).StatusCode);
+        await CreateAsync("2024-11-30", Equipo, 12000);
+        await CreateAsync("2024-12-01", Equipo, 100000);
+
+        var gastos = await ListAsync("2024-11-01", "2024-11-30");
+        var resumenes = (await _client.GetFromJsonAsync<SummaryResponse>("/api/reports/summary?from=2024-11-01&to=2024-11-30"))!;
+
+        Assert.Equal(53000, gastos.Total);
+        Assert.Equal(gastos.Total, resumenes.Spent.Total);
+        Assert.Equal(
+            gastos.ByCategory.Select(category => new CategorySpent(category.Name, category.Total)),
+            resumenes.Spent.ByCategory);
     }
 
     [Fact]
@@ -223,7 +299,7 @@ public sealed class ExpenseEndpointsTests : IDisposable
             $"/api/expenses/{expense.Id}",
             new ExpenseCommand(Nov3, Otro, 31000, null));
 
-        Assert.Equal(["Escriba en qué gastó."], (await ReadErrorsAsync(response))["note"]);
+        Assert.Equal(["Escriba qué gasto fue."], (await ReadErrorsAsync(response))["note"]);
     }
 
     [Fact]

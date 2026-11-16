@@ -1,14 +1,16 @@
-import { Navigate, useParams } from 'react-router'
+import { Navigate, useParams, useSearchParams } from 'react-router'
 import { LoadProblem } from '../../layout/LoadProblem'
 import { Screen } from '../../layout/Screen'
 import { useLoad } from '../../layout/useLoad'
 import { getExpense, listExpenseCategories } from '../../services/expenses'
+import { hasListPeriod, periodAfterSave, readListPeriod } from '../periodView'
+import type { Period } from '../summaries/periods'
 import { ExpenseForm } from './ExpenseForm'
-import { listOfExpenseDay, useExpenseDay } from './useExpenseDay'
+import { expensesAddress } from './expensesView'
 
 export function EditExpenseScreen() {
   const { id = '' } = useParams()
-  const { day } = useExpenseDay()
+  const [params] = useSearchParams()
   const { load, retry } = useLoad(
     id,
     async (signal) => {
@@ -18,19 +20,36 @@ export function EditExpenseScreen() {
     'Este gasto ya no existe.',
   )
 
-  const returnTo = listOfExpenseDay(load.state === 'ready' ? load.value.expense.date : day)
+  const ready = load.state === 'ready' ? load.value : null
+  // Opened from Gastos, back to the period it was opened from; from anywhere else, to the day of the expense.
+  const period: Period =
+    hasListPeriod(params) || !ready ? readListPeriod(params) : { kind: 'day', start: ready.expense.date }
+  const closeTo = expensesAddress(period)
 
   if (load.state === 'gone') {
-    return <Navigate to={returnTo} replace />
+    return <Navigate to={closeTo} replace />
+  }
+
+  if (!ready) {
+    return (
+      <Screen title="Editar gasto" backTo={closeTo}>
+        <LoadProblem
+          state={load.state === 'failed' ? 'failed' : 'loading'}
+          failedMessage="No se pudo abrir este gasto."
+          onRetry={retry}
+        />
+      </Screen>
+    )
   }
 
   return (
-    <Screen title="Editar gasto" backTo={returnTo}>
-      {load.state === 'ready' ? (
-        <ExpenseForm categories={load.value.categories} expense={load.value.expense} startDay={load.value.expense.date} />
-      ) : (
-        <LoadProblem state={load.state} failedMessage="No se pudo abrir este gasto." onRetry={retry} />
-      )}
-    </Screen>
+    <ExpenseForm
+      categories={ready.categories}
+      expense={ready.expense}
+      startDay={ready.expense.date}
+      closeTo={closeTo}
+      afterSave={(saved) => expensesAddress(periodAfterSave(period, saved.date))}
+      afterDelete={closeTo}
+    />
   )
 }

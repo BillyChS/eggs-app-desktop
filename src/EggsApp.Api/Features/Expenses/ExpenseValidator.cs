@@ -4,8 +4,10 @@ namespace EggsApp.Api.Features.Expenses;
 
 public static class ExpenseValidator
 {
-    public const string CategoryMissingMessage = "Escoja en qué gastó.";
-    public const string DescriptionMissingMessage = "Escriba en qué gastó.";
+    public const string CategoryMissingMessage = "Elija el tipo de gasto.";
+    /// <summary>For "Otro", whose note says what the expense was ("¿Qué gasto fue?").</summary>
+    public const string DescriptionMissingMessage = "Escriba qué gasto fue.";
+    public const string AmountMissingMessage = "Escriba el monto.";
 
     /// <returns>Spanish messages by field, ready to show next to each input. When there are none, the fields to save.</returns>
     public static (Dictionary<string, string[]> Errors, ExpenseFields? Fields) Validate(ExpenseCommand command)
@@ -22,7 +24,7 @@ public static class ExpenseValidator
 
         if (command.Amount is not { } amount || amount < 1)
         {
-            errors["amount"] = ["Escriba el monto del gasto."];
+            errors["amount"] = [AmountMissingMessage];
             amount = 0;
         }
 

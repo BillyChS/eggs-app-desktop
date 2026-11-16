@@ -2,13 +2,15 @@ import { screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { formatDateLong, todayLocal, yesterdayLocal } from '../../lib/dates'
 import { addressOf, fakeApi, json, noContent, openApp } from '../../test/api'
-import { periodOf, rangeOf, step } from '../summaries/periods'
+import { describePeriod, periodOf, rangeOf, step } from '../summaries/periods'
 
 const TODAY = todayLocal()
 const YESTERDAY = yesterdayLocal()
 const OLD_DAY = '2026-01-05'
 const THIS_MONTH = periodOf('month', TODAY)
 const LAST_MONTH = step(THIS_MONTH, -1)
+const THIS_WEEK = periodOf('week', TODAY)
+const LAST_WEEK = step(THIS_WEEK, -1)
 
 const line = (cartonType: 'A' | 'B', quantity: number, unitPrice: number) => ({
   cartonType,
@@ -196,6 +198,62 @@ describe('Ventas: the period', () => {
 
     await user.click(button('Mes siguiente'))
     expect(addressOf(router)).toBe(`/ventas?mes=${THIS_MONTH.start.slice(0, 7)}`)
+  })
+
+  it('the period buttons are Hoy, Ayer, Otro día, Esta semana and Este mes', async () => {
+    openApp('/ventas')
+    await screen.findByRole('table')
+
+    expect(
+      within(screen.getByRole('group', { name: 'Período' }))
+        .getAllByRole('button')
+        .map((item) => item.textContent),
+    ).toEqual(['Hoy', 'Ayer', 'Otro día', 'Esta semana', 'Este mes'])
+  })
+
+  it('Esta semana asks from Monday to today, adds the Fecha column, and stops › at this week', async () => {
+    serveDay()
+    const { router, user } = openApp('/ventas?pestana=fiado')
+    await screen.findByRole('table')
+
+    await user.click(button('Esta semana'))
+
+    expect(addressOf(router)).toBe(`/ventas?semana=${THIS_WEEK.start}&pestana=fiado`)
+    expect(pressed('Esta semana')).toBe('true')
+    await waitFor(() => expect(lastQuery('/api/sales').get('from')).toBe(THIS_WEEK.start))
+    for (const path of ['/api/sales', '/api/payments', '/api/reports/summary']) {
+      expect(lastQuery(path).get('from')).toBe(THIS_WEEK.start)
+      expect(lastQuery(path).get('to')).toBe(TODAY)
+    }
+    expect(await screen.findByRole('columnheader', { name: 'Fecha' })).toBeTruthy()
+    expect(screen.getByText(`Todas las ventas del ${describePeriod(THIS_WEEK)}`)).toBeTruthy()
+    expect(screen.getByText('Entró en la semana')).toBeTruthy()
+    expect(screen.getByText('Fiado de la semana')).toBeTruthy()
+    expect((button('Semana siguiente') as HTMLButtonElement).disabled).toBe(true)
+    const [weekday] = rows()[0][0]!.split(' ')
+    expect(weekday).toMatch(/^(dom|lun|mar|mié|jue|vie|sáb)$/)
+  })
+
+  it('‹ goes to the whole of last week, and › comes back to this one', async () => {
+    const { router, user } = openApp(`/ventas?semana=${THIS_WEEK.start}`)
+    await screen.findByRole('table')
+
+    await user.click(button('Semana anterior'))
+
+    expect(addressOf(router)).toBe(`/ventas?semana=${LAST_WEEK.start}`)
+    await waitFor(() => expect(lastQuery('/api/sales').get('from')).toBe(LAST_WEEK.start))
+    expect(lastQuery('/api/sales').get('to')).toBe(rangeOf(LAST_WEEK).to)
+
+    await user.click(button('Semana siguiente'))
+    expect(addressOf(router)).toBe(`/ventas?semana=${THIS_WEEK.start}`)
+  })
+
+  it('a day typed in the address as a week shows its whole week, from Monday', async () => {
+    const { router } = openApp(`/ventas?semana=${rangeOf(LAST_WEEK).to}`)
+    await screen.findByRole('table')
+
+    expect(lastQuery('/api/sales').get('from')).toBe(LAST_WEEK.start)
+    expect(addressOf(router)).toBe(`/ventas?semana=${rangeOf(LAST_WEEK).to}`)
   })
 
   it('a month shows the day of each row', async () => {
