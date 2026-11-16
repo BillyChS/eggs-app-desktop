@@ -2,8 +2,11 @@ import type { ButtonHTMLAttributes, Ref } from 'react'
 import styles from './Button.module.css'
 
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
-  /** Success is for the Aceptar of a success message. */
-  variant?: 'primary' | 'secondary' | 'danger' | 'success'
+  /**
+   * Success is for the Aceptar of a success message. dangerOutline is a destructive action that isn't the page's
+   * main one, like Borrar venta: it looks like a secondary button, in the danger color.
+   */
+  variant?: 'primary' | 'secondary' | 'danger' | 'dangerOutline' | 'success'
   ref?: Ref<HTMLButtonElement>
 }
 

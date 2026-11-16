@@ -128,11 +128,18 @@ touch the real data; set `Database:Path` to override it for the standalone API.
 - **Paid with a fiado:** "¿Pagó algo ahora?" saves the credit sale and an abono with `Payment.SaleId` in one
   `SaveChanges`. It must be less than the total (all of it is "Al contado", which the form offers to switch to). That
   abono follows its sale (`SaleCredit.ApplyPaidNow`): editing the sale changes it, moving the sale to another customer
-  replaces it, switching to cash or deleting the sale deletes it, and its own `PUT`/`DELETE` answer 409. Every other
-  abono isn't tied to any sale.
+  replaces it, switching to cash or deleting the sale deletes it, and its own `PUT`/`DELETE` answer 409.
+- **Abonar from a sale:** a fiado's Abonar button in Ventas saves an abono dated today with `Payment.ForSaleId`
+  (`POST /api/sales/{id}/payments`, `CreateSalePayment`), at most what that sale still owes. Unlike `SaleId`, it
+  doesn't follow the sale: it's edited and deleted like any abono, and if the sale is lowered, moved to another
+  customer or (soft-)deleted, what no longer fits in it pays the customer's other fiados. The FK stays Restrict because
+  sales are only soft-deleted. Every other abono isn't tied to any sale. `GET /api/sales/{id}/payments`
+  (`GetSalePayments`) lists the abonos that paid a sale, as `SaleStatuses` shares them out, newest first: an abono
+  only partly used there shows as "₡X (de un abono de ₡Y)".
 - **Sale status:** what each fiado still owes ("Debe ₡X" or "Pagado con abonos"; a cash sale is "Pagado") is
-  `SaleDetail.Owed`, from `SaleStatuses`: per customer, a linked abono pays its own sale first, then all their other
-  abonos pay their oldest fiados first (sale date, then `CreatedAt`, then `Id`), from all their history, whatever the
+  `SaleDetail.Owed`, from `SaleStatuses`: per customer, an abono that points at one of their active fiados
+  (`SaleId`, then `ForSaleId`) pays that sale first, then all their other abonos, and what was left of those, pay
+  their oldest fiados first (sale date, then `CreatedAt`, then `Id`), from all their history, whatever the
   period shown. Worked out on every read, never stored, so the sales' `Owed` always add up to the balance; editing or
   deleting an old fiado or an abono can change the status of newer ones.
 - **Ventas:** one day (Hoy, Ayer, Otro día) or one month (‹ ›, never past the current one, which stops at today), and a
@@ -180,17 +187,20 @@ touch the real data; set `Database:Path` to override it for the standalone API.
 - **Dates and money in the UI:** use `lib/dates.ts` and `lib/money.ts`. `new Date("YYYY-MM-DD")` means UTC and shows
   the day before in Costa Rica; `Intl` doesn't give `₡12.500` for `es-CR`.
 - **Navigation:** the sidebar is always there with the four pages by name (no submenus), and marks the page a screen
-  is under. The app opens on Ventas. Screens under a page have "‹ Volver" to it (the sale form has Cancelar and ✕),
-  never browser history, so it still works after a reload.
+  is under. The app opens on Ventas. Screens under a page have "‹ Volver" to it (the sale form has Cancelar instead),
+  never browser history, so it still works after a reload. Every page, the sale form included, is a `Screen`.
 - **Forms:** use `useUnsavedChanges` so leaving asks first. It also tells the window, which asks before closing. Don't
   disable the button being pressed while saving, because that loses keyboard focus: use `useOneAtATime`.
 - **Sale, abono and expense form keyboard:** Enter moves on and never saves from a field; only activating the button
   saves. The sale form opens on ¿Cómo pagó? and asks in this order: Fecha → ¿Cómo pagó? → each line's type → quantity
   → price → "¿Pagó algo ahora?" (fiado only) → Cliente (skipped once someone is chosen, as "Cliente sin nombre" is for
-  a cash sale; Enter in the search goes to the first name, it doesn't pick it) → "Guardar venta". Abono: amount → note
-  → "Guardar abono". Expense: category → amount → note → "Guardar gasto". So these forms have no `<form>` element, and
-  a held-down Enter is ignored. All three must keep their save button in sight at both screen sizes above: the sale
-  form's header and buttons stay put while its middle scrolls.
+  a cash sale; Enter in the search goes to the first name, it doesn't pick it) → "Guardar venta", which saves nothing:
+  it opens the "Ventana de confirmación" (`SaleConfirmDialog`, also when editing), focused on Editar, and only its
+  Listo saves; a failure stays in it, saying what to do. Abono: amount → note → "Guardar abono"; in the Abonar dialog,
+  amount → "Guardar abono", which asks "Sí, guardar" / "No" first. Expense: category → amount → note → "Guardar
+  gasto". So these forms have no `<form>` element, and a held-down Enter is ignored (also inside any `Modal`). All of
+  them must keep their save button in sight at both screen sizes above: the sale form's total and buttons are
+  `Screen`'s `footer`, which stays put while the content scrolls, with Borrar venta apart on its left.
 - **Data safety:** never commit `.db` files or backup JSON files.
 - **Version:** `<Version>` in `Directory.Build.props` is the only place it's set; read it through `AppVersion`. A `v*`
   tag must match it.

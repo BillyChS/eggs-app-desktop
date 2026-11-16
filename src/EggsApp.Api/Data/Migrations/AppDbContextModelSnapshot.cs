@@ -218,6 +218,9 @@ namespace EggsApp.Api.Data.Migrations
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("ForSaleId")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("INTEGER");
 
@@ -237,6 +240,8 @@ namespace EggsApp.Api.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
+
+                    b.HasIndex("ForSaleId");
 
                     b.HasIndex("PaymentDate");
 
@@ -343,6 +348,11 @@ namespace EggsApp.Api.Data.Migrations
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("EggsApp.Api.Features.Sales.Sale", null)
+                        .WithMany()
+                        .HasForeignKey("ForSaleId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("EggsApp.Api.Features.Sales.Sale", null)
                         .WithMany()

@@ -301,13 +301,8 @@
   font-size: var(--font-size-small);
 }
 
-.phone,
 .note {
   color: var(--color-text-soft);
-}
-
-.phone {
-  white-space: nowrap;
 }
 
 .number {
@@ -379,6 +374,28 @@
 
 .edit:hover {
   background-color: var(--color-back);
+}
+
+/* Abonar: the one a fiado that still owes is there for, so it's filled in, ahead of Editar and Eliminar. */
+.pay {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: var(--size-small-button);
+  padding: 0 var(--space-md);
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: var(--font-size-button);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pay:hover {
+  border-color: var(--color-primary-hover);
+  background-color: var(--color-primary-hover);
 }
 
 .remove {

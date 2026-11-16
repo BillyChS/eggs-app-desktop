@@ -1,4 +1,3 @@
-import { X } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { Button } from '../../components/Button'
@@ -7,6 +6,7 @@ import { DateInput } from '../../components/DateInput'
 import { Dropdown } from '../../components/Dropdown'
 import { useMessages } from '../../components/messages'
 import { MoneyInput } from '../../components/MoneyInput'
+import { Screen } from '../../layout/Screen'
 import { useOneAtATime } from '../../layout/useOneAtATime'
 import { useUnsavedChanges } from '../../layout/useUnsavedChanges'
 import { todayLocal } from '../../lib/dates'
@@ -27,14 +27,17 @@ import {
 import { describeSimilar } from '../customers/customerText'
 import { CustomerChooser } from './CustomerChooser'
 import { cleanName, NO_NAME_FOR_CREDIT, type CustomerChoice } from './customerChoice'
+import { SaleConfirmDialog, type SaleSummary } from './SaleConfirmDialog'
 import { BLANK_LINE, findProblems, isUntouched, MAX_LINES, shownPrice, subtotal, toItem, type LineProblems } from './saleLine'
 import { SaleLines, type FormLine, type LineRefs } from './SaleLines'
 import styles from './SaleForm.module.css'
-import { deleteQuestion, describeLine, describeSaved, PAID_IN_FULL } from './saleText'
+import { deleteQuestion, describeLine, NO_NAME, PAID_IN_FULL } from './saleText'
 
 const GONE_MESSAGE = 'Esta venta ya no existe.'
 const PAID_WITH_MISSING = '¿Cómo pagó? Escoja "Al contado" o "Fiado".'
 const NEW_NAME_MISSING = 'Escriba el nombre del cliente.'
+const SAVE_FAILED =
+  'No se pudo guardar la venta. Presione Listo para intentar de nuevo. Si vuelve a pasar, cierre la aplicación y ábrala otra vez.'
 
 /** How the sale was paid. A new sale starts with neither, so a forgotten "Fiado" can't become a debt nobody wrote. */
 type PaidWith = 'cash' | 'credit'
@@ -111,12 +114,31 @@ function snapshot({ date, lines, paidWith, choice, paidNow }: Values, lastPrices
   return JSON.stringify({ date, kept, paidWith, who, paidNow: paidWith === 'credit' ? (paidNow ?? 0) : 0 })
 }
 
+/** Who the sale is for, as the Ventana de confirmación says it. */
+function describeChoice(choice: CustomerChoice): string {
+  switch (choice.kind) {
+    case 'existing':
+      return choice.customer.isDeleted ? `${choice.customer.name} (borrado)` : choice.customer.name
+    case 'new':
+      return `${cleanName(choice.name)} (cliente nuevo)`
+    default:
+      return NO_NAME
+  }
+}
+
+/** The sale waiting in the Ventana de confirmación, with why the last Listo didn't save it. */
+interface Confirming {
+  input: SaleInput
+  summary: SaleSummary
+  error: string | null
+}
+
 interface Props {
   /** The sale being edited. Without one, the form creates a new sale. */
   sale?: Sale
   /** The day a new sale starts on. */
   startDay: string
-  /** Where Cancelar and ✕ go. */
+  /** Where Cancelar goes. */
   closeTo: string
   /** Where to go once saved. */
   afterSave: (saved: Sale) => string
@@ -126,7 +148,8 @@ interface Props {
 
 /**
  * A sale, in the order it's told: the day, how it was paid, the cartons, what was paid with a fiado, and who. Enter
- * moves on and never saves: only Guardar venta does. The header and the buttons stay in sight; the middle scrolls.
+ * moves on and never saves: Guardar venta opens the Ventana de confirmación, and only its Listo saves. A page like
+ * any other, whose bar with the total and the buttons stays in sight while the rest scrolls.
  */
 export function SaleForm({ sale, startDay, closeTo, afterSave, afterDelete }: Props) {
   const navigate = useNavigate()
@@ -144,6 +167,9 @@ export function SaleForm({ sale, startDay, closeTo, afterSave, afterDelete }: Pr
   const [removing, setRemoving] = useState<FormLine | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [similar, setSimilar] = useState<CustomerSummary[] | null>(null)
+  const [confirming, setConfirming] = useState<Confirming | null>(null)
+  // The field the API refused, to go to once Editar closes the Ventana de confirmación.
+  const focusAfterEdit = useRef<(() => HTMLElement | null) | null>(null)
   // What the sale's customer owes now, to say what deleting the sale does to it. Unknown until loaded.
   const [owedNow, setOwedNow] = useState<number | null>(null)
 
@@ -438,8 +464,11 @@ export function SaleForm({ sale, startDay, closeTo, afterSave, afterDelete }: Pr
     }
   }
 
-  /** The API's messages, each next to its field. A line's index is its place among the lines that were sent. */
-  const showFieldErrors = (fieldErrors: Record<string, string>) => {
+  /**
+   * The API's messages, each next to its field. A line's index is its place among the lines that were sent.
+   * Returns how to reach the first of those fields, for once the form is back in front.
+   */
+  const showFieldErrors = (fieldErrors: Record<string, string>): (() => HTMLElement | null) => {
     const kept = linesToSave(lines)
     const byLine: Errors['byLine'] = {}
 
@@ -462,34 +491,67 @@ export function SaleForm({ sale, startDay, closeTo, afterSave, afterDelete }: Pr
       lines: fieldErrors.items,
     })
 
+    const firstLine = kept.find((line) => byLine[line.key])
+
     if (fieldErrors.date) {
-      dateRef.current?.focus()
+      return () => dateRef.current
     } else if (fieldErrors.paidNow) {
-      paidNowRef.current?.focus()
+      return () => paidNowRef.current
     } else if (fieldErrors['newCustomer.name'] || fieldErrors['newCustomer.phone']) {
-      newNameRef.current?.focus()
+      return () => newNameRef.current
     } else if (fieldErrors.customerId) {
-      searchRef.current?.focus()
+      return () => searchRef.current
+    } else if (firstLine) {
+      const problems = byLine[firstLine.key]!
+      const refs = refsOf(firstLine.key)
+      return () => (problems.cartonType ? refs.type : problems.quantity ? refs.quantity : refs.price).current
     }
+
+    return () => saveRef.current
   }
 
-  /** Only from inside oneAtATime. */
+  /** Opens the Ventana de confirmación on what was checked. Nothing is saved until its Listo. */
+  const confirm = (input: SaleInput) =>
+    setConfirming({
+      input,
+      summary: {
+        customer: describeChoice(choice),
+        date: input.date,
+        isCredit: input.isCredit,
+        paidNow: input.paidNow,
+        items: input.items,
+      },
+      error: null,
+    })
+
+  const showSaveError = (error: string) => setConfirming((current) => current && { ...current, error })
+
+  /** Listo: only from inside oneAtATime. When it fails, the Ventana de confirmación stays and says why. */
   const sendNow = async (input: SaleInput) => {
     try {
       const result = await (sale ? updateSale(sale.id, input) : createSale(input))
-      showSuccess(describeSaved(result))
       leaveTo(afterSave(result))
     } catch (error) {
       if (hasStatus(error, 404)) {
+        setConfirming(null)
         handleGone()
       } else if (hasStatus(error, 400) && Object.keys(error.fieldErrors).length > 0) {
-        showFieldErrors(error.fieldErrors)
+        focusAfterEdit.current = showFieldErrors(error.fieldErrors)
+        const [first] = Object.values(error.fieldErrors)
+        showSaveError(`${first} Presione Editar para corregirlo.`)
       } else if (error instanceof ApiError && error.refusal) {
-        showError(error.refusal)
+        showSaveError(`${error.refusal} Presione Editar para cambiar la venta.`)
       } else {
-        showError('No se pudo guardar la venta. Intente de nuevo.')
+        showSaveError(SAVE_FAILED)
       }
     }
+  }
+
+  /** Editar: back to the form as it was, on the field the API refused, if it refused one. */
+  const backToForm = () => {
+    setConfirming(null)
+    focusNext.current = focusAfterEdit.current
+    focusAfterEdit.current = null
   }
 
   const save = () => {
@@ -507,7 +569,7 @@ export function SaleForm({ sale, startDay, closeTo, afterSave, afterDelete }: Pr
       if (found.length > 0) {
         setSimilar(found)
       } else {
-        await sendNow(input)
+        confirm(input)
       }
     })
   }
@@ -536,28 +598,44 @@ export function SaleForm({ sale, startDay, closeTo, afterSave, afterDelete }: Pr
   const showRemaining = isCredit && paidNow !== null && paidNow > 0 && paidNow < total
 
   return (
-    <>
-      <div className={styles.page}>
-        <section
-          className={styles.panel}
-          aria-labelledby="sale-form-title"
-          // Holding Enter down must not run through the fields and press Guardar venta.
-          onKeyDownCapture={(event) => {
-            if (event.key === 'Enter' && event.repeat) {
-              event.preventDefault()
-            }
-          }}
-        >
-          <header className={styles.header}>
-            <h1 id="sale-form-title" className={styles.title}>
-              {sale ? 'Editar venta' : 'Nueva venta'}
-            </h1>
-            <button type="button" className={styles.close} aria-label="Cerrar" onClick={() => navigate(closeTo)}>
-              <X size={28} aria-hidden="true" />
-            </button>
-          </header>
-
-          <div className={styles.body}>
+    <div
+      className={styles.form}
+      // Holding Enter down must not run through the fields and press Guardar venta, or Listo after it.
+      onKeyDownCapture={(event) => {
+        if (event.key === 'Enter' && event.repeat) {
+          event.preventDefault()
+        }
+      }}
+    >
+      <Screen
+        title={sale ? 'Editar venta' : 'Nueva venta'}
+        footer={
+          <>
+            {sale && (
+              // Away from Guardar venta, and it always asks first.
+              <Button variant="dangerOutline" onClick={() => setConfirmingDelete(true)}>
+                Borrar venta
+              </Button>
+            )}
+            <div className={styles.end}>
+              <p className={styles.total}>
+                <span>Total de la venta</span>
+                <strong>{formatColones(total)}</strong>
+              </p>
+              <div className={styles.buttons}>
+                <Button variant="secondary" onClick={() => navigate(closeTo)}>
+                  Cancelar
+                </Button>
+                <Button ref={saveRef} onClick={save}>
+                  Guardar venta
+                </Button>
+              </div>
+            </div>
+          </>
+        }
+      >
+        <div className={styles.columns}>
+          <div className={styles.main}>
             <div className={styles.firstRow}>
               <DateInput
                 ref={dateRef}
@@ -631,7 +709,9 @@ export function SaleForm({ sale, startDay, closeTo, afterSave, afterDelete }: Pr
                 )}
               </div>
             )}
+          </div>
 
+          <div className={styles.side}>
             <CustomerChooser
               choice={choice}
               onChoose={chooseCustomer}
@@ -645,28 +725,17 @@ export function SaleForm({ sale, startDay, closeTo, afterSave, afterDelete }: Pr
               onDone={() => saveRef.current?.focus()}
             />
           </div>
+        </div>
+      </Screen>
 
-          <footer className={styles.footer}>
-            <p className={styles.total}>
-              <span>Total de la venta</span>
-              <strong>{formatColones(total)}</strong>
-            </p>
-            <div className={styles.buttons}>
-              {sale && (
-                <Button variant="danger" onClick={() => setConfirmingDelete(true)}>
-                  Borrar venta
-                </Button>
-              )}
-              <Button variant="secondary" onClick={() => navigate(closeTo)}>
-                Cancelar
-              </Button>
-              <Button ref={saveRef} onClick={save}>
-                Guardar venta
-              </Button>
-            </div>
-          </footer>
-        </section>
-      </div>
+      {confirming && (
+        <SaleConfirmDialog
+          summary={confirming.summary}
+          error={confirming.error}
+          onEdit={backToForm}
+          onConfirm={() => void oneAtATime(() => sendNow(confirming.input))}
+        />
+      )}
 
       {removing && (
         <ConfirmDialog
@@ -692,7 +761,7 @@ export function SaleForm({ sale, startDay, closeTo, afterSave, afterDelete }: Pr
             setSimilar(null)
             const input = readInput()
             if (input) {
-              void oneAtATime(() => sendNow(input))
+              confirm(input)
             }
           }}
         />
@@ -722,6 +791,6 @@ export function SaleForm({ sale, startDay, closeTo, afterSave, afterDelete }: Pr
           onConfirm={guard.leave}
         />
       )}
-    </>
+    </div>
   )
 }

@@ -52,6 +52,11 @@ const searchBox = () => screen.getByRole('searchbox', { name: 'Cliente' })
 const results = () => screen.getByRole('group', { name: 'Resultados de clientes' })
 const chosen = () => screen.getByText(/^Elegido:/).textContent
 const dialog = () => screen.findByRole('alertdialog')
+const confirmation = () => screen.findByRole('alertdialog', { name: 'Ventana de confirmación' })
+/** Listo, in the Ventana de confirmación that Guardar venta opened: the only thing that saves. */
+async function confirmSale(user: User) {
+  await user.click(within(await confirmation()).getByRole('button', { name: 'Listo' }))
+}
 const total = () => screen.getByText('Total de la venta').parentElement!.textContent
 
 async function choose(user: User, dropdown: HTMLElement, option: string) {
@@ -174,9 +179,15 @@ describe('sale form: Enter', () => {
     expect(document.activeElement).toBe(save())
     expect(posted()).toEqual([])
 
+    // Guardar venta only asks: focus is on Editar, so another Enter would just go back to the form.
     await user.keyboard('{Enter}')
+    const asked = await confirmation()
+    expect(document.activeElement).toBe(within(asked).getByRole('button', { name: 'Editar' }))
+    expect(posted()).toEqual([])
 
-    expect((await dialog()).textContent).toContain(`Venta guardada: ₡9.000, ${formatDateLong(TODAY)}.`)
+    await user.click(within(asked).getByRole('button', { name: 'Listo' }))
+
+    await waitFor(() => expect(posted()).toHaveLength(1))
     expect(posted()).toEqual([
       { date: TODAY, items: [{ cartonType: 'B', quantity: 2, unitPrice: 4500 }], isCredit: false, customerId: null, paidNow: 0 },
     ])
@@ -205,8 +216,10 @@ describe('sale form: Enter', () => {
     expect(document.activeElement).toBe(save())
 
     await user.keyboard('{Enter}')
+    expect((await confirmation()).textContent).toContain('María Rodríguez')
+    await confirmSale(user)
 
-    expect((await dialog()).textContent).toContain('Venta fiada guardada: ₡3.000 a María Rodríguez')
+    await waitFor(() => expect(posted()).toHaveLength(1))
     expect(posted()[0]).toMatchObject({ isCredit: true, customerId: '1', paidNow: 0 })
     expect(addressOf(router)).toBe(`/ventas?fecha=${TODAY}&pestana=fiado`)
   })
@@ -253,6 +266,66 @@ describe('sale form: Enter', () => {
   })
 })
 
+describe('sale form: Ventana de confirmación', () => {
+  it('says who, the day in words, how it was paid, each carton line and the total, and Editar saves nothing', async () => {
+    const { router, user } = openApp(`/ventas/nueva?fecha=${OLD_DAY}`)
+    await fillLine(user, 'Cartón de 15 huevos', '1', '1500')
+    await user.click(button('Agregar otro cartón'))
+    await fillLine(user, 'Cartón de 30 huevos', '3', '2800', 2)
+    await choose(user, paidWith(), 'Al contado')
+
+    await user.click(save())
+
+    const asked = await confirmation()
+    const lines = within(asked).getAllByRole('listitem').map((item) => item.textContent)
+    expect(lines).toEqual(['1 cartón de 15 a ₡1.500₡1.500', '3 cartones de 30 a ₡2.800₡8.400'])
+    expect(asked.textContent).toContain('ClienteCliente sin nombre')
+    expect(asked.textContent).toContain(`Fecha${formatDateLong(OLD_DAY)}`)
+    expect(asked.textContent).toContain('Cómo pagóAl contado')
+    expect(asked.textContent).toContain('Total₡9.900')
+
+    await user.click(within(asked).getByRole('button', { name: 'Editar' }))
+
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(posted()).toEqual([])
+    expect(router.state.location.pathname).toBe('/ventas/nueva')
+    expect(field('Precio por cartón, línea 2').value).toBe('2.800')
+    expect(total()).toBe('Total de la venta₡9.900')
+  })
+
+  it('editing a sale asks too, and Listo saves it and goes back without a second message', async () => {
+    const { router, user } = openApp(`/ventas/6/editar?fecha=${OLD_DAY}&pestana=fiado`)
+    await screen.findByText('Editar venta')
+
+    await user.click(save())
+    expect((await confirmation()).textContent).toContain('Mixto: pagó ₡1.000 ahora y quedan ₡4.000 fiados')
+    expect(callsTo('PUT', '/api/sales/6')).toEqual([])
+    await confirmSale(user)
+
+    await waitFor(() => expect(addressOf(router)).toBe(`/ventas?fecha=${OLD_DAY}&pestana=fiado`))
+    expect(callsTo('PUT', '/api/sales/6')).toHaveLength(1)
+    // The address changes a render before the form, and its dialog, are gone.
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+  })
+
+  it('a refusal stays in the confirmation, saying what to do', async () => {
+    handlers['PUT /api/sales/6'] = () =>
+      json({ message: 'María Rodríguez ya abonó ₡6.000, y con este cambio sus fiados sumarían ₡5.000.' }, 409)
+    const { user } = openApp('/ventas/6/editar')
+    await screen.findByText('Editar venta')
+
+    await user.click(save())
+    await confirmSale(user)
+
+    const asked = await confirmation()
+    await waitFor(() =>
+      expect(within(asked).getByRole('alert').textContent).toBe(
+        'María Rodríguez ya abonó ₡6.000, y con este cambio sus fiados sumarían ₡5.000. Presione Editar para cambiar la venta.',
+      ),
+    )
+  })
+})
+
 describe('sale form: ¿Cómo pagó?', () => {
   it('saving without it asks for it, with focus on it, and sends nothing', async () => {
     const { user } = openApp('/ventas/nueva')
@@ -295,6 +368,8 @@ describe('sale form: Cliente', () => {
     expect(rows[1].getAttribute('aria-pressed')).toBe('true')
 
     await user.click(save())
+    await confirmSale(user)
+    await waitFor(() => expect(posted()).toHaveLength(1))
     expect(posted()[0].customerId).toBeNull()
   })
 
@@ -328,8 +403,10 @@ describe('sale form: Cliente', () => {
     expect(chosen()).toBe('Elegido: María Rodríguez')
 
     await user.click(save())
+    expect((await confirmation()).textContent).toContain('ClienteMaría Rodríguez')
+    await confirmSale(user)
 
-    expect((await dialog()).textContent).toContain('Venta guardada: ₡3.000 a María Rodríguez')
+    await waitFor(() => expect(posted()).toHaveLength(1))
     expect(posted()[0]).toMatchObject({ isCredit: false, customerId: '1' })
   })
 
@@ -368,8 +445,10 @@ describe('sale form: Cliente', () => {
     expect(chosen()).toBe('Elegido: Ana Solano')
 
     await user.click(save())
+    expect((await confirmation()).textContent).toContain('Ana Solano (cliente nuevo)')
+    await confirmSale(user)
 
-    expect((await dialog()).textContent).toContain('Venta fiada guardada: ₡3.000 a Ana Solano')
+    await waitFor(() => expect(posted()).toHaveLength(1))
     expect(posted()[0]).toMatchObject({
       isCredit: true,
       customerId: null,
@@ -408,6 +487,7 @@ describe('sale form: Cliente', () => {
     await user.click(save())
     question = await dialog()
     await user.click(within(question).getByRole('button', { name: 'Sí, es otra persona' }))
+    await confirmSale(user)
 
     await waitFor(() => expect(posted()).toHaveLength(1))
     expect(posted()[0].newCustomer).toEqual({ name: 'Maria Rodriguez', phone: '' })
@@ -434,8 +514,20 @@ describe('sale form: Cliente', () => {
     await user.type(screen.getByLabelText('Nombre'), 'Ana')
 
     await user.click(save())
+    await confirmSale(user)
 
-    expect(await screen.findByText('El teléfono no puede tener más de 30 caracteres.')).toBeTruthy()
+    // Said in the Ventana de confirmación, which stays, and next to the field, which Editar goes to.
+    const asked = await confirmation()
+    await waitFor(() =>
+      expect(within(asked).getByRole('alert').textContent).toBe(
+        'El teléfono no puede tener más de 30 caracteres. Presione Editar para corregirlo.',
+      ),
+    )
+    await user.click(within(asked).getByRole('button', { name: 'Editar' }))
+
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(screen.getByText('El teléfono no puede tener más de 30 caracteres.')).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByLabelText('Nombre'))
   })
 })
 
@@ -456,7 +548,9 @@ describe('sale form: lines', () => {
 
     await choose(user, paidWith(), 'Al contado')
     await user.click(save())
+    await confirmSale(user)
 
+    await waitFor(() => expect(posted()).toHaveLength(1))
     expect(posted()[0].items).toEqual([
       { cartonType: 'A', quantity: 4, unitPrice: 1000 },
       { cartonType: 'B', quantity: 1, unitPrice: 4500 },
@@ -473,6 +567,8 @@ describe('sale form: lines', () => {
 
     await choose(user, paidWith(), 'Al contado')
     await user.click(save())
+    await confirmSale(user)
+    await waitFor(() => expect(posted()).toHaveLength(1))
     expect(posted()[0].items).toHaveLength(1)
   })
 
@@ -531,9 +627,12 @@ describe('sale form: lines', () => {
     await choose(user, paidWith(), 'Al contado')
 
     await user.click(save())
+    await confirmSale(user)
+    await user.click(within(await confirmation()).getByRole('button', { name: 'Editar' }))
 
     const error = await screen.findByText('El precio no puede ser mayor que ₡1.000.000.')
     expect(field('Precio por cartón, línea 2').getAttribute('aria-describedby')).toContain(error.id)
+    expect(document.activeElement).toBe(field('Precio por cartón, línea 2'))
   })
 })
 
@@ -564,7 +663,7 @@ describe('sale form: last prices', () => {
 })
 
 describe('sale form: paid with a fiado', () => {
-  it('shows what is left, and the message says paid and still owed', async () => {
+  it('shows what is left, and the confirmation says Mixto with what was paid and what stays fiado', async () => {
     const { user } = openApp('/ventas/nueva')
     await fillLine(user, 'Cartón de 15 huevos', '5', '1000')
     await choose(user, paidWith(), 'Fiado')
@@ -575,7 +674,9 @@ describe('sale form: paid with a fiado', () => {
 
     await user.click(save())
 
-    expect((await dialog()).textContent).toContain('Pagó ₡2.000 y queda debiendo ₡3.000 de esta venta.')
+    expect((await confirmation()).textContent).toContain('Mixto: pagó ₡2.000 ahora y quedan ₡3.000 fiados')
+    await confirmSale(user)
+    await waitFor(() => expect(posted()).toHaveLength(1))
     expect(posted()[0].paidNow).toBe(2000)
   })
 
@@ -633,8 +734,9 @@ describe('sale form: editing', () => {
     await screen.findByText('Editar venta')
 
     await user.click(save())
+    await confirmSale(user)
 
-    await dialog()
+    await waitFor(() => expect(callsTo('PUT', '/api/sales/5')).toHaveLength(1))
     expect(callsTo('PUT', '/api/sales/5')[0].body).toMatchObject({ date: OLD_DAY, isCredit: false, customerId: null })
   })
 
@@ -674,16 +776,16 @@ describe('sale form: editing', () => {
 })
 
 describe('sale form: leaving', () => {
-  it('an untouched form leaves without asking, by Cancelar or ✕', async () => {
+  it('an untouched form leaves without asking, by Cancelar', async () => {
     const { router, user } = openApp(`/ventas/nueva?fecha=${OLD_DAY}`)
 
-    await user.click(button('Cerrar'))
+    await user.click(button('Cancelar'))
 
     expect(addressOf(router)).toBe(`/ventas?fecha=${OLD_DAY}`)
     expect(screen.queryByRole('alertdialog')).toBeNull()
   })
 
-  it.each(['Cancelar', 'Cerrar', 'Clientes'])('%s asks first when something was filled in', async (exit) => {
+  it.each(['Cancelar', 'Clientes'])('%s asks first when something was filled in', async (exit) => {
     const { router, user } = openApp('/ventas/nueva')
     await fillLine(user)
 
@@ -708,32 +810,45 @@ describe('sale form: leaving', () => {
 
     await choose(user, paidWith(), 'Al contado')
     await user.click(save())
+    // Still unsaved while it only asks.
+    await confirmation()
+    expect(postMessage).toHaveBeenLastCalledWith('unsaved-changes')
+    await confirmSale(user)
 
-    await dialog()
     await waitFor(() => expect(postMessage).toHaveBeenLastCalledWith('no-unsaved-changes'))
   })
 
-  it('a double click on Guardar venta saves once', async () => {
+  it('a double click on Listo saves once', async () => {
     const { user } = openApp('/ventas/nueva')
     await fillLine(user)
     await choose(user, paidWith(), 'Al contado')
+    await user.click(save())
 
-    await user.dblClick(save())
+    await user.dblClick(within(await confirmation()).getByRole('button', { name: 'Listo' }))
 
-    await dialog()
+    await waitFor(() => expect(posted()).toHaveLength(1))
     expect(posted()).toHaveLength(1)
   })
 
-  it('when saving fails, says so without details and keeps what was typed', async () => {
+  it('when saving fails, the confirmation stays and says what to do, and Editar keeps what was typed', async () => {
     handlers['POST /api/sales'] = () => new Response('', { status: 500 })
     const { user } = openApp('/ventas/nueva')
     await fillLine(user)
     await choose(user, paidWith(), 'Al contado')
 
     await user.click(save())
+    await confirmSale(user)
 
-    expect((await dialog()).textContent).toContain('No se pudo guardar la venta. Intente de nuevo.')
+    const asked = await confirmation()
+    await waitFor(() =>
+      expect(within(asked).getByRole('alert').textContent).toContain(
+        'No se pudo guardar la venta. Presione Listo para intentar de nuevo.',
+      ),
+    )
+    await user.click(within(asked).getByRole('button', { name: 'Editar' }))
+
     expect(field('Cantidad').value).toBe('3')
+    expect(paidWith().textContent).toBe('Al contado')
   })
 
   it('an emptied date is asked for, and nothing is sent', async () => {

@@ -3,20 +3,36 @@ import styles from './Modal.module.css'
 
 interface Props {
   title: string
-  message: string
-  icon: ReactNode
+  /** One line of text under the title. Dialogs that need more give `body` instead. */
+  message?: string
+  /** Richer content under the title, in place of `message`: a summary, a field, a list. */
+  body?: ReactNode
+  /** In a circle above the title. Left out by a dialog with a form, where the room is worth more. */
+  icon?: ReactNode
+  /** Wider, for a body laid out in two columns, where stacking it all would not fit a 768-pixel-tall screen. */
+  wide?: boolean
   /** The icon's circle color. */
-  tone: 'primary' | 'success' | 'danger'
+  tone?: 'primary' | 'success' | 'danger'
   /** Pressing Esc does this. Clicking outside the dialog does nothing, so a stray click can't dismiss it. */
   onEscape: () => void
-  /** The button that starts focused, so Enter does what's safest. */
-  initialFocus: RefObject<HTMLButtonElement | null>
-  /** Announced as an alert: it needs an answer, or holds a message that can't be missed. */
+  /** What starts focused: the button that's safest for Enter, or the dialog's field. */
+  initialFocus: RefObject<HTMLElement | null>
+  /** The buttons. Announced as an alert: it needs an answer, or holds a message that can't be missed. */
   children: ReactNode
 }
 
 /** A native modal dialog: the browser keeps Tab inside it, blocks the page behind it, and returns focus on close. */
-export function Modal({ title, message, icon, tone, onEscape, initialFocus, children }: Props) {
+export function Modal({
+  title,
+  message,
+  body,
+  icon,
+  wide = false,
+  tone = 'primary',
+  onEscape,
+  initialFocus,
+  children,
+}: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const id = useId()
 
@@ -39,12 +55,19 @@ export function Modal({ title, message, icon, tone, onEscape, initialFocus, chil
     <dialog
       ref={dialogRef}
       role="alertdialog"
-      className={styles.dialog}
+      className={[styles.dialog, body && styles.withBody, wide && styles.wide].filter(Boolean).join(' ')}
       aria-labelledby={`${id}-title`}
       aria-describedby={`${id}-message`}
-      // A click on the dialog or outside it would take focus off the button, and Enter would stop working.
+      // A click on the dialog or outside it would take focus off the button, and Enter would stop working. Fields
+      // and their labels still take a click.
       onMouseDown={(event) => {
-        if (!(event.target as Element).closest('button')) {
+        if (!(event.target as Element).closest('button, input, textarea, label')) {
+          event.preventDefault()
+        }
+      }}
+      // Holding Enter down must not press one button after another as dialogs open and close.
+      onKeyDownCapture={(event) => {
+        if (event.key === 'Enter' && event.repeat) {
           event.preventDefault()
         }
       }}
@@ -54,15 +77,23 @@ export function Modal({ title, message, icon, tone, onEscape, initialFocus, chil
         onEscape()
       }}
     >
-      <div className={`${styles.icon} ${styles[tone]}`} aria-hidden="true">
-        {icon}
-      </div>
+      {icon && (
+        <div className={`${styles.icon} ${styles[tone]}`} aria-hidden="true">
+          {icon}
+        </div>
+      )}
       <h2 id={`${id}-title`} className={styles.title}>
         {title}
       </h2>
-      <p id={`${id}-message`} className={styles.message}>
-        {message}
-      </p>
+      {body ? (
+        <div id={`${id}-message`} className={styles.body}>
+          {body}
+        </div>
+      ) : (
+        <p id={`${id}-message`} className={styles.message}>
+          {message}
+        </p>
+      )}
       <div className={styles.buttons}>{children}</div>
     </dialog>
   )

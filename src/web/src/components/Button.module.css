@@ -37,6 +37,16 @@
   background-color: var(--color-danger-hover);
 }
 
+.dangerOutline {
+  background-color: var(--color-surface);
+  border-color: var(--color-danger-edge);
+  color: var(--color-danger);
+}
+
+.dangerOutline:hover:enabled {
+  background-color: #fdf1f1;
+}
+
 .success {
   background-color: var(--color-success);
   color: var(--color-on-primary);

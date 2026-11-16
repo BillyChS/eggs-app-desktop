@@ -13,11 +13,13 @@ interface Props {
   subtitle?: ReactNode
   /** The page's main button, at the right of the title. */
   actions?: ReactNode
+  /** A bar under the content that never scrolls away, for a form whose save button must stay in sight. */
+  footer?: ReactNode
   children: ReactNode
 }
 
 /** A page's header and its scrollable content, next to the sidebar. */
-export function Screen({ title, backTo, subtitle, actions, children }: Props) {
+export function Screen({ title, backTo, subtitle, actions, footer, children }: Props) {
   const navigate = useNavigate()
 
   return (
@@ -40,6 +42,7 @@ export function Screen({ title, backTo, subtitle, actions, children }: Props) {
         {actions && <div className={styles.actions}>{actions}</div>}
       </header>
       <main className={styles.content}>{children}</main>
+      {footer && <footer className={styles.footer}>{footer}</footer>}
     </>
   )
 }

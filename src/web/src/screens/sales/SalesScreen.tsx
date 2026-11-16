@@ -1,4 +1,4 @@
-import { CalendarDays, ChevronLeft, ChevronRight, Pencil, Plus, Search, Trash2 } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Eye, HandCoins, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Button } from '../../components/Button'
@@ -14,6 +14,7 @@ import { ApiError } from '../../services/http'
 import { deletePayment, type Payment } from '../../services/payments'
 import { deleteSale, type Sale } from '../../services/sales'
 import { describeBalanceNow, statementOf } from '../customers/customerText'
+import { AbonoDialog } from './AbonoDialog'
 import { describePeriod, isCurrent, periodOf, rangeOf, step } from '../summaries/periods'
 import { deleteQuestion, describeCartons, NO_NAME, statusOf } from './saleText'
 import styles from './SalesScreen.module.css'
@@ -208,6 +209,16 @@ function footerText(tab: SalesTab, count: number): string {
   return `${plural(count, 'venta', 'ventas')} ${tab === 'fiado' ? (count === 1 ? 'fiada' : 'fiadas') : 'al contado'}`
 }
 
+/** "Abono a la venta del 3 de noviembre": an abono from a fiado's Abonar button, while that sale is still there. */
+function describePaymentKind(payment: Payment): string {
+  if (payment.saleId) {
+    return 'Abono al hacer la venta'
+  }
+
+  const saleDay = payment.forSaleDate ? formatDateLong(payment.forSaleDate) : null
+  return saleDay ? `Abono a la venta del ${saleDay.split(', ')[1] ?? saleDay}` : 'Abono'
+}
+
 /** What's being deleted, with the question to ask about it once it's ready. */
 type Deleting = { kind: 'sale'; sale: Sale; question: string } | { kind: 'payment'; payment: Payment; question: string; balance: number | null }
 
@@ -220,6 +231,8 @@ export function SalesScreen() {
   const { page, failed, reload } = useSalesPage(from, to)
   const [search, setSearch] = useState('')
   const [deleting, setDeleting] = useState<Deleting | null>(null)
+  // The fiado whose Abonar (or Ver abonos, once it's paid) is open.
+  const [paying, setPaying] = useState<{ sale: Sale; readOnly: boolean } | null>(null)
 
   const isMonth = view.period.kind === 'month'
   const query = viewQuery(view)
@@ -378,7 +391,6 @@ export function SalesScreen() {
                     <tr>
                       {isMonth && <th scope="col">Fecha</th>}
                       <th scope="col">Nombre</th>
-                      <th scope="col">Teléfono</th>
                       <th scope="col" className={styles.number}>
                         {view.tab === 'abonos' ? 'Monto' : 'Precio de venta'}
                       </th>
@@ -395,11 +407,8 @@ export function SalesScreen() {
                             {isMonth && <td className={styles.date}>{dayInMonth(payment.date)}</td>}
                             <td>
                               <span className={styles.name}>{nameOf(payment.customer)}</span>
-                              <span className={styles.detail}>
-                                {payment.saleId ? 'Abono al hacer la venta' : 'Abono'}
-                              </span>
+                              <span className={styles.detail}>{describePaymentKind(payment)}</span>
                             </td>
-                            <td className={styles.phone}>{payment.customer.phone || '—'}</td>
                             <td className={`${styles.number} ${styles.amount}`}>{formatColones(payment.amount)}</td>
                             <td className={styles.note}>{payment.note ?? ''}</td>
                             <td>
@@ -448,13 +457,34 @@ export function SalesScreen() {
                                 </span>
                                 <span className={styles.detail}>{describeCartons(sale.items)}</span>
                               </td>
-                              <td className={styles.phone}>{sale.customer?.phone || '—'}</td>
                               <td className={`${styles.number} ${styles.amount}`}>{formatColones(sale.total)}</td>
                               <td>
                                 <span className={`${styles.badge} ${styles[status.tone]}`}>{status.text}</span>
                               </td>
                               <td>
                                 <div className={styles.actions}>
+                                  {sale.isCredit &&
+                                    (sale.owed > 0 ? (
+                                      <button
+                                        type="button"
+                                        className={styles.pay}
+                                        aria-label={`Abonar a la venta de ${name}`}
+                                        onClick={() => setPaying({ sale, readOnly: false })}
+                                      >
+                                        <HandCoins size={20} aria-hidden="true" />
+                                        Abonar
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        className={styles.edit}
+                                        aria-label={`Ver abonos de la venta de ${name}`}
+                                        onClick={() => setPaying({ sale, readOnly: true })}
+                                      >
+                                        <Eye size={20} aria-hidden="true" />
+                                        Ver abonos
+                                      </button>
+                                    ))}
                                   <button
                                     type="button"
                                     className={styles.edit}
@@ -496,6 +526,19 @@ export function SalesScreen() {
           </>
         )}
       </div>
+
+      {paying && (
+        <AbonoDialog
+          key={paying.sale.id}
+          sale={paying.sale}
+          readOnly={paying.readOnly}
+          onClose={() => setPaying(null)}
+          onChanged={() => {
+            setPaying(null)
+            reload()
+          }}
+        />
+      )}
 
       {deleting && (
         <ConfirmDialog
