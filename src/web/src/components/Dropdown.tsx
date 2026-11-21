@@ -7,6 +7,9 @@ export interface DropdownOption<T extends string> {
   label: string
 }
 
+// About three options: below that, the list is too short to be worth scrolling, and it overlaps the edge instead.
+const MIN_LIST_HEIGHT = 180
+
 interface Props<T extends string> {
   /** Shown above the button. Hidden when the button sits under a column heading, which says it already. */
   label: string
@@ -39,6 +42,8 @@ export function Dropdown<T extends string>({
 }: Props<T>) {
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
+  // The room below the button when the list opened, so its last option is never past the window's edge.
+  const [room, setRoom] = useState<number>()
   const id = useId()
   const wrapperRef = useRef<HTMLDivElement>(null)
   const ownRef = useRef<HTMLButtonElement | null>(null)
@@ -56,6 +61,13 @@ export function Dropdown<T extends string>({
       listRef.current?.focus()
     }
   }, [open])
+
+  // The arrows can move past what a long list shows: the option they're on stays in sight.
+  useEffect(() => {
+    if (open) {
+      document.getElementById(optionId(active))?.scrollIntoView?.({ block: 'nearest' })
+    }
+  })
 
   // A click anywhere else closes it, leaving focus wherever that click put it.
   useEffect(() => {
@@ -76,6 +88,8 @@ export function Dropdown<T extends string>({
   const openList = () => {
     const selected = options.findIndex((option) => option.value === value)
     setActive(selected >= 0 ? selected : 0)
+    const bottom = ownButtonRef.current?.getBoundingClientRect().bottom
+    setRoom(bottom === undefined ? undefined : Math.max(window.innerHeight - bottom - 24, MIN_LIST_HEIGHT))
     setOpen(true)
   }
 
@@ -163,6 +177,7 @@ export function Dropdown<T extends string>({
           aria-labelledby={labelId}
           aria-activedescendant={optionId(active)}
           className={styles.list}
+          style={room ? { maxHeight: `min(${room}px, var(--list-max-height))` } : undefined}
           onKeyDown={handleListKey}
           onBlur={(event) => {
             if (!wrapperRef.current?.contains(event.relatedTarget as Node | null)) {

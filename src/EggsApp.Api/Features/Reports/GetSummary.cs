@@ -27,11 +27,9 @@ public static class GetSummary
 
         var cameIn = new CameIn(sales.CashTotal, payments.Total);
 
-        var byCategory = expenses.Expenses
-            .GroupBy(expense => expense.Category.Id)
-            .Select(group => new CategorySpent(group.First().Category.Name, group.Sum(expense => expense.Amount)))
-            .OrderByDescending(category => category.Total)
-            .ThenBy(category => category.Name, CustomerNames.SpanishOrder)
+        // Grouped once, by ListExpenses, so Gastos and Resúmenes show the same totals.
+        var byCategory = expenses.ByCategory
+            .Select(category => new CategorySpent(category.Name, category.Total))
             .ToList();
 
         var cartons = sales.Sales

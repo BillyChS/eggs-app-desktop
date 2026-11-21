@@ -27,6 +27,21 @@ function setup(initial: number | null = null) {
 }
 
 describe('MoneyInput', () => {
+  it('has the ₡ inside the field, before the digits, and out of its name', () => {
+    const { input } = setup(12500)
+    const box = input.parentElement!
+
+    // One box: the ₡ first, then the input that sits under it, with room for it on its left.
+    expect(box.children).toHaveLength(2)
+    expect(box.firstElementChild!.textContent).toBe('₡')
+    expect(box.firstElementChild!.getAttribute('aria-hidden')).toBe('true')
+    expect(box.lastElementChild).toBe(input)
+    expect(box.className).toMatch(/withPrefix/)
+    // Screen readers read "Monto", and the value is digits only: the ₡ isn't typed or copied.
+    expect(screen.getByRole('textbox', { name: 'Monto' })).toBe(input)
+    expect(input.value).toBe('12.500')
+  })
+
   it('formats while typing and reports whole colones', async () => {
     const { seen, input, user } = setup()
 

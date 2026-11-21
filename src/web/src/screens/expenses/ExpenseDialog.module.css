@@ -1,0 +1,41 @@
+/* Wide enough for two fields side by side, so the whole form fits a 768-pixel-tall screen without scrolling. [open]
+   wins over Modal's own width. */
+.dialog[open] {
+  width: min(960px, calc(100vw - 2 * var(--space-xl)));
+}
+
+/* The fields: the list of types hangs past the popup's edge instead of being cut off by it. */
+.form[open] {
+  overflow: visible;
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+/* Two fields in a row: the type and what it was, the amount and the note. */
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--space-lg);
+}
+
+/* Borrar gasto, on the far left, away from Guardar gasto. */
+.apart {
+  margin-right: auto;
+}
+
+.question {
+  text-align: center;
+}
+
+.problem {
+  padding: var(--space-sm) var(--space-md);
+  border: 2px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+  color: var(--color-danger);
+  font-weight: 700;
+}
