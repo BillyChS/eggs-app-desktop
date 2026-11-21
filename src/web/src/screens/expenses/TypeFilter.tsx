@@ -2,6 +2,7 @@ import { ListFilter } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type CSSProperties } from 'react'
 import { Button } from '../../components/Button'
 import { plural } from './expenseText'
+import { listMaxHeight } from './listHeight'
 import styles from './TypeFilter.module.css'
 
 export interface TypeOption {
@@ -11,18 +12,23 @@ export interface TypeOption {
   count: number
 }
 
-// The popup's title, Quitar filtros, its padding, the gap to the button and a margin from the window's edge.
-const AROUND_THE_LIST = 190
-// About three types: below that, the list overlaps the edge instead.
-const MIN_LIST_HEIGHT = 170
+// The popup's title, Quitar filtros, its padding (144px), the gap to the button and a margin from the window's edge.
+const AROUND_THE_LIST = 170
 // Room for about five types: with less below the button, the popup opens above it if there's more room there.
 const ROOMY = 280
 const GAP = 6
+// A type's row is one control tall (--size-input).
+const DEFAULT_ROW = 56
 
 /** Where the popup goes in the window, and how tall its list can be, so "Quitar filtros" stays in sight. */
 interface Place {
   style: CSSProperties
-  room: number
+  maxHeight?: number
+}
+
+function rowHeight(): number {
+  const size = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--size-input'))
+  return size > 0 ? size : DEFAULT_ROW
 }
 
 interface Props {
@@ -98,7 +104,7 @@ export function TypeFilter({ options, selected, onChange }: Props) {
       const right = window.innerWidth - button.right
       setPlace({
         style: up ? { bottom: window.innerHeight - button.top + GAP, right } : { top: button.bottom + GAP, right },
-        room: Math.max(up ? above : below, MIN_LIST_HEIGHT),
+        maxHeight: listMaxHeight(up ? above : below, options.length, rowHeight()),
       })
     }
 
@@ -147,7 +153,7 @@ export function TypeFilter({ options, selected, onChange }: Props) {
           ) : (
             <ul
               className={styles.options}
-              style={place ? { maxHeight: `min(${place.room}px, var(--options-max-height))` } : undefined}
+              style={place?.maxHeight ? { maxHeight: place.maxHeight } : undefined}
             >
               {options.map((option, index) => (
                 <li key={option.id}>

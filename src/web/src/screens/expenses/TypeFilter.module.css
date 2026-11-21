@@ -37,11 +37,8 @@
   color: var(--color-text-muted);
 }
 
-/* About six types in sight, fewer when the window has less room below the button; more scroll. */
+/* TypeFilter.tsx sets how tall it can be when the types don't all fit: whole rows and half of the next. */
 .options {
-  --options-max-height: calc(6 * var(--size-input) + 4px);
-
-  max-height: var(--options-max-height);
   margin: 0;
   padding: 0;
   overflow-y: auto;
