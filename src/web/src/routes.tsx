@@ -5,9 +5,8 @@ import { CustomerStatementScreen } from './screens/customers/CustomerStatementSc
 import { EditCustomerScreen } from './screens/customers/EditCustomerScreen'
 import { NewCustomerScreen } from './screens/customers/NewCustomerScreen'
 import { ErrorScreen } from './screens/ErrorScreen'
-import { EditExpenseScreen } from './screens/expenses/EditExpenseScreen'
 import { ExpensesScreen } from './screens/expenses/ExpensesScreen'
-import { NewExpenseScreen } from './screens/expenses/NewExpenseScreen'
+import { ToExpenses } from './screens/expenses/ToExpenses'
 import { EditPaymentScreen } from './screens/payments/EditPaymentScreen'
 import { NewPaymentScreen } from './screens/payments/NewPaymentScreen'
 import { EditSaleScreen } from './screens/sales/EditSaleScreen'
@@ -41,8 +40,9 @@ export const routes: RouteObject[] = [
       { path: 'clientes/:id/abonos/nuevo', element: <NewPaymentScreen /> },
       { path: 'clientes/:id/abonos/:paymentId/editar', element: <EditPaymentScreen /> },
       { path: 'gastos', element: <ExpensesScreen /> },
-      { path: 'gastos/nuevo', element: <NewExpenseScreen /> },
-      { path: 'gastos/:id/editar', element: <EditExpenseScreen /> },
+      // Nuevo gasto and Editar gasto are popups over Gastos now.
+      { path: 'gastos/nuevo', element: <ToExpenses /> },
+      { path: 'gastos/:id/editar', element: <ToExpenses /> },
       { path: 'resumenes', element: <SummariesScreen /> },
       ...devRoutes,
       // The API serves index.html for any address, so an unknown one goes to Ventas.

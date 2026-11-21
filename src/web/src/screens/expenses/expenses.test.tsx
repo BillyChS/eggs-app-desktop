@@ -18,29 +18,30 @@ const category = (id: string, name: string, needsDescription = false, isRetired 
   isRetired,
 })
 
+// As the API lists them: alphabetically, "Otro" last, with how many expenses use each.
 const CATEGORIES = [
-  category('c1', 'Alimento'),
-  category('c2', 'Vitaminas'),
-  category('c3', 'Desparasitantes'),
-  category('c4', 'Burucha'),
-  category('c5', 'Cartones'),
-  category('c6', 'Plásticos/Envoltorios'),
-  category('c7', 'Equipo'),
-  category('c8', 'Otro', true),
+  { ...category('c1', 'Alimento'), expenseCount: 12 },
+  { ...category('c4', 'Burucha'), expenseCount: 0 },
+  { ...category('c5', 'Cartones'), expenseCount: 3 },
+  { ...category('c3', 'Desparasitantes'), expenseCount: 1 },
+  { ...category('c7', 'Equipo'), expenseCount: 0 },
+  { ...category('c6', 'Plásticos/Envoltorios'), expenseCount: 2 },
+  { ...category('c2', 'Vitaminas'), expenseCount: 1 },
+  { ...category('c8', 'Otro', true), expenseCount: 1 },
 ]
-const ALIMENTO = CATEGORIES[0]
-const OTRO = CATEGORIES[7]
+const ALIMENTO = category('c1', 'Alimento')
+const PLASTICOS = category('c6', 'Plásticos/Envoltorios')
+const VITAMINAS = category('c2', 'Vitaminas')
+const OTRO = category('c8', 'Otro', true)
 
 const FEED = { id: 'e1', date: OLD_DAY, category: ALIMENTO, amount: 31000, note: '2 sacos' }
+// Saved under "Otro" before "Otro" made types of its own: its note says what it was.
 const GAS = { id: 'e2', date: OLD_DAY, category: OTRO, amount: 5000, note: 'Gasolina' }
 const OLD_TRAYS = { id: 'e3', date: OLD_DAY, category: category('c9', 'Bandejas', false, true), amount: 2500, note: null }
+const BAGS = { id: 'e4', date: OLD_DAY, category: PLASTICOS, amount: 3000, note: null }
+const VITS = { id: 'e5', date: OLD_DAY, category: VITAMINAS, amount: 4000, note: 'Para los pollitos' }
 
-const total = (name: string, amount: number, id = name, count = 1) => ({ id, name, total: amount, count })
-const OLD_DAY_LIST = {
-  expenses: [GAS, FEED],
-  total: 36000,
-  byCategory: [total('Alimento', 31000), total('Otro', 5000)],
-}
+const OLD_DAY_LIST = { expenses: [GAS, BAGS, VITS, FEED], total: 43000, byCategory: [] }
 const NOTHING = { expenses: [], total: 0, byCategory: [] }
 
 const api = fakeApi()
@@ -48,7 +49,6 @@ const { handlers, callsTo } = api
 
 const button = (name: string | RegExp) => screen.getByRole('button', { name })
 const pressed = (name: string | RegExp) => button(name).getAttribute('aria-pressed')
-const field = (label: string) => screen.getByLabelText<HTMLInputElement>(label)
 const card = (label: string | RegExp) => screen.getByText(label).parentElement!.textContent
 const lastQuery = () => callsTo('GET', '/api/expenses').at(-1)!.url.searchParams
 const rows = () =>
@@ -61,24 +61,45 @@ const rows = () =>
         .slice(0, -1)
         .map((cell) => cell.textContent),
     )
+const footer = () => screen.getByText(/^Total ₡/).parentElement!.textContent
 
-const typeOf = () => button(/^¿Qué tipo de gasto\?/)
-const save = () => button('Guardar gasto')
-const confirmation = () => screen.findByRole('alertdialog', { name: 'Ventana de confirmación' })
+/** The one popup open: there's never a second one on top. */
+const popup = () => {
+  const open = screen.getAllByRole('alertdialog')
+  expect(open).toHaveLength(1)
+  return open[0]
+}
+const inPopup = () => within(popup())
+const field = (label: string) => inPopup().getByLabelText<HTMLInputElement>(label)
+const typeOf = () => inPopup().getByRole('button', { name: /^¿Qué tipo de gasto\?/ })
+const save = () => inPopup().getByRole('button', { name: 'Guardar gasto' })
 const posted = () => callsTo('POST', '/api/expenses').map((call) => call.body)
+
+async function openNew(user: User) {
+  await user.click(screen.getAllByRole('button', { name: 'Nuevo gasto' })[0])
+  await screen.findByRole('alertdialog', { name: 'Nuevo gasto' })
+  await waitFor(() => expect(document.activeElement).toBe(typeOf()))
+}
 
 async function choose(user: User, option: string) {
   await user.click(typeOf())
   await user.click(screen.getByRole('option', { name: option }))
 }
 
+async function confirm(user: User) {
+  await user.click(save())
+  return screen.findByRole('alertdialog', { name: 'Ventana de confirmación' })
+}
+
 async function listo(user: User) {
-  await user.click(within(await confirmation()).getByRole('button', { name: 'Listo' }))
+  await user.click(within(popup()).getByRole('button', { name: 'Listo' }))
 }
 
 const echoExpense: Reply = ({ body }) => {
-  const { categoryId, note, ...rest } = body as { categoryId: string; note: string }
-  const chosen = [...CATEGORIES, OLD_TRAYS.category].find((candidate) => candidate.id === categoryId)
+  const { categoryId, newCategory, note, ...rest } = body as { categoryId?: string; newCategory?: string; note: string }
+  const chosen = newCategory
+    ? category('c10', newCategory)
+    : [...CATEGORIES, OLD_TRAYS.category].find((candidate) => candidate.id === categoryId)
   return json({ id: 'e9', category: chosen, note: note || null, ...rest }, 201)
 }
 
@@ -90,11 +111,9 @@ beforeEach(() => {
     'GET /api/expenses': ({ url }) =>
       json(url.searchParams.get('from') === OLD_DAY && url.searchParams.get('to') === OLD_DAY ? OLD_DAY_LIST : NOTHING),
     'POST /api/expenses': echoExpense,
-    'GET /api/expenses/e1': () => json(FEED),
-    'GET /api/expenses/e2': () => json(GAS),
-    'GET /api/expenses/e3': () => json(OLD_TRAYS),
     'PUT /api/expenses/e1': echoExpense,
     'PUT /api/expenses/e2': echoExpense,
+    'PUT /api/expenses/e3': echoExpense,
     'DELETE /api/expenses/e1': () => noContent(),
     'DELETE /api/expenses/e2': () => noContent(),
   })
@@ -105,8 +124,8 @@ afterEach(() => {
 })
 
 describe('Gastos: the page', () => {
-  it('opens on today: the long date, Hoy, "Gastado hoy" apart from its amount, and an empty list that offers a new one', async () => {
-    const { router, user } = openApp('/gastos')
+  it('opens on today: one card with the total and how many, the toolbar, and an empty list that offers a new one', async () => {
+    const { user } = openApp('/gastos')
 
     expect(await screen.findByText('No hay gastos registrados hoy.')).toBeTruthy()
     expect(lastQuery().get('from')).toBe(TODAY)
@@ -119,14 +138,19 @@ describe('Gastos: the page', () => {
     const spent = screen.getByText('Gastado hoy')
     expect(spent.nextElementSibling!.textContent).toBe('₡0')
     expect(card('Gastado hoy')).toContain('0 gastos')
-    expect(card('En qué se gastó')).toContain('Nada todavía.')
+    expect(screen.queryByText('En qué se gastó')).toBeNull()
+
+    // Even with nothing in the period, the types can be managed.
+    expect(screen.getByRole('searchbox', { name: 'Buscar gasto' })).toBeTruthy()
+    expect(button('Filtrar')).toBeTruthy()
+    expect(button('Tipos de gasto')).toBeTruthy()
 
     const empty = screen.getByRole('region', { name: 'Lista de gastos' })
     await user.click(within(empty).getByRole('button', { name: 'Nuevo gasto' }))
-    expect(addressOf(router)).toBe(`/gastos/nuevo?fecha=${TODAY}`)
+    expect(await screen.findByRole('alertdialog', { name: 'Nuevo gasto' })).toBeTruthy()
   })
 
-  it('lists the day: Tipo ("Otro" by what it was), Nota, Monto, and a footer with how many and the total', async () => {
+  it('lists the day: Tipo (an old "Otro" by what it was), Nota, Monto, and a footer with how many and the total', async () => {
     openApp(`/gastos?fecha=${OLD_DAY}`)
     await screen.findByRole('table')
 
@@ -139,39 +163,92 @@ describe('Gastos: the page', () => {
     ])
     expect(rows()).toEqual([
       ['GasolinaOtro', '', '₡5.000'],
+      ['Plásticos/Envoltorios', '', '₡3.000'],
+      ['Vitaminas', 'Para los pollitos', '₡4.000'],
       ['Alimento', '2 sacos', '₡31.000'],
     ])
-    expect(screen.getByText(/^Total ₡/).parentElement!.textContent).toBe('2 gastosTotal ₡36.000')
-    expect(card('Gastado ese día')).toBe('Gastado ese día₡36.0002 gastos')
-    const spentOn = screen.getByRole('list', { name: 'En qué se gastó' })
-    expect(within(spentOn).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
-      'Alimento₡31.000',
-      'Otro₡5.000',
-    ])
+    expect(footer()).toBe('4 gastosTotal ₡43.000')
+    expect(card('Gastado ese día')).toBe('Gastado ese día₡43.0004 gastos')
   })
 
-  it('"En qué se gastó" shows up to four types, and past that the top three and "Lo demás (N tipos)"', async () => {
-    handlers['GET /api/expenses'] = () =>
-      json({
-        expenses: [FEED],
-        total: 50000,
-        byCategory: [
-          total('Alimento', 30000),
-          total('Equipo', 9000),
-          total('Vitaminas', 5000),
-          total('Burucha', 4000),
-          total('Cartones', 2000),
-        ],
-      })
-    openApp('/gastos')
+  it('Buscar gasto filters by type or note as it is typed, ignoring case and accents, and the footer says how many of all', async () => {
+    const { user } = openApp(`/gastos?fecha=${OLD_DAY}`)
+    await screen.findByRole('table')
+    const search = screen.getByRole('searchbox', { name: 'Buscar gasto' })
 
-    const spentOn = await screen.findByRole('list', { name: 'En qué se gastó' })
-    expect(within(spentOn).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
-      'Alimento₡30.000',
-      'Equipo₡9.000',
-      'Vitaminas₡5.000',
-      'Lo demás (2 tipos)₡6.000',
+    await user.type(search, 'PLASTICOS')
+    expect(rows()).toEqual([['Plásticos/Envoltorios', '', '₡3.000']])
+    expect(footer()).toBe('1 de 4 gastosTotal ₡3.000')
+
+    await user.clear(search)
+    await user.type(search, 'póllitos')
+    expect(rows().map((row) => row[0])).toEqual(['Vitaminas'])
+
+    // An old "Otro" by what it was.
+    await user.clear(search)
+    await user.type(search, 'gasolina')
+    expect(rows().map((row) => row[0])).toEqual(['GasolinaOtro'])
+
+    // The card is still the whole period.
+    expect(card('Gastado ese día')).toBe('Gastado ese día₡43.0004 gastos')
+  })
+
+  it('with nothing that matches, says so, and Quitar filtros shows everything again', async () => {
+    const { user } = openApp(`/gastos?fecha=${OLD_DAY}`)
+    await screen.findByRole('table')
+
+    await user.type(screen.getByRole('searchbox', { name: 'Buscar gasto' }), 'candado')
+
+    expect(screen.getByText('No hay gastos que coincidan.')).toBeTruthy()
+    expect(screen.queryByRole('table')).toBeNull()
+    await user.click(button('Quitar filtros'))
+
+    expect(rows()).toHaveLength(4)
+    expect(screen.getByRole<HTMLInputElement>('searchbox', { name: 'Buscar gasto' }).value).toBe('')
+    expect(footer()).toBe('4 gastosTotal ₡43.000')
+  })
+
+  it('Filtrar offers the types of the period with how many, and ticking some shows only those', async () => {
+    const { user } = openApp(`/gastos?fecha=${OLD_DAY}`)
+    await screen.findByRole('table')
+
+    await user.click(button('Filtrar'))
+    const filter = screen.getByRole('group', { name: 'Filtrar por tipo' })
+    const boxes = within(filter).getAllByRole('checkbox')
+    expect(boxes.map((box) => box.closest('label')!.textContent)).toEqual([
+      'Alimento1 gasto',
+      'Plásticos/Envoltorios1 gasto',
+      'Vitaminas1 gasto',
+      'Otro1 gasto',
     ])
+    expect(document.activeElement).toBe(boxes[0])
+
+    await user.click(boxes[0])
+    await user.click(within(filter).getByRole('checkbox', { name: /^Vitaminas/ }))
+
+    expect(button('Filtrar (2)').getAttribute('aria-expanded')).toBe('true')
+    expect(rows().map((row) => row[0])).toEqual(['Vitaminas', 'Alimento'])
+    expect(footer()).toBe('2 de 4 gastosTotal ₡35.000')
+
+    // With the search too: only what both leave.
+    await user.type(screen.getByRole('searchbox', { name: 'Buscar gasto' }), 'sacos')
+    expect(rows().map((row) => row[0])).toEqual(['Alimento'])
+
+    await user.click(button('Filtrar (2)'))
+    await user.click(within(screen.getByRole('group', { name: 'Filtrar por tipo' })).getByRole('button', { name: 'Quitar filtros' }))
+    expect(button('Filtrar')).toBeTruthy()
+    expect(rows().map((row) => row[0])).toEqual(['Alimento'])
+  })
+
+  it('Filtrar closes with Esc, back on its button', async () => {
+    const { user } = openApp(`/gastos?fecha=${OLD_DAY}`)
+    await screen.findByRole('table')
+
+    await user.click(button('Filtrar'))
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByRole('group', { name: 'Filtrar por tipo' })).toBeNull()
+    expect(document.activeElement).toBe(button('Filtrar'))
   })
 
   it('Ayer shows yesterday and keeps it in the address', async () => {
@@ -219,23 +296,11 @@ describe('Gastos: the page', () => {
     expect(await screen.findByRole('columnheader', { name: 'Fecha' })).toBeTruthy()
     expect(pressed('Este mes')).toBe('true')
     expect(lastQuery().get('from')).toBe(THIS_MONTH.start)
-    expect(card('Gastado este mes')).toContain('₡36.000')
+    expect(card('Gastado este mes')).toContain('₡43.000')
     const [weekday, day, month] = rows()[0][0]!.split(' ')
     expect(weekday).toBe('lun')
     expect(day).toBe('2')
     expect(month).toBe('nov')
-  })
-
-  it('Editar opens the expense with the period, and Cancelar comes back to it', async () => {
-    const { router, user } = openApp(`/gastos?fecha=${OLD_DAY}`)
-    await screen.findByRole('table')
-
-    await user.click(button('Editar el gasto de Alimento'))
-    expect(addressOf(router)).toBe(`/gastos/e1/editar?fecha=${OLD_DAY}`)
-    await screen.findByRole('heading', { name: 'Editar gasto' })
-
-    await user.click(button('Cancelar'))
-    expect(addressOf(router)).toBe(`/gastos?fecha=${OLD_DAY}`)
   })
 
   it('Eliminar asks first, saying what it was; Sí, borrar deletes it and loads the list again', async () => {
@@ -265,20 +330,30 @@ describe('Gastos: the page', () => {
 
     expect(await screen.findByText('No hay gastos registrados hoy.')).toBeTruthy()
   })
+
+  it('the old addresses of the expense pages go to Gastos, on the period they carried', async () => {
+    const created = openApp(`/gastos/nuevo?fecha=${OLD_DAY}`)
+    await waitFor(() => expect(addressOf(created.router)).toBe(`/gastos?fecha=${OLD_DAY}`))
+    created.router.dispose()
+
+    const edited = openApp(`/gastos/e1/editar?semana=${LAST_WEEK.start}`)
+    await waitFor(() => expect(addressOf(edited.router)).toBe(`/gastos?semana=${LAST_WEEK.start}`))
+  })
 })
 
-describe('Gastos: the form', () => {
-  it('is a page with the type first, starting at "Elija uno", "Otro" last, and the bar with the total and buttons', async () => {
-    const { user } = openApp(`/gastos/nuevo?fecha=${OLD_DAY}`)
+describe('Gastos: the Nuevo gasto popup', () => {
+  it('opens over the page on its day, on the type, which starts at "Elija uno", with the types in order', async () => {
+    const { router, user } = openApp(`/gastos?fecha=${OLD_DAY}`)
+    await screen.findByRole('table')
 
-    expect(await screen.findByRole('heading', { name: 'Nuevo gasto' })).toBeTruthy()
-    await waitFor(() => expect(document.activeElement).toBe(typeOf()))
+    await openNew(user)
+
+    expect(addressOf(router)).toBe(`/gastos?fecha=${OLD_DAY}`)
     expect(typeOf().textContent).toContain('Elija uno')
-    expect(screen.queryByRole('button', { name: /Volver/ })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Borrar gasto' })).toBeNull()
-    expect(screen.getByText('Total del gasto').parentElement!.textContent).toBe('Total del gasto₡0')
     expect(field('Fecha').value).toBe(OLD_DAY)
-    expect(screen.queryByLabelText('¿Qué gasto fue?')).toBeNull()
+    expect(popup().textContent).toContain(formatDateLong(OLD_DAY))
+    expect(inPopup().queryByRole('button', { name: 'Borrar gasto' })).toBeNull()
+    expect(inPopup().queryByLabelText('¿Qué gasto fue?')).toBeNull()
     expect(field('Nota (opcional)')).toBeTruthy()
 
     await user.click(typeOf())
@@ -287,50 +362,66 @@ describe('Gastos: the form', () => {
     )
   })
 
-  it('"Otro" shows "¿Qué gasto fue?" right below, with focus in it, and no Nota; another type hides and clears it', async () => {
-    const { user } = openApp('/gastos/nuevo')
-    await screen.findByRole('heading', { name: 'Nuevo gasto' })
+  it('from a week, starts today', async () => {
+    const { user } = openApp(`/gastos?semana=${THIS_WEEK.start}`)
+    await screen.findByText('No hay gastos registrados esta semana.')
+
+    await openNew(user)
+
+    expect(field('Fecha').value).toBe(TODAY)
+  })
+
+  it('"Otro" shows "¿Qué gasto fue?" next to the type, with focus in it; another type hides and clears it', async () => {
+    const { user } = openApp('/gastos')
+    await screen.findByText('No hay gastos registrados hoy.')
+    await openNew(user)
 
     await choose(user, 'Otro')
 
     await waitFor(() => expect(document.activeElement).toBe(field('¿Qué gasto fue?')))
-    expect(screen.queryByLabelText('Nota (opcional)')).toBeNull()
+    // The note is for every type now, "Otro" too.
+    expect(field('Nota (opcional)')).toBeTruthy()
     await user.type(field('¿Qué gasto fue?'), 'Gasolina')
 
     await choose(user, 'Alimento')
 
-    expect(screen.queryByLabelText('¿Qué gasto fue?')).toBeNull()
-    expect(field('Nota (opcional)')).toBeTruthy()
+    expect(inPopup().queryByLabelText('¿Qué gasto fue?')).toBeNull()
     expect(document.activeElement).toBe(field('Monto'))
 
     await choose(user, 'Otro')
     await waitFor(() => expect(field('¿Qué gasto fue?').value).toBe(''))
   })
 
-  it('asks for what is missing next to each field, with focus on the first, and opens nothing', async () => {
-    const { user } = openApp('/gastos/nuevo')
-    await screen.findByRole('heading', { name: 'Nuevo gasto' })
+  it('asks for what is missing next to each field, with focus on the first, and shows no confirmation', async () => {
+    const { user } = openApp('/gastos')
+    await screen.findByText('No hay gastos registrados hoy.')
+    await openNew(user)
 
     await user.click(save())
 
-    expect(screen.getByText('Elija el tipo de gasto.')).toBeTruthy()
-    expect(screen.getByText('Escriba el monto.')).toBeTruthy()
+    expect(inPopup().getByText('Elija el tipo de gasto.')).toBeTruthy()
+    expect(inPopup().getByText('Escriba el monto.')).toBeTruthy()
     expect(document.activeElement).toBe(typeOf())
-    expect(screen.queryByRole('alertdialog')).toBeNull()
 
     await choose(user, 'Otro')
     await user.type(field('Monto'), '5000')
     await user.click(save())
 
-    expect(screen.getByText('Escriba qué gasto fue.')).toBeTruthy()
+    expect(inPopup().getByText('Escriba qué gasto fue.')).toBeTruthy()
     expect(document.activeElement).toBe(field('¿Qué gasto fue?'))
-    expect(screen.queryByRole('alertdialog')).toBeNull()
+
+    await user.type(field('¿Qué gasto fue?'), ' OTRO ')
+    await user.click(save())
+
+    expect(inPopup().getByText('Escriba qué gasto fue, no «Otro».')).toBeTruthy()
+    expect(screen.queryByRole('alertdialog', { name: 'Ventana de confirmación' })).toBeNull()
     expect(posted()).toEqual([])
   })
 
-  it('Enter moves on, type → Monto → Nota → Guardar gasto, which only asks, with focus on Editar', async () => {
-    const { user } = openApp(`/gastos/nuevo?fecha=${OLD_DAY}`)
-    await screen.findByRole('heading', { name: 'Nuevo gasto' })
+  it('Enter moves on, type → Monto → Nota → Guardar gasto, which shows the confirmation in the same popup', async () => {
+    const { user } = openApp(`/gastos?fecha=${OLD_DAY}`)
+    await screen.findByRole('table')
+    await openNew(user)
 
     await choose(user, 'Alimento')
     expect(document.activeElement).toBe(field('Monto'))
@@ -338,106 +429,140 @@ describe('Gastos: the form', () => {
     expect(document.activeElement).toBe(field('Nota (opcional)'))
     await user.keyboard('2 sacos{Enter}')
     expect(document.activeElement).toBe(save())
-    expect(screen.getByText('Total del gasto').parentElement!.textContent).toBe('Total del gasto₡31.000')
 
     await user.keyboard('{Enter}')
 
-    const asked = await confirmation()
-    expect(document.activeElement).toBe(within(asked).getByRole('button', { name: 'Editar' }))
+    const asked = await screen.findByRole('alertdialog', { name: 'Ventana de confirmación' })
+    // Not a second dialog on top: the same popup, showing the confirmation in place of the fields.
+    expect(popup()).toBe(asked)
+    await waitFor(() => expect(document.activeElement).toBe(within(asked).getByRole('button', { name: 'Editar' })))
     expect(asked.textContent).toContain('TipoAlimento')
     expect(asked.textContent).toContain(`Fecha${formatDateLong(OLD_DAY)}`)
     expect(asked.textContent).toContain('Nota2 sacos')
     expect(asked.textContent).toContain('Monto₡31.000')
     expect(posted()).toEqual([])
 
-    // Another Enter is Editar: back to the form, with everything still there.
+    // Another Enter is Editar: back to the fields, with everything still there.
     await user.keyboard('{Enter}')
-    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(popup().textContent).toContain('Nuevo gasto')
     expect(field('Monto').value).toBe('31.000')
     expect(field('Nota (opcional)').value).toBe('2 sacos')
     expect(typeOf().textContent).toContain('Alimento')
     expect(posted()).toEqual([])
   })
 
-  it('Listo saves and goes back to Gastos on the expense’s day', async () => {
-    const { router, user } = openApp(`/gastos/nuevo?fecha=${OLD_DAY}`)
-    await screen.findByRole('heading', { name: 'Nuevo gasto' })
+  it('Listo saves, closes the popup and loads the list again, on the same period', async () => {
+    const { router, user } = openApp(`/gastos?fecha=${OLD_DAY}`)
+    await screen.findByRole('table')
+    await openNew(user)
     await choose(user, 'Alimento')
     await user.type(field('Monto'), '31000')
     await user.type(field('Nota (opcional)'), '  2 sacos ')
 
-    await user.click(save())
+    await confirm(user)
+    const before = callsTo('GET', '/api/expenses').length
     await listo(user)
 
-    await waitFor(() => expect(addressOf(router)).toBe(`/gastos?fecha=${OLD_DAY}`))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     expect(posted()).toEqual([{ date: OLD_DAY, categoryId: 'c1', amount: 31000, note: '2 sacos' }])
-    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(addressOf(router)).toBe(`/gastos?fecha=${OLD_DAY}`)
+    await waitFor(() => expect(callsTo('GET', '/api/expenses').length).toBeGreaterThan(before))
   })
 
-  it('"Otro" saves what it was as its note, and the confirmation says it as its type, with no Nota', async () => {
-    const { user } = openApp(`/gastos/nuevo?fecha=${OLD_DAY}`)
-    await screen.findByRole('heading', { name: 'Nuevo gasto' })
-    await choose(user, 'Otro')
-    await user.type(field('¿Qué gasto fue?'), 'Gasolina{Enter}')
-    expect(document.activeElement).toBe(field('Monto'))
-    await user.keyboard('5000{Enter}')
-    expect(document.activeElement).toBe(save())
-
-    await user.click(save())
-    const asked = await confirmation()
-    expect(asked.textContent).toContain('TipoOtro: Gasolina')
-    expect(asked.textContent).not.toContain('Nota')
-    await listo(user)
-
-    await waitFor(() => expect(posted()).toEqual([{ date: OLD_DAY, categoryId: 'c8', amount: 5000, note: 'Gasolina' }]))
-  })
-
-  it('from a week, a new expense starts today and Listo goes back to that week', async () => {
-    const { router, user } = openApp(`/gastos/nuevo?semana=${THIS_WEEK.start}`)
-    await screen.findByRole('heading', { name: 'Nuevo gasto' })
-    expect(field('Fecha').value).toBe(TODAY)
+  it('saved on another day than the one shown, the page goes to that day', async () => {
+    const { router, user } = openApp(`/gastos?fecha=${OLD_DAY}`)
+    await screen.findByRole('table')
+    await openNew(user)
+    await user.click(inPopup().getByRole('button', { name: 'Hoy' }))
     await choose(user, 'Cartones')
     await user.type(field('Monto'), '2500')
 
-    await user.click(save())
+    await confirm(user)
     await listo(user)
 
-    await waitFor(() => expect(addressOf(router)).toBe(`/gastos?semana=${THIS_WEEK.start}`))
+    await waitFor(() => expect(addressOf(router)).toBe(`/gastos?fecha=${TODAY}`))
+  })
+
+  it('"Otro" saves what it was as a new type, and the confirmation says it is new', async () => {
+    const { user } = openApp(`/gastos?fecha=${OLD_DAY}`)
+    await screen.findByRole('table')
+    await openNew(user)
+    await choose(user, 'Otro')
+    await user.type(field('¿Qué gasto fue?'), '  gasolina   súper {Enter}')
+    expect(document.activeElement).toBe(field('Monto'))
+    await user.keyboard('5000{Enter}')
+    await user.keyboard('Para el carro')
+
+    const asked = await confirm(user)
+    expect(asked.textContent).toContain('TipoGasolina súper (tipo nuevo)')
+    expect(asked.textContent).toContain('NotaPara el carro')
+    await listo(user)
+
+    await waitFor(() =>
+      expect(posted()).toEqual([
+        { date: OLD_DAY, amount: 5000, note: 'Para el carro', newCategory: 'Gasolina súper' },
+      ]),
+    )
+
+    // Next time, it's in the list like any other type.
+    handlers['GET /api/expense-categories'] = () =>
+      json([...CATEGORIES.slice(0, 5), { ...category('c10', 'Gasolina súper'), expenseCount: 1 }, ...CATEGORIES.slice(5)])
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    await openNew(user)
+    await user.click(typeOf())
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toContain('Gasolina súper')
+  })
+
+  it('"Otro" with the name of a type there already says that type, not a new one', async () => {
+    const { user } = openApp(`/gastos?fecha=${OLD_DAY}`)
+    await screen.findByRole('table')
+    await openNew(user)
+    await choose(user, 'Otro')
+    await user.type(field('¿Qué gasto fue?'), 'PLASTICOS/envoltorios')
+    await user.type(field('Monto'), '1500')
+
+    const asked = await confirm(user)
+
+    expect(asked.textContent).toContain('TipoPlásticos/Envoltorios')
+    expect(asked.textContent).not.toContain('tipo nuevo')
   })
 
   it('what the API refuses stays in the confirmation, and Editar goes to its field', async () => {
-    handlers['POST /api/expenses'] = () => json({ errors: { amount: ['Escriba el monto.'] } }, 400)
-    const { user } = openApp('/gastos/nuevo')
-    await screen.findByRole('heading', { name: 'Nuevo gasto' })
-    await choose(user, 'Alimento')
+    handlers['POST /api/expenses'] = () =>
+      json({ errors: { newCategory: ['El nombre no puede tener más de 40 letras.'] } }, 400)
+    const { user } = openApp('/gastos')
+    await screen.findByText('No hay gastos registrados hoy.')
+    await openNew(user)
+    await choose(user, 'Otro')
+    await user.type(field('¿Qué gasto fue?'), 'Gasolina')
     await user.type(field('Monto'), '1000')
 
-    await user.click(save())
+    const asked = await confirm(user)
     await listo(user)
 
-    const asked = await confirmation()
     await waitFor(() =>
-      expect(within(asked).getByRole('alert').textContent).toBe('Escriba el monto. Presione Editar para corregirlo.'),
+      expect(within(asked).getByRole('alert').textContent).toBe(
+        'El nombre no puede tener más de 40 letras. Presione Editar para corregirlo.',
+      ),
     )
     await user.click(within(asked).getByRole('button', { name: 'Editar' }))
 
-    expect(screen.queryByRole('alertdialog')).toBeNull()
-    expect(screen.getByText('Escriba el monto.')).toBeTruthy()
-    expect(document.activeElement).toBe(field('Monto'))
+    expect(inPopup().getByText('El nombre no puede tener más de 40 letras.')).toBeTruthy()
+    await waitFor(() => expect(document.activeElement).toBe(field('¿Qué gasto fue?')))
   })
 
   it('when saving fails, the confirmation stays and says what to do, and Editar keeps what was typed', async () => {
     handlers['POST /api/expenses'] = () => new Response('', { status: 500 })
-    const { user } = openApp('/gastos/nuevo')
-    await screen.findByRole('heading', { name: 'Nuevo gasto' })
+    const { user } = openApp('/gastos')
+    await screen.findByText('No hay gastos registrados hoy.')
+    await openNew(user)
     await choose(user, 'Otro')
     await user.type(field('¿Qué gasto fue?'), 'Candado')
     await user.type(field('Monto'), '4500')
 
-    await user.click(save())
+    const asked = await confirm(user)
     await listo(user)
 
-    const asked = await confirmation()
     await waitFor(() =>
       expect(within(asked).getByRole('alert').textContent).toContain(
         'No se pudo guardar el gasto. Presione Listo para intentar de nuevo.',
@@ -449,49 +574,59 @@ describe('Gastos: the form', () => {
     expect(field('Monto').value).toBe('4.500')
   })
 
-  it('asks before leaving with changes, and leaves without asking when untouched', async () => {
-    const { router, user } = openApp(`/gastos/nuevo?fecha=${OLD_DAY}`)
-    await screen.findByRole('heading', { name: 'Nuevo gasto' })
+  it('Cancelar with changes asks in the same popup; untouched, it just closes', async () => {
+    const { user } = openApp(`/gastos?fecha=${OLD_DAY}`)
+    await screen.findByRole('table')
+    await openNew(user)
     await user.type(field('Monto'), '1000')
 
-    await user.click(button('Cancelar'))
+    await user.click(inPopup().getByRole('button', { name: 'Cancelar' }))
     const question = await screen.findByRole('alertdialog', { name: 'Tiene cambios sin guardar' })
+    expect(popup()).toBe(question)
     await user.click(within(question).getByRole('button', { name: 'No, seguir aquí' }))
-    expect(addressOf(router)).toBe(`/gastos/nuevo?fecha=${OLD_DAY}`)
+    expect(field('Monto').value).toBe('1.000')
 
-    await user.clear(field('Monto'))
-    await user.click(button('Cancelar'))
-    expect(addressOf(router)).toBe(`/gastos?fecha=${OLD_DAY}`)
+    await user.click(inPopup().getByRole('button', { name: 'Cancelar' }))
+    await user.click(within(popup()).getByRole('button', { name: 'Sí, salir' }))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+
+    await openNew(user)
+    await user.click(inPopup().getByRole('button', { name: 'Cancelar' }))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
   })
 
-  it('offers to try again when the categories can not load', async () => {
+  it('offers to try again when the types can not load', async () => {
     handlers['GET /api/expense-categories'] = () => new Response('', { status: 500 })
-    const { user } = openApp('/gastos/nuevo')
+    const { user } = openApp('/gastos')
+    await screen.findByText('No hay gastos registrados hoy.')
 
-    expect(await screen.findByText('No se pudo abrir el formulario de gastos.')).toBeTruthy()
+    await user.click(screen.getAllByRole('button', { name: 'Nuevo gasto' })[0])
+    expect(await inPopup().findByText('No se pudo abrir el formulario de gastos.')).toBeTruthy()
     handlers['GET /api/expense-categories'] = () => json(CATEGORIES)
-    await user.click(button('Intentar de nuevo'))
+    await user.click(inPopup().getByRole('button', { name: 'Intentar de nuevo' }))
 
-    expect(await screen.findByRole('heading', { name: 'Nuevo gasto' })).toBeTruthy()
+    await waitFor(() => expect(document.activeElement).toBe(typeOf()))
   })
 })
 
-describe('Gastos: editing', () => {
-  it('opens with its values, Borrar gasto apart, and Listo saves the change and goes back to the period', async () => {
-    const { router, user } = openApp(`/gastos/e1/editar?fecha=${OLD_DAY}`)
-    await screen.findByRole('heading', { name: 'Editar gasto' })
+describe('Gastos: the Editar gasto popup', () => {
+  it('opens with its values and Borrar gasto, and Listo saves the change and closes', async () => {
+    const { user } = openApp(`/gastos?fecha=${OLD_DAY}`)
+    await screen.findByRole('table')
 
-    expect(typeOf().textContent).toContain('Alimento')
+    await user.click(button('Editar el gasto de Alimento'))
+    await screen.findByRole('alertdialog', { name: 'Editar gasto' })
+    await waitFor(() => expect(typeOf().textContent).toContain('Alimento'))
     expect(field('Monto').value).toBe('31.000')
     expect(field('Nota (opcional)').value).toBe('2 sacos')
-    expect(button('Borrar gasto')).toBeTruthy()
+    expect(inPopup().getByRole('button', { name: 'Borrar gasto' })).toBeTruthy()
 
     await user.clear(field('Monto'))
     await user.type(field('Monto'), '32000')
-    await user.click(save())
+    await confirm(user)
     await listo(user)
 
-    await waitFor(() => expect(addressOf(router)).toBe(`/gastos?fecha=${OLD_DAY}`))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     expect(callsTo('PUT', '/api/expenses/e1')[0].body).toEqual({
       date: OLD_DAY,
       categoryId: 'c1',
@@ -500,41 +635,169 @@ describe('Gastos: editing', () => {
     })
   })
 
-  it('"Otro" opens with what it was in "¿Qué gasto fue?"', async () => {
-    openApp(`/gastos/e2/editar?fecha=${OLD_DAY}`)
-    await screen.findByRole('heading', { name: 'Editar gasto' })
+  it('an old "Otro" opens with what it was in "¿Qué gasto fue?", and saving makes it a type', async () => {
+    const { user } = openApp(`/gastos?fecha=${OLD_DAY}`)
+    await screen.findByRole('table')
 
-    expect(field('¿Qué gasto fue?').value).toBe('Gasolina')
-    expect(screen.queryByLabelText('Nota (opcional)')).toBeNull()
+    await user.click(button('Editar el gasto de Gasolina'))
+    await screen.findByRole('alertdialog', { name: 'Editar gasto' })
+    await waitFor(() => expect(field('¿Qué gasto fue?').value).toBe('Gasolina'))
+    expect(field('Nota (opcional)').value).toBe('')
+
+    await confirm(user)
+    await listo(user)
+
+    await waitFor(() => expect(callsTo('PUT', '/api/expenses/e2')).toHaveLength(1))
+    expect(callsTo('PUT', '/api/expenses/e2')[0].body).toEqual({
+      date: OLD_DAY,
+      amount: 5000,
+      note: '',
+      newCategory: 'Gasolina',
+    })
   })
 
-  it('Borrar gasto asks first, then deletes and goes back', async () => {
-    const { router, user } = openApp(`/gastos/e1/editar?fecha=${OLD_DAY}`)
-    await screen.findByRole('heading', { name: 'Editar gasto' })
+  it('Borrar gasto asks in the same popup; Sí, borrar deletes it and closes', async () => {
+    const { user } = openApp(`/gastos?fecha=${OLD_DAY}`)
+    await screen.findByRole('table')
+    await user.click(button('Editar el gasto de Alimento'))
+    await screen.findByRole('alertdialog', { name: 'Editar gasto' })
+    await waitFor(() => expect(typeOf()).toBeTruthy())
 
-    await user.click(button('Borrar gasto'))
+    await user.click(inPopup().getByRole('button', { name: 'Borrar gasto' }))
     const question = await screen.findByRole('alertdialog', { name: '¿Borrar este gasto?' })
+    expect(popup()).toBe(question)
     expect(question.textContent).toContain(`¿Borrar el gasto de Alimento de ₡31.000 del ${formatDateLong(OLD_DAY)}?`)
+    await waitFor(() => expect(document.activeElement).toBe(within(question).getByRole('button', { name: 'No, cancelar' })))
     expect(callsTo('DELETE', '/api/expenses/e1')).toEqual([])
+
     await user.click(within(question).getByRole('button', { name: 'Sí, borrar' }))
 
-    await waitFor(() => expect(addressOf(router)).toBe(`/gastos?fecha=${OLD_DAY}`))
-    expect(callsTo('DELETE', '/api/expenses/e1')).toHaveLength(1)
+    await waitFor(() => expect(callsTo('DELETE', '/api/expenses/e1')).toHaveLength(1))
+    expect(await screen.findByText('Gasto borrado.')).toBeTruthy()
+    expect(screen.queryByRole('alertdialog', { name: 'Editar gasto' })).toBeNull()
   })
 
-  it('keeps a retired category as an option on the expense that still has it', async () => {
-    const { user } = openApp('/gastos/e3/editar')
-    await screen.findByRole('heading', { name: 'Editar gasto' })
+  it('keeps a retired type as an option on the expense that still has it', async () => {
+    handlers['GET /api/expenses'] = () => json({ expenses: [OLD_TRAYS], total: 2500, byCategory: [] })
+    const { user } = openApp('/gastos')
+    await screen.findByRole('table')
 
-    expect(typeOf().textContent).toContain('Bandejas')
+    await user.click(button('Editar el gasto de Bandejas'))
+    await screen.findByRole('alertdialog', { name: 'Editar gasto' })
+
+    await waitFor(() => expect(typeOf().textContent).toContain('Bandejas'))
     await user.click(typeOf())
     expect(screen.getAllByRole('option').map((option) => option.textContent)).toContain('Bandejas')
   })
 
-  it('goes back to the list when the expense no longer exists', async () => {
-    handlers['GET /api/expenses/e1'] = () => new Response('', { status: 404 })
-    const { router } = openApp(`/gastos/e1/editar?fecha=${OLD_DAY}`)
+  it('says so when the expense no longer exists, and loads the list again', async () => {
+    handlers['PUT /api/expenses/e1'] = () => new Response('', { status: 404 })
+    const { user } = openApp(`/gastos?fecha=${OLD_DAY}`)
+    await screen.findByRole('table')
+    await user.click(button('Editar el gasto de Alimento'))
+    await screen.findByRole('alertdialog', { name: 'Editar gasto' })
+    await waitFor(() => expect(typeOf()).toBeTruthy())
 
-    await waitFor(() => expect(addressOf(router)).toBe(`/gastos?fecha=${OLD_DAY}`))
+    await confirm(user)
+    await listo(user)
+
+    expect(await screen.findByText('Este gasto ya no existe.')).toBeTruthy()
+    expect(screen.queryByRole('alertdialog', { name: /gasto|confirmación/ })).toBeNull()
+  })
+})
+
+describe('Gastos: the Tipos de gasto popup', () => {
+  async function openTypes(user: User) {
+    await user.click(button('Tipos de gasto'))
+    await screen.findByRole('list', { name: 'Tipos de gasto' })
+  }
+
+  const listed = () =>
+    within(screen.getByRole('list', { name: 'Tipos de gasto' }))
+      .getAllByRole('listitem')
+      .map((item) => item.textContent)
+
+  it('lists the types in order with how many gastos use each; every one but "Otro" can be deleted', async () => {
+    const { user } = openApp('/gastos')
+    await screen.findByText('No hay gastos registrados hoy.')
+
+    await openTypes(user)
+
+    expect(listed()).toEqual([
+      'Alimento12 gastosEliminar',
+      'Burucha0 gastosEliminar',
+      'Cartones3 gastosEliminar',
+      'Desparasitantes1 gastoEliminar',
+      'Equipo0 gastosEliminar',
+      'Plásticos/Envoltorios2 gastosEliminar',
+      'Vitaminas1 gastoEliminar',
+      'Otro1 gastoSiempre está',
+    ])
+    expect(screen.queryByRole('button', { name: 'Eliminar el tipo Otro' })).toBeNull()
+    expect(document.activeElement).toBe(inPopup().getByRole('button', { name: 'Cerrar' }))
+
+    await user.click(inPopup().getByRole('button', { name: 'Cerrar' }))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+  })
+
+  it('Agregar tipo checks the name, then adds it in its place in the list', async () => {
+    handlers['POST /api/expense-categories'] = ({ body }) =>
+      json({ ...category('c10', (body as { name: string }).name), expenseCount: 0 }, 201)
+    const { user } = openApp('/gastos')
+    await screen.findByText('No hay gastos registrados hoy.')
+    await openTypes(user)
+    const name = field('Agregar tipo')
+    const add = () => inPopup().getByRole('button', { name: 'Agregar' })
+
+    await user.click(add())
+    expect(inPopup().getByText('Escriba el nombre del tipo.')).toBeTruthy()
+
+    await user.type(name, 'ALIMENTO')
+    await user.click(add())
+    expect(inPopup().getByText('Ya existe el tipo Alimento.')).toBeTruthy()
+
+    await user.clear(name)
+    await user.type(name, 'otro')
+    await user.click(add())
+    expect(inPopup().getByText('Escriba qué gasto fue, no «Otro».')).toBeTruthy()
+    expect(callsTo('POST', '/api/expense-categories')).toEqual([])
+
+    // Enter moves on to Agregar, and adds nothing by itself.
+    await user.clear(name)
+    await user.type(name, '  gasolina {Enter}')
+    expect(document.activeElement).toBe(add())
+    expect(callsTo('POST', '/api/expense-categories')).toEqual([])
+
+    await user.click(add())
+
+    await waitFor(() => expect(callsTo('POST', '/api/expense-categories')[0]?.body).toEqual({ name: 'Gasolina' }))
+    expect(await inPopup().findByText('Se agregó el tipo Gasolina.')).toBeTruthy()
+    expect(listed()[5]).toBe('Gasolina0 gastosEliminar')
+    expect(listed().at(-1)).toBe('Otro1 gastoSiempre está')
+    expect(name.value).toBe('')
+  })
+
+  it('Eliminar asks in the same popup, and Sí, eliminar retires the type', async () => {
+    handlers['DELETE /api/expense-categories/c2'] = () => noContent()
+    const { user } = openApp('/gastos')
+    await screen.findByText('No hay gastos registrados hoy.')
+    await openTypes(user)
+
+    await user.click(inPopup().getByRole('button', { name: 'Eliminar el tipo Vitaminas' }))
+    const question = await screen.findByRole('alertdialog', { name: '¿Eliminar este tipo?' })
+    expect(popup()).toBe(question)
+    expect(question.textContent).toContain('¿Eliminar el tipo Vitaminas? Los gastos que ya lo usan lo mantienen.')
+    await waitFor(() => expect(document.activeElement).toBe(within(question).getByRole('button', { name: 'No, cancelar' })))
+
+    await user.click(within(question).getByRole('button', { name: 'No, cancelar' }))
+    expect(listed()).toContain('Vitaminas1 gastoEliminar')
+    expect(callsTo('DELETE', '/api/expense-categories/c2')).toEqual([])
+
+    await user.click(inPopup().getByRole('button', { name: 'Eliminar el tipo Vitaminas' }))
+    await user.click(within(popup()).getByRole('button', { name: 'Sí, eliminar' }))
+
+    await waitFor(() => expect(callsTo('DELETE', '/api/expense-categories/c2')).toHaveLength(1))
+    expect(await inPopup().findByText('Se eliminó el tipo Vitaminas.')).toBeTruthy()
+    expect(listed().some((item) => item!.startsWith('Vitaminas'))).toBe(false)
   })
 })

@@ -772,7 +772,8 @@ describe('sale form: editing', () => {
     const { router } = openApp(`/ventas/5/editar?fecha=${OLD_DAY}`)
 
     expect((await dialog()).textContent).toContain('Esta venta ya no existe.')
-    expect(addressOf(router)).toBe(`/ventas?fecha=${OLD_DAY}`)
+    // <Navigate> moves in an effect, after the render that shows the message.
+    await waitFor(() => expect(addressOf(router)).toBe(`/ventas?fecha=${OLD_DAY}`))
   })
 })
 

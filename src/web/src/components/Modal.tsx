@@ -11,6 +11,8 @@ interface Props {
   icon?: ReactNode
   /** Wider, for a body laid out in two columns, where stacking it all would not fit a 768-pixel-tall screen. */
   wide?: boolean
+  /** A dialog's own layout: its width, or letting a dropdown's list hang past its edge. */
+  className?: string
   /** The icon's circle color. */
   tone?: 'primary' | 'success' | 'danger'
   /** Pressing Esc does this. Clicking outside the dialog does nothing, so a stray click can't dismiss it. */
@@ -28,6 +30,7 @@ export function Modal({
   body,
   icon,
   wide = false,
+  className,
   tone = 'primary',
   onEscape,
   initialFocus,
@@ -55,7 +58,7 @@ export function Modal({
     <dialog
       ref={dialogRef}
       role="alertdialog"
-      className={[styles.dialog, body && styles.withBody, wide && styles.wide].filter(Boolean).join(' ')}
+      className={[styles.dialog, body && styles.withBody, wide && styles.wide, className].filter(Boolean).join(' ')}
       aria-labelledby={`${id}-title`}
       aria-describedby={`${id}-message`}
       // A click on the dialog or outside it would take focus off the button, and Enter would stop working. Fields

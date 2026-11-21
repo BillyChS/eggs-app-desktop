@@ -1,0 +1,86 @@
+.wrapper {
+  position: relative;
+}
+
+.buttonContent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* A filter is on: the button says so in color too, so a shorter list is never a surprise. */
+.active {
+  border-color: var(--color-primary);
+  background-color: var(--color-back);
+}
+
+/* By the button's right edge, over the table: fixed in the window, where TypeFilter.tsx puts it. */
+.popup {
+  position: fixed;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  width: 380px;
+  padding: var(--space-md);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-popup);
+}
+
+.title {
+  font-weight: 700;
+}
+
+.nothing {
+  color: var(--color-text-muted);
+}
+
+/* About six types in sight, fewer when the window has less room below the button; more scroll. */
+.options {
+  --options-max-height: calc(6 * var(--size-input) + 4px);
+
+  max-height: var(--options-max-height);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--size-input);
+  padding: 0 var(--space-xs);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.option:hover {
+  background-color: var(--color-surface-muted);
+}
+
+.option input {
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.name {
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.count {
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.clear {
+  align-self: flex-start;
+}

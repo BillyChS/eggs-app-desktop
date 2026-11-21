@@ -1,13 +1,31 @@
 namespace EggsApp.Api.Features.Expenses;
 
 /// <summary>What the UI sends.</summary>
-public sealed record ExpenseCommand(string? Date, Guid? CategoryId, long? Amount, string? Note);
+/// <param name="NewCategory">
+/// What "Otro"'s "¿Qué gasto fue?" says, in place of <paramref name="CategoryId"/>: the type the expense goes under,
+/// reused if one has that name, reactivated if it was retired, otherwise added.
+/// </param>
+public sealed record ExpenseCommand(
+    string? Date,
+    Guid? CategoryId,
+    long? Amount,
+    string? Note,
+    string? NewCategory = null);
 
 /// <summary>
 /// A command that passed validation. Whether the category exists, is still in use and needs a description is the
 /// handler's to check.
 /// </summary>
-public sealed record ExpenseFields(DateOnly Date, Guid CategoryId, long Amount, string? Note);
+/// <param name="CategoryId">Empty when <paramref name="NewCategory"/> is given.</param>
+/// <param name="NewCategory">The cleaned name of the type to reuse or add, or null.</param>
+public sealed record ExpenseFields(DateOnly Date, Guid CategoryId, string? NewCategory, long Amount, string? Note);
+
+/// <summary>"Agregar tipo".</summary>
+public sealed record CategoryCommand(string? Name);
+
+/// <summary>A category as "Tipos de gasto" and the form's list show it.</summary>
+/// <param name="ExpenseCount">How many expenses use it, of any date.</param>
+public sealed record CategorySummary(Guid Id, string Name, bool NeedsDescription, bool IsRetired, int ExpenseCount);
 
 /// <summary>A category as the form's buttons and an expense's row show it.</summary>
 /// <param name="IsRetired">No longer offered for new expenses; its old expenses still show it.</param>

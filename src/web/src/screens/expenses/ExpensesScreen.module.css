@@ -1,48 +1,23 @@
-/* Gastos uses Ventas' cards, table and footer (SalesScreen.module.css); these are only what Gastos has of its own. */
+/* Gastos uses Ventas' cards, toolbar, table and footer (SalesScreen.module.css); these are only what Gastos has of
+   its own. */
 
-/* Two cards: what was spent, and what it went to, which needs more room for its lines. */
-.cards {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-  gap: var(--space-md);
-}
-
-/* At most four lines, each a category and its amount, biggest first. */
-.categories {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px var(--space-xl);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.categories li {
+/* Filtrar and Tipos de gasto, on the toolbar's right, across from "Buscar gasto". */
+.tools {
   display: flex;
-  justify-content: space-between;
-  gap: var(--space-md);
-  padding: 6px 0;
-  border-bottom: 1px solid var(--color-divider);
-  font-size: 20px;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-left: auto;
 }
 
-.categories span {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.categories strong {
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.nothing {
+/* A page to manage, not part of finding a gasto: the quieter of the two. */
+.types {
   color: var(--color-text-muted);
-  font-size: 20px;
 }
 
-/* No gastos in the period: says so, with the way to add one. */
+/* No gastos in the period, or none that match: says so, with what to do. */
 .empty {
+  display: flex;
+  flex-direction: column;
   align-items: center;
   gap: var(--space-md);
   padding: 40px var(--space-lg);

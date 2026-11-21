@@ -6,7 +6,10 @@ namespace EggsApp.Api.Features.Expenses;
 
 public static class UpdateExpense
 {
-    /// <summary>Everything can change. A retired category can stay, but can't be chosen again once left.</summary>
+    /// <summary>
+    /// Everything can change. A retired category can stay, but can't be chosen again once left. An old "Otro" expense
+    /// becomes the type its "¿Qué gasto fue?" names.
+    /// </summary>
     public static async Task<Outcome<ExpenseDetail>> HandleAsync(AppDbContext db, Guid id, ExpenseFields fields)
     {
         var expense = await db.Expenses.FirstOrDefaultAsync(candidate => candidate.Id == id);
@@ -24,7 +27,7 @@ public static class UpdateExpense
         }
 
         expense.ExpenseDate = fields.Date;
-        expense.CategoryId = fields.CategoryId;
+        expense.CategoryId = category.Id;
         expense.Amount = fields.Amount;
         expense.Note = fields.Note;
         await db.SaveChangesAsync();

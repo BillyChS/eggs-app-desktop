@@ -36,12 +36,13 @@ src/
     src/theme/tokens.css       Design tokens: colors, spacing, radii, font sizes
     src/components/            Button, inputs, Dropdown, DayPicker, ConfirmDialog, useMessages (success and error messages)
     src/layout/                AppLayout + Sidebar (pages, connection, backup, version), Screen (header, "‹ Volver" on inner
-                               screens), FormFooter (the sale and expense forms' bar), useUnsavedChanges, useOneAtATime
+                               screens), FormFooter (the sale form's bar), useUnsavedChanges, useOneAtATime
     src/lib/                   Money and date helpers, selectOnFocus
     src/screens/               Screens; dev/ is a components page that exists only in pnpm dev. PeriodBar and periodView:
                                the period of Ventas and Gastos (day, week or month, in the address)
     src/screens/sales/         Ventas (salesView: the period and the tab) and the sale form
-    src/screens/expenses/      Gastos (its period, cards and table) and the expense form
+    src/screens/expenses/      Gastos (its period, card, search, Filtrar and table), ExpenseDialog (Nuevo/Editar gasto),
+                               ExpenseTypesDialog (Tipos de gasto)
     src/services/              API calls; http.ts has the timeout and ApiError
     src/test/                  Test setup, and a fake API (api.tsx) for screen tests
     vite.config.ts             Dev proxy: /api → http://localhost:5080; Vitest settings
@@ -151,16 +152,28 @@ touch the real data; set `Database:Path` to override it for the standalone API.
   to that day. A week or a month adds a Fecha column.
 - **Ventas:** the period and a tab: Fiado, Contado or Abonos (`&pestana=`, see `salesView.ts`). The cards are `GetSummary`'s numbers for the same range, so
   they match Resúmenes; the table and its search are the period's `ListSales` and `ListPayments`.
-- **Expenses:** cash-basis, like income: an `Expense` counts on its `ExpenseDate`. Its category is a row of
-  `ExpenseCategory`, not code: the migration seeds them with fixed ids, and a new or renamed one is a data change
-  (there's no screen for it yet). A category is never removed, only retired (soft-deleted, with a Restrict FK):
-  its old expenses keep showing its name (`ExpenseCategories.FindRefsAsync`) and can keep it when edited, but it's
-  no longer offered. A category with `NeedsDescription` ("Otro") requires the note, which says what it was: the form
-  asks for it as "¿Qué gasto fue?" (shown only for "Otro", and cleared when another type is chosen) and has no other
-  note for it; Gastos shows that text as its Tipo. A new expense starts with no category chosen.
-- **Gastos:** the period's `ListExpenses`: the card "Gastado hoy / esta semana…" (total and how many), "En qué se
-  gastó" (its `ByCategory`, at most four lines: past four, the top three and "Lo demás (N tipos)"), and a table with
-  Editar and Eliminar (which asks first) and a footer with how many and the total.
+- **Expenses:** cash-basis, like income: an `Expense` counts on its `ExpenseDate`. Its category ("tipo de gasto") is
+  a row of `ExpenseCategory`, not code: the migration seeds them with fixed ids, and users add more. Lists of types are
+  in Spanish alphabetical order with "Otro" last (`ExpenseCategories.ListAsync`, with how many expenses use each).
+  A type is added by "Agregar tipo" (`POST /api/expense-categories`) or from the form: "Otro" (`NeedsDescription`)
+  asks "¿Qué gasto fue?" and sends it as `newCategory` in place of `categoryId`, and the expense is saved under that
+  type in one `SaveChanges`. Both go through `ExpenseCategories.ResolveAsync` and `CategoryNames`: trimmed, spaces
+  collapsed, first letter capitalized, 1–40 letters, never "otro"; compared without case or accents
+  (`CustomerNames.ForComparison`), so a type with that name is reused, and a retired one is reactivated. "Otro" itself
+  is never saved on an expense any more, and can't be retired (409). A type is never removed, only retired ("Eliminar",
+  `DELETE /api/expense-categories/{id}`: a soft delete, with a Restrict FK): its old expenses keep showing its name
+  (`ExpenseCategories.FindRefsAsync`) and can keep it when edited, but it's no longer offered. Every expense has an
+  optional note. Expenses saved under "Otro" before this kept what they were in their note: Gastos still shows that
+  as their Tipo, and editing one fills "¿Qué gasto fue?" with it, so saving moves it to that type. A new expense starts
+  with no type chosen.
+- **Gastos:** the period's `ListExpenses`: the card "Gastado hoy / esta semana…" (total and how many, always the
+  whole period), a toolbar with "Buscar gasto" (tipo or nota, without case or accents, as it's typed), Filtrar (a
+  popup with a checkbox per type of the period and "Quitar filtros"; the button says "Filtrar (N)") and "Tipos de
+  gasto" (secondary), and a table with Editar and Eliminar (which asks first). Search and filter stay as the period
+  changes, live only in the page, and are applied in the browser; the footer then says "N de M gastos" and the total
+  of what's shown. Nothing matching shows "No hay gastos que coincidan." with Quitar filtros. Nuevo gasto and Editar
+  open `ExpenseDialog` over the page; the old `/gastos/nuevo` and `/gastos/:id/editar` go to Gastos (`ToExpenses`).
+  "Tipos de gasto" is `ExpenseTypesDialog`: the types with how many expenses each, Agregar tipo, and Eliminar.
 - **Summaries:** `GetSummary` never adds anything up on its own: it calls `ListSales`, `ListPayments`,
   `ListExpenses` and `ListCustomers` and combines their results, so Resúmenes can't disagree with Ventas, Gastos or
   Clientes. Spending by category is `ListExpenses`' `ByCategory`, grouped there once for Gastos and Resúmenes. Entró = cash sales + abonos; Gastado = expenses; Quedó = Entró − Gastado (it can be negative). Fiado is
@@ -193,12 +206,16 @@ touch the real data; set `Database:Path` to override it for the standalone API.
   The browser's calendar popup is a known exception to the size rule: CSS can't reach it (about 13px text and 28px
   days at 125% scaling), so a date can always be typed, and Ventas, abonos and expenses offer Hoy and Ayer as large
   buttons. A new sale or expense starts on the day its page was showing, or today from a week or a month.
-- **Dates and money in the UI:** use `lib/dates.ts` and `lib/money.ts`. `new Date("YYYY-MM-DD")` means UTC and shows
+- **Dates and money in the UI:** use `lib/dates.ts` and `lib/money.ts`. Money is typed in `MoneyInput`, whose ₡ sits
+  inside the field (`Field`'s `prefix`). `new Date("YYYY-MM-DD")` means UTC and shows
   the day before in Costa Rica; `Intl` doesn't give `₡12.500` for `es-CR`.
 - **Navigation:** the sidebar is always there with the four pages by name (no submenus), and marks the page a screen
-  is under. The app opens on Ventas. Screens under a page have "‹ Volver" to it (the sale and expense forms have
-  Cancelar instead), never browser history, so it still works after a reload. Every page, the forms included, is a
-  `Screen`.
+  is under. The app opens on Ventas. Screens under a page have "‹ Volver" to it (the sale form has Cancelar instead),
+  never browser history, so it still works after a reload. Every page, the forms included, is a `Screen`.
+- **Popups:** a popup with steps (the expense popup's confirmation, its Borrar gasto and unsaved-changes questions,
+  Eliminar in Tipos de gasto) shows each step in place of its content, in the same `Modal`, never a second dialog on
+  top. Its views pass one stable `initialFocus` ref (Modal reopens the dialog when it changes) and focus their own
+  button themselves. Success and error messages are `Modal`s too, so inside a popup problems are shown in it.
 - **Forms:** use `useUnsavedChanges` so leaving asks first. It also tells the window, which asks before closing. Don't
   disable the button being pressed while saving, because that loses keyboard focus: use `useOneAtATime`.
 - **Sale, abono and expense form keyboard:** Enter moves on and never saves from a field; only activating the button
@@ -207,12 +224,14 @@ touch the real data; set `Database:Path` to override it for the standalone API.
   a cash sale; Enter in the search goes to the first name, it doesn't pick it) → "Guardar venta", which saves nothing:
   it opens the "Ventana de confirmación" (`ConfirmationWindow`, also when editing), focused on Editar, and only its
   Listo saves; a failure stays in it, saying what to do. Abono: amount → note → "Guardar abono"; in the Abonar dialog,
-  amount → "Guardar abono", which asks "Sí, guardar" / "No" first. Expense: it opens on ¿Qué tipo de gasto?; Fecha →
-  ¿Qué tipo de gasto? → "¿Qué gasto fue?" ("Otro" only) → Monto → Nota (not for "Otro") → "Guardar gasto", which
-  opens the same Ventana de confirmación. So these forms have no `<form>` element, and a held-down Enter is ignored
-  (also inside any `Modal`). All of them must keep their save button in sight at both screen sizes above: the sale and
-  expense forms' total and buttons are `FormFooter`, in `Screen`'s `footer`, which stays put while the content
-  scrolls, with Borrar venta or Borrar gasto apart on its left.
+  amount → "Guardar abono", which asks "Sí, guardar" / "No" first. Expense popup: it opens on ¿Qué tipo de gasto?;
+  Fecha → ¿Qué tipo de gasto? → "¿Qué gasto fue?" ("Otro" only) → Monto → Nota → "Guardar gasto", which shows the
+  Ventana de confirmación (`ConfirmationSummary`) in the same popup, focused on Editar; Listo saves, closes it and
+  loads the list again (or moves to the expense's day if it's outside the period). Borrar gasto is apart on its left.
+  Agregar tipo: Enter moves to Agregar. So these forms have no `<form>` element, and a held-down Enter is ignored
+  (also inside any `Modal`). All of them must keep their save button in sight at both screen sizes above: the sale
+  form's total and buttons are `FormFooter`, in `Screen`'s `footer`, which stays put while the content scrolls, with
+  Borrar venta apart on its left. A `Dropdown`'s list, and Filtrar's, stop at the window's edge and scroll.
 - **Data safety:** never commit `.db` files or backup JSON files.
 - **Version:** `<Version>` in `Directory.Build.props` is the only place it's set; read it through `AppVersion`. A `v*`
   tag must match it.

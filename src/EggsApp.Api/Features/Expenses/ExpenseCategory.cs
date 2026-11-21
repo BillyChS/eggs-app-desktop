@@ -5,8 +5,8 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace EggsApp.Api.Features.Expenses;
 
 /// <summary>
-/// What an expense was for. Categories are rows, not code, so one can be added, renamed or retired with data alone.
-/// A retired category is soft-deleted: its expenses keep showing its name, and new expenses can't use it.
+/// What an expense was for. Categories are rows, not code: "Tipos de gasto" and "Otro" add them, and "Eliminar" retires
+/// them. A retired category is soft-deleted: its expenses keep showing its name, and new expenses can't use it.
 /// </summary>
 public sealed class ExpenseCategory : BaseEntity
 {
@@ -14,7 +14,9 @@ public sealed class ExpenseCategory : BaseEntity
 
     public required string Name { get; set; }
 
-    /// <summary>Where its button goes, lowest first.</summary>
+    /// <summary>
+    /// The seed's order. Lists no longer use it: they go alphabetically, "Otro" last (<see cref="ExpenseCategories.ListAsync"/>).
+    /// </summary>
     public int SortOrder { get; set; }
 
     /// <summary>True for "Otro": its expenses must say what they were.</summary>

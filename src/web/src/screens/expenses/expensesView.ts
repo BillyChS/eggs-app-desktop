@@ -4,10 +4,8 @@ import type { Period } from '../summaries/periods'
 
 const LIST = '/gastos'
 
-/** "?fecha=…", "?semana=…" or "?mes=…", to carry the period to a screen opened from Gastos and back. */
-export const expensesQuery = (period: Period) => `?${new URLSearchParams(listPeriodParams(period))}`
-
-export const expensesAddress = (period: Period) => `${LIST}${expensesQuery(period)}`
+/** Gastos on a period: "?fecha=…", "?semana=…" or "?mes=…". */
+export const expensesAddress = (period: Period) => `${LIST}?${new URLSearchParams(listPeriodParams(period))}`
 
 /** The period Gastos shows. It lives in the address, so it survives a reload. */
 export function useExpensesPeriod() {

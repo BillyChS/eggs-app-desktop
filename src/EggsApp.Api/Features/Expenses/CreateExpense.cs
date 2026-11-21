@@ -18,7 +18,7 @@ public static class CreateExpense
         var expense = new Expense
         {
             ExpenseDate = fields.Date,
-            CategoryId = fields.CategoryId,
+            CategoryId = category.Id,
             Amount = fields.Amount,
             Note = fields.Note,
         };

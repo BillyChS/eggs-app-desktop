@@ -10,6 +10,12 @@ export interface ExpenseCategory {
   isRetired: boolean
 }
 
+/** A category as "Tipos de gasto" and the form's list show it. */
+export interface ExpenseType extends ExpenseCategory {
+  /** How many expenses use it, of any date. */
+  expenseCount: number
+}
+
 export interface Expense {
   id: string
   /** Local YYYY-MM-DD. */
@@ -19,13 +25,13 @@ export interface Expense {
   note: string | null
 }
 
-export interface ExpenseInput {
+/** Either a category, or for "Otro" the name of the type it goes under, reused or added by the API. */
+export type ExpenseInput = {
   date: string
-  categoryId: string
   amount: number
-  /** For "Otro", what the expense was ("¿Qué gasto fue?"), which it requires. */
+  /** Optional, for any type. */
   note: string
-}
+} & ({ categoryId: string; newCategory?: undefined } | { categoryId?: undefined; newCategory: string })
 
 /** What went to one category in a period. */
 export interface CategoryTotal {
@@ -46,9 +52,21 @@ export interface ExpenseList {
 
 const BASE = '/api/expenses'
 
-/** The categories a new expense can use, in button order. */
-export function listExpenseCategories(signal?: AbortSignal): Promise<ExpenseCategory[]> {
-  return request<ExpenseCategory[]>('/api/expense-categories', { signal })
+const CATEGORIES = '/api/expense-categories'
+
+/** The categories a new expense can use, with how many expenses use each: alphabetically, "Otro" last. */
+export function listExpenseCategories(signal?: AbortSignal): Promise<ExpenseType[]> {
+  return request<ExpenseType[]>(CATEGORIES, { signal })
+}
+
+/** "Agregar tipo": a type with that name already (even retired) is given back instead of a new one. */
+export function createExpenseCategory(name: string): Promise<ExpenseType> {
+  return request<ExpenseType>(CATEGORIES, { method: 'POST', body: { name } })
+}
+
+/** Retires it: its expenses keep it, but new ones can't use it. */
+export function retireExpenseCategory(id: string): Promise<void> {
+  return request<void>(`${CATEGORIES}/${id}`, { method: 'DELETE' })
 }
 
 export function listExpenses(from: string, to: string, signal?: AbortSignal): Promise<ExpenseList> {
