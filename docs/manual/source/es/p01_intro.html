@@ -1,0 +1,99 @@
+
+<!--TOC-->
+
+<h1 class="chapter" id="c1"><span class="num">Capítulo 1</span>Introducción</h1>
+
+<h2 id="c1-1">Qué es Eggs App</h2>
+<p>Eggs App es una aplicación de escritorio para Windows que lleva las cuentas de un negocio pequeño de venta de huevos. La usa una sola persona, mayor y sin experiencia técnica, en su propia computadora. Con ella se anotan:</p>
+<ul>
+  <li><b>Ventas al contado:</b> el cliente paga en el momento.</li>
+  <li><b>Ventas fiadas (fiados):</b> el cliente se lleva los huevos y paga después.</li>
+  <li><b>Abonos:</b> pagos que hace un cliente para ir bajando lo que debe.</li>
+  <li><b>Gastos:</b> lo que se gasta en el negocio (alimento, vitaminas, cartones…).</li>
+  <li><b>Resúmenes:</b> cuánto entró, cuánto se gastó y cuánto quedó en un día, una semana o un mes.</li>
+</ul>
+<p>Todo el dinero está en <b>colones costarricenses (₡)</b>, siempre en números enteros (no hay céntimos).</p>
+
+<h2 id="c1-2">Tres decisiones que explican casi todo el código</h2>
+<div class="box idea"><span class="t">1. No hay internet ni nube</span>
+<p>Todo corre en la misma computadora: la pantalla, el "servidor" y la base de datos. No hay cuentas de usuario ni contraseñas. Los datos viven en un archivo (<code>eggs.db</code>) dentro de la carpeta del usuario de Windows.</p></div>
+<div class="box idea"><span class="t">2. El usuario es una persona mayor</span>
+<p>Por eso los botones son grandes (56 píxeles), el texto nunca baja de 18 píxeles, hay pocas acciones por pantalla, todo lo importante pide confirmación y los mensajes están en español sencillo, diciendo qué hacer ("Por favor llame a Billy").</p></div>
+<div class="box idea"><span class="t">3. Los datos no se pueden perder ni descuadrar</span>
+<p>Nada se borra de verdad (se marca como borrado), los totales y saldos se calculan siempre desde los registros (nunca se guardan aparte), hay respaldos automáticos todos los días y el servidor rechaza cualquier cambio que dejaría a un cliente debiendo menos de cero.</p></div>
+
+<h2 id="c1-3">Cómo leer este manual</h2>
+<p>El manual va de lo general a lo específico. Si usted no sabe nada de programación, lea primero el Capítulo 2 (conceptos básicos) y el Capítulo 3 (arquitectura). Después puede ir directo al capítulo de la parte que necesite tocar.</p>
+<table>
+<tr><th style="width:38%">Si necesita…</th><th>Lea</th></tr>
+<tr><td>Entender cómo está armado todo</td><td>Capítulos 3 y 4</td></tr>
+<tr><td>Entender la ventana de Windows</td><td>Capítulo 5</td></tr>
+<tr><td>Entender el servidor (la API)</td><td>Capítulos 6 y 9</td></tr>
+<tr><td>Entender la base de datos</td><td>Capítulo 7</td></tr>
+<tr><td>Entender cómo se calculan saldos, fiados y abonos</td><td>Capítulo 8 (el más importante)</td></tr>
+<tr><td>Entender las pantallas</td><td>Capítulo 10</td></tr>
+<tr><td>Seguir una venta de punta a punta</td><td>Capítulo 11</td></tr>
+<tr><td>Respaldos, registros de fallas, restaurar datos</td><td>Capítulo 12</td></tr>
+<tr><td>Compilar, probar, crear el instalador e instalar</td><td>Capítulo 13</td></tr>
+<tr><td>Agregar o cambiar algo en el código</td><td>Capítulo 14</td></tr>
+<tr><td>Arreglar un problema en la PC</td><td>Capítulo 15</td></tr>
+</table>
+<p>Los nombres de archivos, clases y funciones aparecen en <code>letra de código</code>, tal como están en el código. El código, sus comentarios y los mensajes de commit están en inglés; todo lo que ve el usuario está en español. Al final hay un glosario.</p>
+
+<h2 id="c1-4">Vocabulario del negocio</h2>
+<table>
+<tr><th style="width:24%">Palabra</th><th>Qué significa en la aplicación</th><th style="width:26%">En el código</th></tr>
+<tr><td>Venta</td><td>Una compra completa de un cliente, como una factura. Tiene una o más líneas.</td><td><code>Sale</code></td></tr>
+<tr><td>Línea</td><td>Un renglón de la venta: tipo de cartón, cantidad y precio por cartón.</td><td><code>SaleItem</code></td></tr>
+<tr><td>Cartón de 15 / de 30</td><td>Los dos tamaños de cartón que se venden.</td><td><code>CartonType.A</code> (15) y <code>CartonType.B</code> (30)</td></tr>
+<tr><td>Al contado</td><td>Venta pagada en el momento. Cuenta como ingreso el día de la venta.</td><td><code>IsCredit = false</code></td></tr>
+<tr><td>Fiado</td><td>Venta a crédito. No es ingreso: es plata que se debe.</td><td><code>IsCredit = true</code></td></tr>
+<tr><td>Abono</td><td>Un pago de un cliente que baja lo que debe. Es ingreso el día que se paga.</td><td><code>Payment</code></td></tr>
+<tr><td>Saldo</td><td>Lo que un cliente debe ahora: sus fiados menos sus abonos.</td><td><code>Balance</code></td></tr>
+<tr><td>Gasto / tipo de gasto</td><td>Dinero que salió del negocio, y su categoría.</td><td><code>Expense</code>, <code>ExpenseCategory</code></td></tr>
+<tr><td>Cliente sin nombre</td><td>Una venta al contado a alguien que no se conoce. No tiene cliente.</td><td><code>CustomerId = null</code></td></tr>
+<tr><td>Entró / Gastado / Quedó</td><td>Ingresos, gastos, y la resta de ambos, en un período.</td><td><code>CameIn</code>, <code>Spent</code>, <code>Net</code></td></tr>
+</table>
+
+<h1 class="chapter" id="c2"><span class="num">Capítulo 2</span>Conceptos básicos para empezar</h1>
+<p>Este capítulo explica, sin dar nada por sabido, las piezas con que está hecha la aplicación. Si ya programa, puede saltárselo.</p>
+
+<h2 id="c2-1">Las tres partes de una aplicación como esta</h2>
+<div class="two">
+<div class="box idea"><span class="t">Frontend (la interfaz)</span><p>Lo que la persona ve y toca: botones, tablas, formularios. Aquí está hecho con <b>React</b>, una librería de JavaScript para construir pantallas, escrita en <b>TypeScript</b> (JavaScript con tipos).</p></div>
+<div class="box idea"><span class="t">Backend (el servidor o API)</span><p>El programa que recibe pedidos de la interfaz ("guardá esta venta", "dame las ventas de hoy"), revisa las reglas y habla con la base de datos. Aquí está hecho con <b>ASP.NET Core</b> en <b>C#</b>.</p></div>
+<div class="box idea"><span class="t">Base de datos</span><p>Donde se guardan los datos de forma permanente, en tablas (como hojas de cálculo). Aquí es <b>SQLite</b>: una base de datos completa dentro de un solo archivo.</p></div>
+</div>
+<p>Lo especial de Eggs App es que las tres partes corren <b>en la misma computadora y en el mismo programa</b>. Un cuarto componente, la "cáscara" de escritorio hecha con <b>WPF</b>, abre la ventana de Windows y muestra la interfaz dentro de ella con <b>WebView2</b> (el motor del navegador Microsoft Edge, incrustado).</p>
+
+<h2 id="c2-2">Cómo se hablan: HTTP, API y JSON</h2>
+<p>La interfaz y el servidor se comunican igual que un navegador con una página web: con pedidos <b>HTTP</b>. Cada pedido tiene un <b>método</b> que dice qué se quiere hacer y una <b>ruta</b> que dice sobre qué:</p>
+<table>
+<tr><th style="width:14%">Método</th><th style="width:30%">Para qué</th><th>Ejemplo en Eggs App</th></tr>
+<tr><td><code>GET</code></td><td>Leer algo</td><td><code>GET /api/sales?from=2026-11-01&amp;to=2026-11-07</code> → las ventas de esa semana</td></tr>
+<tr><td><code>POST</code></td><td>Crear algo</td><td><code>POST /api/sales</code> → guarda una venta nueva</td></tr>
+<tr><td><code>PUT</code></td><td>Reemplazar / editar</td><td><code>PUT /api/sales/{id}</code> → cambia una venta</td></tr>
+<tr><td><code>DELETE</code></td><td>Borrar</td><td><code>DELETE /api/sales/{id}</code> → borra una venta</td></tr>
+</table>
+<p>El conjunto de todas estas rutas es la <b>API</b> (interfaz de programación). Los datos viajan en formato <b>JSON</b>, que es texto con llaves y comillas, por ejemplo:</p>
+<pre><code>{ "date": "2026-11-23", "isCredit": false, "customerId": null,
+  "items": [ { "cartonType": "A", "quantity": 3, "unitPrice": 2500 } ] }</code></pre>
+<p>El servidor contesta con un <b>código de estado</b>: <code>200</code> (bien), <code>201</code> (creado), <code>204</code> (bien, sin contenido), <code>400</code> (los datos tienen errores), <code>404</code> (no existe), <code>409</code> (se rechazó por una regla del negocio).</p>
+
+<h2 id="c2-3">Otros términos que aparecen en todo el manual</h2>
+<table>
+<tr><th style="width:26%">Término</th><th>Qué es</th></tr>
+<tr><td>.NET 10</td><td>La plataforma de Microsoft para ejecutar programas en C#. Incluye ASP.NET Core (servidores web) y WPF (ventanas de Windows).</td></tr>
+<tr><td>Kestrel</td><td>El servidor web que viene dentro de ASP.NET Core. Es el que "escucha" los pedidos HTTP.</td></tr>
+<tr><td>Entity Framework Core (EF Core)</td><td>Un <b>ORM</b>: traduce clases de C# (como <code>Sale</code>) a tablas de la base de datos y consultas en C# a SQL, para no escribir SQL a mano.</td></tr>
+<tr><td>Migración</td><td>Un archivo de C# que describe un cambio en la estructura de la base de datos (crear una tabla, agregar una columna). Se aplican en orden.</td></tr>
+<tr><td>Entidad</td><td>Una clase que corresponde a una tabla. Cada objeto es una fila.</td></tr>
+<tr><td>Endpoint</td><td>Una ruta concreta de la API (por ejemplo <code>POST /api/sales</code>) y el código que la atiende.</td></tr>
+<tr><td>Vite / pnpm</td><td>Vite compila la interfaz React a archivos HTML/JS/CSS. pnpm instala las librerías de JavaScript.</td></tr>
+<tr><td>Componente (React)</td><td>Una pieza reutilizable de interfaz, por ejemplo <code>Button</code> o <code>Modal</code>.</td></tr>
+<tr><td>Hook (React)</td><td>Una función que empieza con <code>use…</code> y le da a un componente estado o comportamiento, por ejemplo <code>useLoad</code>.</td></tr>
+<tr><td>Ruta (React Router)</td><td>La dirección de una pantalla dentro de la interfaz, por ejemplo <code>/ventas</code> o <code>/clientes/123</code>.</td></tr>
+<tr><td>Soft delete (borrado lógico)</td><td>En vez de eliminar una fila, se le pone <code>IsDeleted = true</code> y se esconde de las consultas. El dato sigue ahí.</td></tr>
+<tr><td>GUID</td><td>Un identificador único de 128 bits, como <code>5d1f3c0e-6a51-…</code>. Cada fila tiene uno como llave.</td></tr>
+<tr><td>Prueba automática</td><td>Código que usa el programa y revisa que haga lo correcto. Se corren con <code>dotnet test</code> y <code>pnpm test</code>.</td></tr>
+</table>

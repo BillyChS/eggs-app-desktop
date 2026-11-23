@@ -1,0 +1,91 @@
+
+<h1 class="chapter" id="c5"><span class="num">Capítulo 5</span>La capa de escritorio (EggsApp.Desktop)</h1>
+<p>Este proyecto es la "cáscara": el ejecutable que abre la persona. Es pequeño (unos 8 archivos), pero decide el orden de arranque, cómo se cierra la app y qué pasa cuando algo falla.</p>
+
+<h2 id="c5-1">Archivos del proyecto</h2>
+<table>
+<tr><th style="width:28%">Archivo</th><th>Qué hace</th></tr>
+<tr><td><code>App.xaml.cs</code></td><td>Punto de entrada. Orden de arranque, apagado y manejo de errores fatales.</td></tr>
+<tr><td><code>MainWindow.xaml(.cs)</code></td><td>La ventana maximizada con el texto "Abriendo…" y el control WebView2. Configura el navegador y sus reglas de navegación.</td></tr>
+<tr><td><code>SingleInstance.cs</code></td><td>Garantiza que solo haya una copia abierta. Usa un <i>mutex</i> de Windows llamado <code>Local\EggsApp.Desktop.SingleInstance</code>.</td></tr>
+<tr><td><code>FailureDialog.xaml(.cs)</code></td><td>Ventana de mensaje con letra y botones grandes (el <code>MessageBox</code> de Windows es muy pequeño). Muestra la carpeta de registros.</td></tr>
+<tr><td><code>UiText.cs</code></td><td>Todos los textos en español que muestra la ventana (no la interfaz React, que tiene los suyos).</td></tr>
+<tr><td><code>AppPaths.cs</code></td><td>Dónde están los archivos de la interfaz (<code>wwwroot</code>) y la carpeta de datos del WebView2.</td></tr>
+<tr><td><code>Assets/app.ico</code></td><td>Ícono de la app y de la ventana.</td></tr>
+<tr><td><code>Properties/PublishProfiles/win-x64.pubxml</code></td><td>Cómo se publica: Release, Windows 64 bits, <b>self-contained</b> (lleva .NET adentro; la PC no necesita instalarlo).</td></tr>
+</table>
+
+<h2 id="c5-2">El arranque, paso a paso</h2>
+<figure>
+<svg viewBox="0 0 760 440" xmlns="http://www.w3.org/2000/svg" font-family="Inter, sans-serif" font-size="11.5">
+  <defs><marker id="a5" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#6e788c"/></marker></defs>
+  <g>
+    <rect x="10" y="8" width="360" height="40" rx="7" fill="#e6ecfb" stroke="#1e40af"/><text x="22" y="26" font-weight="700" fill="#1e40af">1. RegisterFailureHandlers()</text><text x="22" y="41" fill="#4a5468">Todo error no atrapado va al registro.</text>
+    <rect x="10" y="58" width="360" height="40" rx="7" fill="#e6ecfb" stroke="#1e40af"/><text x="22" y="76" font-weight="700" fill="#1e40af">2. SingleInstance.TryAcquire()</text><text x="22" y="91" fill="#4a5468">¿Ya hay otra copia? → la trae al frente y sale.</text>
+    <rect x="10" y="108" width="360" height="40" rx="7" fill="#e6ecfb" stroke="#1e40af"/><text x="22" y="126" font-weight="700" fill="#1e40af">3. new MainWindow().Show()</text><text x="22" y="141" fill="#4a5468">La persona ve "Abriendo…" de inmediato.</text>
+    <rect x="10" y="158" width="360" height="40" rx="7" fill="#e6ecfb" stroke="#1e40af"/><text x="22" y="176" font-weight="700" fill="#1e40af">4. Revisa que exista WebView2 Runtime</text><text x="22" y="191" fill="#4a5468">Si falta → mensaje WebView2Missing.</text>
+    <rect x="10" y="208" width="360" height="40" rx="7" fill="#fff4e3" stroke="#7a3a00"/><text x="22" y="226" font-weight="700" fill="#7a3a00">5. EmbeddedApiHost.StartAsync() (en otro hilo)</text><text x="22" y="241" fill="#4a5468">Arranca la API: ver la columna derecha.</text>
+    <rect x="10" y="258" width="360" height="40" rx="7" fill="#e6ecfb" stroke="#1e40af"/><text x="22" y="276" font-weight="700" fill="#1e40af">6. Log: "Started. Version 1.3.0+…, port N."</text><text x="22" y="291" fill="#4a5468">Una línea por arranque en logs\.</text>
+    <rect x="10" y="308" width="360" height="40" rx="7" fill="#e6ecfb" stroke="#1e40af"/><text x="22" y="326" font-weight="700" fill="#1e40af">7. window.LoadAppAsync(url)</text><text x="22" y="341" fill="#4a5468">WebView2 en es-CR, navega a http://127.0.0.1:N/</text>
+    <rect x="10" y="358" width="360" height="40" rx="7" fill="#e8f5ec" stroke="#14632b"/><text x="22" y="376" font-weight="700" fill="#14632b">8. NavigationCompleted → muestra la interfaz</text><text x="22" y="391" fill="#4a5468">Esconde "Abriendo…", muestra el WebView2. La app abre en Ventas.</text>
+  </g>
+  <g>
+    <rect x="410" y="150" width="340" height="270" rx="10" fill="#fff" stroke="#7a3a00" stroke-width="1.5"/>
+    <text x="424" y="172" font-weight="700" fill="#7a3a00" font-size="12.5">Dentro de EmbeddedApiHost.StartAsync</text>
+    <text x="424" y="196">a. ¿Existe wwwroot\index.html? Si no → error.</text>
+    <text x="424" y="218">b. Crea la app web en modo Production.</text>
+    <text x="424" y="240">c. AddEggsApp(): servicios y base de datos.</text>
+    <text x="424" y="262">d. Backup:Enabled = true; lee settings.json.</text>
+    <text x="424" y="284">e. AllowedHosts = 127.0.0.1;localhost.</text>
+    <text x="424" y="306">f. Kestrel escucha en 127.0.0.1, puerto 0.</text>
+    <text x="424" y="328">g. MigrateDatabaseAsync(): respalda y migra.</text>
+    <text x="424" y="350">h. UseEggsApp(): rutas /api y archivos.</text>
+    <text x="424" y="372">i. StartAsync(): empieza a escuchar.</text>
+    <text x="424" y="394">j. Lee el puerto que eligió Windows → Url.</text>
+    <line x1="370" y1="228" x2="408" y2="228" stroke="#7a3a00" stroke-width="1.5" marker-end="url(#a5)"/>
+  </g>
+  <g>
+    <rect x="410" y="8" width="340" height="128" rx="10" fill="#fbecec" stroke="#a31515"/>
+    <text x="424" y="30" font-weight="700" fill="#a31515" font-size="12.5">Si algo falla al arrancar</text>
+    <text x="424" y="52">Falta la interfaz → FrontendMissing</text>
+    <text x="424" y="72">Base de datos dañada o más nueva → DatabaseFailed</text>
+    <text x="424" y="92">Falta WebView2 → WebView2Missing</text>
+    <text x="424" y="112">Cualquier otra cosa → StartFailed</text>
+    <text x="424" y="129" fill="#4a5468" font-size="10.5">Se registra, se muestra el mensaje y sale con código 1.</text>
+  </g>
+</svg>
+<figcaption>Figura 5.1 — Secuencia de <code>App.OnStartup</code> y de <code>EmbeddedApiHost.StartAsync</code>.</figcaption>
+</figure>
+<p>Detalles que importan:</p>
+<ul>
+  <li><b>La ventana va primero.</b> Arrancar la API y migrar la base de datos puede tardar segundos; la persona tiene que ver que la app está abriendo.</li>
+  <li><b>La API arranca en otro hilo</b> (<code>Task.Run(StartHostAsync)</code>) para no congelar la ventana.</li>
+  <li><b>Si la persona cierra la ventana mientras arranca</b>, no se le muestra nada (no hay a quién), solo se registra.</li>
+  <li><b>El idioma del navegador se fija en <code>es-CR</code></b> (<code>CoreWebView2EnvironmentOptions.Language</code>) para que el calendario de las fechas salga en español aunque Windows esté en inglés.</li>
+</ul>
+
+<h2 id="c5-3">Las reglas del navegador (MainWindow)</h2>
+<table>
+<tr><th style="width:32%">Qué</th><th>Cómo y por qué</th></tr>
+<tr><td>Solo muestra la app</td><td><code>OnNavigationStarting</code> cancela cualquier navegación a una dirección que no sea la de la API (<code>IsAppUrl</code>). Un enlace perdido nunca convierte la ventana en un navegador.</td></tr>
+<tr><td>Sin ventanas nuevas</td><td><code>OnNewWindowRequested</code> las bloquea.</td></tr>
+<tr><td>Sin "sensación de navegador" (solo en Release)</td><td>Se apagan el menú del clic derecho, las herramientas de desarrollo, los atajos del navegador, el zoom, la barra de estado, el autocompletar y el guardar contraseñas. En Debug se dejan para poder depurar.</td></tr>
+<tr><td>Avisar antes de cerrar con cambios sin guardar</td><td>La página le manda a la ventana el mensaje <code>"unsaved-changes"</code> o <code>"no-unsaved-changes"</code> (ver <code>services/desktopShell.ts</code>). Si hay cambios, al presionar la X la ventana pregunta "Tiene cambios sin guardar. ¿Cerrar Eggs App sin guardar?", con "No" como opción segura.</td></tr>
+<tr><td>Si el motor del navegador se cae</td><td><code>OnProcessFailed</code>: si se cayó el proceso principal, cierra con mensaje; si solo se colgó la página, ofrece volver a abrirla.</td></tr>
+<tr><td>Si Windows se está apagando</td><td><code>OnSessionEnding</code> llama a <code>CloseWithoutAsking()</code>: no se pregunta nada, porque detendría el apagado.</td></tr>
+</table>
+
+<h2 id="c5-4">Una sola copia (SingleInstance)</h2>
+<p>Al arrancar, la app intenta crear el mutex <code>Local\EggsApp.Desktop.SingleInstance</code>. Si ya existe, hay otra copia abierta: esta segunda copia activa un evento de Windows (<code>Local\EggsApp.Desktop.Activate</code>) y se cierra. La primera copia está escuchando ese evento (<code>ListenForActivation</code>) y llama a <code>BringToFront()</code>, que restaura y levanta la ventana.</p>
+<div class="box warn"><span class="t">Este nombre está en dos lugares</span><p>El instalador (<code>EggsApp.iss</code>, <code>AppMutex=…</code>) usa el mismo nombre del mutex para pedir que se cierre la app antes de instalar. Si se cambia en un lado, hay que cambiarlo en el otro.</p></div>
+
+<h2 id="c5-5">El cierre</h2>
+<ol class="steps">
+  <li>La persona cierra la ventana (o Windows se apaga).</li>
+  <li><code>OnExit</code> llama a <code>StopHost()</code>, que en otro hilo espera hasta <b>10 segundos</b> a que la API se detenga.</li>
+  <li><code>EmbeddedApiHost.DisposeAsync()</code>: deja de recibir pedidos, <b>hace el respaldo del cierre</b> (reemplaza el de hoy con el estado final del día), libera la app y cierra todas las conexiones de SQLite (<code>ClearAllPools</code>), lo que pasa todo del archivo <code>eggs.db-wal</code> al <code>eggs.db</code>.</li>
+  <li>Si todo salió bien, registra "Closed cleanly." y suelta el mutex.</li>
+</ol>
+
+<h2 id="c5-6">Dónde están los archivos de la interfaz (AppPaths)</h2>
+<p>Una app publicada tiene <code>wwwroot\index.html</code> al lado del <code>.exe</code>. En modo Debug (desarrollo) no existe, así que <code>AppPaths.WebRoot</code> usa un atributo <code>DevWebRoot</code> que el <code>.csproj</code> graba solo en Debug y que apunta a <code>src/EggsApp.Api/wwwroot</code>. Por eso, para correr la app de escritorio en desarrollo, primero hay que ejecutar <code>pnpm build</code>.</p>

@@ -1,0 +1,77 @@
+
+<h1 class="chapter" id="c12"><span class="num">Capítulo 12</span>Respaldos, registros y restaurar</h1>
+
+<h2 id="c12-1">Dónde escribe la aplicación</h2>
+<p>Todo va bajo <code>%LocalAppData%\EggsApp</code> (<code>AppDataPaths</code>), nunca junto al programa:</p>
+<table>
+<tr><th style="width:28%">Ruta</th><th>Contenido</th></tr>
+<tr><td><code>eggs.db</code></td><td>Los datos. Con la app abierta también existen <code>eggs.db-wal</code> y <code>eggs.db-shm</code>.</td></tr>
+<tr><td><code>eggs.dev.db</code></td><td>Datos de desarrollo (API sola y <code>dotnet ef</code>).</td></tr>
+<tr><td><code>backups\daily\</code></td><td>Respaldos automáticos, uno por día: <code>eggs-AAAA-MM-DD.db</code>.</td></tr>
+<tr><td><code>backups\</code></td><td>Copias antes de cada migración (<code>eggs-AAAA-MM-DD_HH-mm-ss-fff.db</code>, las 5 más nuevas) y <code>backup-state.json</code>.</td></tr>
+<tr><td><code>settings.json</code></td><td>Opcional, escrito a mano: la segunda ubicación de los respaldos.</td></tr>
+<tr><td><code>WebView2\</code></td><td>Datos internos del navegador incrustado.</td></tr>
+<tr><td><code>logs\</code></td><td><code>eggsapp-AAAA-MM-DD.log</code>, uno por día, se guardan 7 días.</td></tr>
+</table>
+<p>La única excepción es la segunda copia de los respaldos: por defecto <code>%OneDrive%\Respaldos Eggs App</code>.</p>
+
+<h2 id="c12-2">Cómo funcionan los respaldos</h2>
+<figure>
+<svg viewBox="0 0 760 210" xmlns="http://www.w3.org/2000/svg" font-family="Inter, sans-serif" font-size="11">
+  <defs><marker id="a12" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1e40af"/></marker></defs>
+  <g text-anchor="middle">
+  <rect x="5" y="10" width="140" height="80" rx="8" fill="#e6ecfb" stroke="#1e40af"/><text x="75" y="32" font-weight="700" fill="#1e40af">Cuándo</text><text x="75" y="50">al arrancar (si no hay</text><text x="75" y="64">de hoy) · cada hora ·</text><text x="75" y="78">al cerrar · "Intentar"</text>
+  <rect x="170" y="10" width="140" height="80" rx="8" fill="#fff" stroke="#14632b"/><text x="240" y="32" font-weight="700" fill="#14632b">1. Copiar</text><text x="240" y="50">API de respaldo de SQLite</text><text x="240" y="64">→ eggs-fecha.db.partial</text><text x="240" y="78">(modo DELETE, 1 archivo)</text>
+  <rect x="335" y="10" width="130" height="80" rx="8" fill="#fff" stroke="#14632b"/><text x="400" y="32" font-weight="700" fill="#14632b">2. Verificar</text><text x="400" y="50">PRAGMA</text><text x="400" y="64">integrity_check</text><text x="400" y="78">= "ok"</text>
+  <rect x="490" y="10" width="120" height="80" rx="8" fill="#fff" stroke="#14632b"/><text x="550" y="32" font-weight="700" fill="#14632b">3. Renombrar</text><text x="550" y="50">quita .partial</text><text x="550" y="64">(nombre real =</text><text x="550" y="78">copia completa)</text>
+  <rect x="635" y="10" width="120" height="80" rx="8" fill="#fff" stroke="#14632b"/><text x="695" y="32" font-weight="700" fill="#14632b">4. Podar</text><text x="695" y="50">14 diarios +</text><text x="695" y="64">1 por mes × 12</text><text x="695" y="78">+ 5 premigración</text>
+  <rect x="335" y="120" width="420" height="80" rx="8" fill="#fff4e3" stroke="#7a3a00"/><text x="545" y="142" font-weight="700" fill="#7a3a00">5. Segunda copia (OneDrive o carpeta de settings.json)</text><text x="545" y="160">Copia el archivo ya verificado, lo verifica otra vez, renombra.</text><text x="545" y="176">Hasta 3 intentos (OneDrive puede tener el archivo ocupado). Misma poda.</text><text x="545" y="192">Si la carpeta no existe (USB desconectado): se salta y se registra.</text>
+  <rect x="5" y="120" width="305" height="80" rx="8" fill="#fbecec" stroke="#a31515"/><text x="157" y="142" font-weight="700" fill="#a31515">Si algo falla</text><text x="157" y="160">Nunca detiene la app ni toca eggs.db.</text><text x="157" y="176">Se registra en logs\ y en backup-state.json;</text><text x="157" y="192">la barra lateral avisa; el próximo intento repite.</text>
+  </g>
+  <g stroke="#1e40af" stroke-width="1.5"><line x1="145" y1="50" x2="166" y2="50" marker-end="url(#a12)"/><line x1="310" y1="50" x2="331" y2="50" marker-end="url(#a12)"/><line x1="465" y1="50" x2="486" y2="50" marker-end="url(#a12)"/><line x1="610" y1="50" x2="631" y2="50" marker-end="url(#a12)"/><line x1="695" y1="90" x2="695" y2="116" marker-end="url(#a12)"/></g>
+</svg>
+<figcaption>Figura 12.1 — <code>DatabaseBackups.BackUpAsync</code> y <code>SqliteBackup.CopyDatabase</code>.</figcaption>
+</figure>
+<ul>
+  <li><b>Quién:</b> <code>BackupWorker</code> (tarea de fondo: revisa al arrancar y cada hora) y <code>EmbeddedApiHost.DisposeAsync</code> (al cerrar). Solo en la app de escritorio: <code>Backup:Enabled</code> lo pone únicamente <code>EmbeddedApiHost</code>, así la API sola y las pruebas nunca respaldan.</li>
+  <li><b>Por qué no se copia el archivo directamente:</b> parte de lo guardado puede estar todavía en <code>eggs.db-wal</code>. La API de respaldo de SQLite copia el estado completo.</li>
+  <li><b>Un respaldo a la vez</b> (<code>SemaphoreSlim</code>). Nada en <code>DatabaseBackups</code> lanza errores hacia afuera.</li>
+  <li><b>La poda solo borra</b> archivos cuyo nombre coincide exactamente con los patrones de <code>BackupFiles</code>, así nunca puede borrar otros archivos de la carpeta de OneDrive. También borra <code>.partial</code> abandonados de más de un día.</li>
+  <li><b>Se cuentan respaldos, no días del calendario:</b> si la app no se usa por semanas, los respaldos viejos no se pierden.</li>
+</ul>
+
+<h3>Cuándo avisa la barra lateral</h3>
+<p>Normalmente dice "Último respaldo: hoy 8:15 a. m.". Avisa ("No se pudo guardar el respaldo… Por favor llame a Billy.", con el botón "Intentar de nuevo") solo si:</p>
+<ul>
+  <li>el último intento falló (se recuerda entre arranques en <code>backup-state.json</code>), o</li>
+  <li>la app se usó <b>3 días</b> sin un respaldo bueno desde entonces (días de uso, no del calendario: un fin de semana largo no causa aviso).</li>
+</ul>
+<p>Para la segunda copia el umbral es de <b>7 días de uso</b> ("La copia en OneDrive no se está haciendo."). Una copia saltada cuenta como día sin copia, no como falla.</p>
+
+<h3>Configurar la segunda ubicación</h3>
+<pre><code><span class="c">// %LocalAppData%\EggsApp\settings.json</span>
+{ "Backup": { "SecondFolder": "E:\\Respaldos Eggs App" } }    <span class="c">// otra carpeta, p. ej. una USB</span>
+{ "Backup": { "SecondFolder": "off" } }                       <span class="c">// sin segunda copia</span></code></pre>
+<p>Sin <code>settings.json</code>, si OneDrive está configurado en Windows (variable de entorno <code>OneDrive</code>), se usa <code>%OneDrive%\Respaldos Eggs App</code>. La app solo ve la carpeta local: conviene revisar de vez en cuando en onedrive.live.com que tenga archivos recientes.</p>
+
+<h2 id="c12-3">El registro de fallas (logs)</h2>
+<p><code>FailureLog</code> escribe en <code>logs\eggsapp-AAAA-MM-DD.log</code>:</p>
+<ul>
+  <li>una línea al arrancar: <code>[Desktop] Started. Version 1.3.0+…, port 51234.</code></li>
+  <li>las migraciones aplicadas y la ruta de la copia previa;</li>
+  <li>cada respaldo: dónde, tamaño, qué se podó, cómo fue la segunda copia;</li>
+  <li>todo error: de la ventana, de pedidos a la API (nivel Error o Critical), excepciones sin atrapar;</li>
+  <li>una línea al cerrar bien: <code>[Desktop] Closed cleanly.</code></li>
+</ul>
+<p>Límites: 7 días de archivos y 5 MB por archivo (si algo falla en bucle, lo de más ese día se descarta). Escribir el registro nunca lanza errores. Los mensajes de error de la ventana muestran la ruta de esta carpeta.</p>
+
+<h2 id="c12-4">Restaurar un respaldo</h2>
+<div class="box warn"><span class="t">Esto lo hace Billy, no la persona que usa la app. No se borra nada hasta el final.</span></div>
+<ol class="steps">
+  <li><b>Cerrar Eggs App.</b> En el Administrador de tareas, confirmar que no quedó ningún proceso <code>EggsApp.Desktop</code>.</li>
+  <li><b>Elegir el respaldo.</b> El más nuevo está en <code>backups\daily</code>, con la fecha en el nombre. Si el disco se dañó, tomar uno de <code>Respaldos Eggs App</code> en OneDrive (descargarlo primero). Para volver al estado anterior a una migración, usar uno de <code>backups\eggs-…_HH-mm-ss-fff.db</code>.</li>
+  <li><b>Apartar la base actual.</b> En <code>%LocalAppData%\EggsApp</code>, crear una carpeta como <code>before-restore-2026-11-23</code> y mover ahí <code>eggs.db</code> <b>junto con <code>eggs.db-wal</code> y <code>eggs.db-shm</code> si existen</b>. Un <code>-wal</code> que quede al lado del archivo restaurado se le aplicaría y lo dañaría.</li>
+  <li><b>Poner el respaldo.</b> Copiar (no mover) el respaldo elegido a <code>%LocalAppData%\EggsApp</code> y renombrar la copia a <code>eggs.db</code>.</li>
+  <li><b>Abrir Eggs App</b> y revisar las últimas ventas, abonos y gastos. Un respaldo de una versión anterior se migra al arrancar (con copia previa). Uno de una versión más nueva se rechaza sin cambiar nada.</li>
+  <li><b>Si todo está bien</b>, borrar la carpeta <code>before-restore-…</code>. Si no, cerrar la app y volver a poner esos archivos.</li>
+</ol>

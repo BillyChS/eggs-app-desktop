@@ -47,6 +47,7 @@ src/
     src/test/                  Test setup, and a fake API (api.tsx) for screen tests
     vite.config.ts             Dev proxy: /api → http://localhost:5080; Vitest settings
 docs/design/                   The design prototypes (Main = Ventas, NuevaVenta = sale form), kept as they came
+docs/manual/                   Technical manual PDFs (English, Spanish), their HTML source and build.py (see its README)
 tests/
   EggsApp.Tests/               xUnit; integration tests via WebApplicationFactory<Program>
 installer/                     EggsApp.iss (Inno Setup, per-user) and build.ps1, which publishes and builds it

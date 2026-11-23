@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Eggs App — Technical Manual</title>
+<style>
+@page { size: Letter; margin: 22mm 20mm 20mm 20mm; }
+@page :first { margin: 0; }
+:root {
+  --navy: #0f1b3d; --blue: #1e40af; --soft: #e6ecfb; --faint: #f3f6fe; --amber: #f5b942;
+  --text: #141b2d; --muted: #4a5468; --line: #d9dee8; --code: #f4f6fa;
+  --green: #14632b; --greenbg: #e8f5ec; --red: #a31515; --redbg: #fbecec; --orange: #7a3a00; --orangebg: #fff4e3;
+}
+* { box-sizing: border-box; }
+html { font-family: 'Inter', 'DejaVu Sans', sans-serif; font-size: 11pt; line-height: 1.5; color: var(--text); }
+body { margin: 0; }
+h1, h2, h3, h4 { color: var(--navy); line-height: 1.25; break-after: avoid; }
+h1.chapter { font-size: 24pt; margin: 0 0 6mm 0; padding-bottom: 3mm; border-bottom: 3px solid var(--amber); break-before: page; }
+h1.chapter .num { display: block; font-size: 11pt; color: var(--blue); letter-spacing: .08em; text-transform: uppercase; font-weight: 600; margin-bottom: 1mm; }
+h2 { font-size: 15pt; margin: 8mm 0 2.5mm; }
+h3 { font-size: 12.5pt; margin: 6mm 0 2mm; color: var(--blue); }
+h4 { font-size: 11pt; margin: 4mm 0 1.5mm; }
+p { margin: 0 0 3mm; }
+ul, ol { margin: 0 0 3mm; padding-left: 6mm; }
+li { margin-bottom: 1.2mm; }
+code { font-family: 'DejaVu Sans Mono', monospace; font-size: 9pt; background: var(--code); padding: 0.2mm 1.2mm; border-radius: 3px; color: #22336b; }
+pre { font-family: 'DejaVu Sans Mono', monospace; font-size: 8.6pt; line-height: 1.42; background: var(--code); border: 1px solid var(--line); border-left: 4px solid var(--blue); border-radius: 4px; padding: 3mm 4mm; margin: 0 0 4mm; white-space: pre-wrap; break-inside: avoid; }
+pre code { background: none; padding: 0; font-size: inherit; color: inherit; }
+pre .c { color: #5d6b82; font-style: italic; }
+pre .k { color: #1e40af; font-weight: bold; }
+pre .s { color: #14632b; }
+table { width: 100%; border-collapse: collapse; margin: 0 0 4mm; font-size: 9.8pt; break-inside: auto; }
+th { background: var(--navy); color: #fff; text-align: left; font-weight: 600; padding: 1.8mm 2.5mm; }
+td { border-bottom: 1px solid var(--line); padding: 1.6mm 2.5mm; vertical-align: top; }
+tr { break-inside: avoid; }
+tr:nth-child(even) td { background: #fafbfd; }
+td code, th code { font-size: 8.6pt; }
+.box { border-radius: 6px; padding: 3mm 4mm; margin: 0 0 4mm; break-inside: avoid; border: 1px solid; }
+.box > .t { font-weight: 700; display: block; margin-bottom: 1mm; }
+.box p:last-child, .box ul:last-child { margin-bottom: 0; }
+.idea { background: var(--faint); border-color: #b8c7f0; }
+.idea > .t { color: var(--blue); }
+.warn { background: var(--orangebg); border-color: #f2c98a; }
+.warn > .t { color: var(--orange); }
+.rule { background: var(--redbg); border-color: #e8c4c4; }
+.rule > .t { color: var(--red); }
+.ok { background: var(--greenbg); border-color: #a9d9b6; }
+.ok > .t { color: var(--green); }
+figure { margin: 2mm 0 5mm; break-inside: avoid; text-align: center; }
+figure svg { max-width: 100%; height: auto; }
+figcaption { font-size: 9pt; color: var(--muted); margin-top: 1.5mm; }
+.small { font-size: 9.5pt; color: var(--muted); }
+.two { display: flex; gap: 6mm; }
+.two > div { flex: 1; }
+.steps { counter-reset: st; list-style: none; padding-left: 0; }
+.steps > li { counter-increment: st; position: relative; padding-left: 10mm; margin-bottom: 2.5mm; }
+.steps > li::before { content: counter(st); position: absolute; left: 0; top: 0; width: 6.5mm; height: 6.5mm; border-radius: 50%; background: var(--blue); color: #fff; font-weight: 700; font-size: 9pt; display: flex; align-items: center; justify-content: center; }
+.keep { break-inside: avoid; }
+
+/* Cover */
+.cover { height: 279.4mm; width: 215.9mm; background: var(--navy); color: #fff; padding: 30mm 22mm; position: relative; display: flex; flex-direction: column; }
+.cover .egg { width: 34mm; height: 34mm; }
+.cover h1 { color: #fff; font-size: 40pt; margin: 14mm 0 3mm; border: 0; }
+.cover .sub { font-size: 17pt; color: #c3cbe0; margin-bottom: 14mm; }
+.cover .bar { width: 40mm; height: 3px; background: var(--amber); margin-bottom: 10mm; }
+.cover .meta { font-size: 11pt; color: #c3cbe0; line-height: 1.9; }
+.cover .meta b { color: #fff; font-weight: 600; }
+.cover .foot { margin-top: auto; font-size: 9.5pt; color: #8f9bbd; }
+
+/* TOC */
+.toc h1 { break-before: page; font-size: 24pt; border-bottom: 3px solid var(--amber); padding-bottom: 3mm; }
+.toc ol { list-style: none; padding: 0; margin: 0; }
+.toc li { display: flex; align-items: baseline; margin: 0; padding: 1.3mm 0; }
+.toc li.ch { font-weight: 700; color: var(--navy); margin-top: 2.2mm; font-size: 11pt; }
+.toc li.sec { padding-left: 8mm; font-size: 10pt; color: var(--text); }
+.toc li .dots { flex: 1; border-bottom: 1px dotted #9aa3b5; margin: 0 2mm; transform: translateY(-1mm); }
+.toc li .pg { min-width: 7mm; text-align: right; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <svg class="egg" viewBox="0 0 24 24" fill="#f5b942"><path d="M12 22c4.4 0 7-3.2 7-7.5C19 9 15.6 2 12 2S5 9 5 14.5C5 18.8 7.6 22 12 22z"/></svg>
+  <h1>Eggs App</h1>
+  <div class="sub">Technical Manual of the Codebase</div>
+  <div class="bar"></div>
+  <div class="meta">
+    <b>What it covers:</b> the architecture, the layers, the database, the business rules, the API, the user interface, the backups, how to build, test and install, and how to change the code.<br>
+    <b>Who it is for:</b> anyone who has to understand or maintain the application, even if they have never seen this code before.<br>
+    <b>Application version:</b> {{VERSION}} (repository <code style="background:none;color:#fff;padding:0">eggs-app-desktop</code>)<br>
+    <b>System author:</b> Billy Chacón Serrano<br>
+    <b>Manual date:</b> November 2026
+  </div>
+  <div class="foot">An offline Windows desktop application for tracking the sales, credit sales, partial payments and expenses of a small family egg business in Costa Rica.</div>
+</section>

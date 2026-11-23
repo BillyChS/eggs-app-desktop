@@ -1,0 +1,145 @@
+
+<h1 class="chapter" id="c8"><span class="num">Capítulo 8</span>Las reglas del negocio</h1>
+<p>Este es el capítulo más importante. Aquí está la lógica que hace que los números cuadren. Casi toda vive en el servidor, en <code>Features/</code>.</p>
+
+<h2 id="c8-1">Contabilidad "de caja": qué cuenta como ingreso</h2>
+<p>La app usa <b>base de efectivo</b>: el dinero cuenta como ingreso el día que de verdad entra.</p>
+<table>
+<tr><th style="width:30%">Movimiento</th><th style="width:22%">¿Es ingreso?</th><th>¿Qué día cuenta?</th></tr>
+<tr><td>Venta al contado</td><td>Sí</td><td>La fecha de la venta (<code>SaleDate</code>).</td></tr>
+<tr><td>Venta fiada</td><td><b>No</b></td><td>Es plata que se debe ("por cobrar"). Se muestra aparte, como "Fiado".</td></tr>
+<tr><td>Abono</td><td>Sí</td><td>La fecha del abono (<code>PaymentDate</code>).</td></tr>
+<tr><td>Gasto</td><td>Es salida</td><td>La fecha del gasto (<code>ExpenseDate</code>).</td></tr>
+</table>
+<div class="box idea"><span class="t">Las tres fórmulas</span>
+<p><b>Entró</b> = ventas al contado + abonos &nbsp;·&nbsp; <b>Gastado</b> = gastos &nbsp;·&nbsp; <b>Quedó</b> = Entró − Gastado (puede ser negativo).</p>
+<p>En el código: <code>ListSales</code> devuelve <code>CashTotal</code> (solo contado) y <code>CreditTotal</code> (solo fiado, aparte); <code>ListPayments</code> devuelve <code>Total</code> de abonos.</p></div>
+
+<h2 id="c8-2">Ventas</h2>
+<ul>
+  <li>Una venta (<code>Sale</code>) es una compra, como una factura, con líneas (<code>SaleItem</code>). Cada línea: tipo de cartón (A = 15 huevos, B = 30), cantidad entera y precio por cartón. Una venta puede mezclar tipos, o tener el mismo tipo a precios distintos.</li>
+  <li><b>El total lo calcula el servidor</b> (<code>SaleLines.Add</code>: <code>LineTotal = Quantity × UnitPrice</code>, <code>Total = Σ LineTotal</code>). No existe forma de imponer un total.</li>
+  <li><b>Editar</b> una venta conserva su id y <b>reemplaza todas sus líneas</b>: las viejas quedan borradas lógicamente y se escriben nuevas (<code>UpdateSale</code>).</li>
+  <li><b>Borrar</b> una venta borra (lógicamente) también sus líneas y el abono pagado con ella, si lo hay (<code>DeleteSale</code>).</li>
+  <li>Cada venta nueva tiene que decir explícitamente "Al contado" o "Fiado": no hay valor por defecto, para que un "Fiado" olvidado no se vuelva una deuda que nadie anotó.</li>
+</ul>
+
+<h3>¿Para quién es la venta?</h3>
+<table>
+<tr><th style="width:26%">Opción en el formulario</th><th>Qué se guarda</th><th style="width:24%">¿Permitido en fiado?</th></tr>
+<tr><td>Cliente sin nombre</td><td><code>CustomerId = null</code>. Resúmenes lo cuenta como "Ventas sin cliente".</td><td>No: "Para fiar hay que elegir un cliente con nombre."</td></tr>
+<tr><td>Un cliente existente</td><td><code>CustomerId</code> del cliente.</td><td>Sí</td></tr>
+<tr><td>Un cliente nuevo</td><td>Se manda <code>newCustomer</code> (nombre y teléfono) en lugar de <code>customerId</code>. Se crea el cliente y la venta en el mismo guardado (<code>SaleCredit.ResolveCustomer</code>).</td><td>Sí</td></tr>
+</table>
+<div class="box rule"><span class="t">Regla clave: el cliente de una venta al contado no toca ningún saldo</span>
+<p>En una venta al contado, el cliente es solo "quién compró" (para saber quién compra más). Por eso <b>todas las reglas de saldo filtran por <code>IsCredit</code>, nunca solo por <code>CustomerId</code></b>. La base de datos además exige que todo fiado tenga cliente: <code>CHECK ("IsCredit" = 0 OR "CustomerId" IS NOT NULL)</code>.</p></div>
+
+<h3>Últimos precios</h3>
+<p>El formulario empieza cada tipo de cartón con el último precio usado (<code>FindLastPrices</code>, <code>GET /api/sales/last-prices</code>). "Último" se decide por la <b>fecha de la venta</b> (y después por cuándo se anotó), no por la fecha en que se escribió: así anotar una venta vieja, con su precio viejo, no cambia el precio actual.</p>
+
+<h2 id="c8-3">El saldo de un cliente</h2>
+<p>Cada cliente tiene <b>una sola cuenta corriente</b>:</p>
+<pre><code>Saldo = (suma de los totales de sus ventas FIADAS) − (suma de sus abonos)</code></pre>
+<p>Lo calcula <code>CustomerAccounts.ReadAsync</code> (un cliente) o <code>ReadAllBalancesAsync</code> (todos) <b>en cada lectura</b>. Nunca se guarda en una columna, por eso no se puede descuadrar.</p>
+<div class="box rule"><span class="t">El saldo nunca baja de cero</span>
+<p>Si bajara de cero significaría que el negocio le debe plata al cliente. Para impedirlo:</p>
+<ul>
+<li><b>Un abono no puede ser mayor que lo que se debe</b> (<code>PaymentRules.CheckAmountAsync</code>): "María debe ₡8.000. El abono no puede ser mayor."</li>
+<li><b>Editar, cambiar de cliente, pasar a contado o borrar un fiado se rechaza (409)</b> si dejaría al cliente con fiados que suman menos de lo que ya abonó (<code>SaleCredit.CheckChangeAsync</code>).</li>
+</ul></div>
+<p>La cuenta que hace <code>CheckChangeAsync</code> es:</p>
+<pre><code>fiadosDespués  = fiadosAhora − totalDeEstaVenta + loQueSeguiríaDebiendoPorElla
+abonosDespués  = abonosAhora − abonoPagadoConLaVenta + abonoPagadoConLaVentaDespués
+si fiadosDespués &lt; abonosDespués → se rechaza:
+  "María ya abonó ₡10.000, y con este cambio sus fiados sumarían ₡6.000.
+   Primero corrija o borre un abono de María."</code></pre>
+
+<h2 id="c8-4">Los tres tipos de abono</h2>
+<p>Todo abono baja el saldo del cliente. Lo que cambia es <b>a cuál fiado se le aplica primero</b> y cómo se edita.</p>
+<table>
+<tr><th style="width:22%">Tipo</th><th style="width:26%">Cómo se crea</th><th style="width:16%">Campo</th><th>Cómo se comporta</th></tr>
+<tr><td><b>Abono suelto</b></td><td>Desde el estado de cuenta del cliente: <code>POST /api/customers/{id}/payments</code></td><td>ninguno</td><td>No apunta a ninguna venta. Se edita y borra libremente. Paga los fiados más viejos primero.</td></tr>
+<tr><td><b>Pagado al vender</b> ("¿Pagó algo ahora?")</td><td>Junto con un fiado nuevo o editado, en el mismo guardado</td><td><code>SaleId</code></td><td><b>Sigue a su venta</b> (<code>SaleCredit.ApplyPaidNow</code>): si se edita la venta cambia; si la venta pasa a otro cliente se reemplaza; si pasa a contado o se borra, se borra. Su propio <code>PUT</code>/<code>DELETE</code> responde 409. Tiene que ser menor que el total ("Si pagó todo, es una venta al contado.").</td></tr>
+<tr><td><b>Desde Abonar</b></td><td>Botón "Abonar" de un fiado en Ventas: <code>POST /api/sales/{id}/payments</code></td><td><code>ForSaleId</code></td><td>Fecha de hoy. A lo sumo lo que esa venta todavía debe. Paga esa venta primero, pero <b>no la sigue</b>: se edita y borra como uno suelto. Si la venta baja, cambia de cliente o se borra, lo que ya no cabe paga los otros fiados.</td></tr>
+</table>
+
+<h2 id="c8-5">Cuánto debe cada fiado (SaleStatuses)</h2>
+<p>En Ventas, cada fiado muestra "Debe ₡X", "Pagado con abonos" o (si es de contado) "Pagado". Ese número es <code>SaleDetail.Owed</code> y lo calcula <code>SaleStatuses.ReadSharesAsync</code> repartiendo los abonos del cliente entre sus fiados. Se hace <b>con toda la historia del cliente</b>, sin importar qué período se esté viendo, y nunca se guarda. Así, la suma de lo que deben sus ventas siempre es igual a su saldo.</p>
+
+<h3>El algoritmo, por cliente</h3>
+<ol class="steps">
+  <li>Ordena sus fiados activos del más viejo al más nuevo (fecha de venta, luego <code>CreatedAt</code>, luego <code>Id</code> para que el orden sea siempre el mismo). Cada uno empieza debiendo su total.</li>
+  <li><b>Primera pasada — abonos con destino.</b> Recorre sus abonos (primero los <code>SaleId</code>, después el resto, del más viejo al más nuevo). Si el abono apunta a un fiado de este cliente que sigue activo (<code>SaleId</code>, si no <code>ForSaleId</code>), le aplica lo que quepa.</li>
+  <li>Lo que sobró de cada abono, y los abonos sin destino, van a una "bolsa", ordenada del más viejo al más nuevo.</li>
+  <li><b>Segunda pasada — la bolsa paga lo más viejo.</b> Recorre los fiados del más viejo al más nuevo y los va pagando con la bolsa hasta que se acabe.</li>
+  <li>Lo que quedó sin pagar de cada fiado es su <code>Owed</code>. De paso, se anota qué parte de qué abono pagó cada fiado (para la ventana "Ver abonos").</li>
+</ol>
+
+<h3>Un ejemplo con números</h3>
+<div class="two">
+<div>
+<table>
+<tr><th>Fiado de Ana</th><th>Fecha</th><th>Total</th></tr>
+<tr><td>V1</td><td>1 nov</td><td>₡10.000</td></tr>
+<tr><td>V2</td><td>3 nov</td><td>₡8.000</td></tr>
+<tr><td>V3</td><td>5 nov</td><td>₡6.000</td></tr>
+<tr><td colspan="2"><b>Total fiado</b></td><td><b>₡24.000</b></td></tr>
+</table>
+</div>
+<div>
+<table>
+<tr><th>Abono</th><th>Fecha</th><th>Monto</th><th>Apunta a</th></tr>
+<tr><td>A1</td><td>3 nov</td><td>₡3.000</td><td>V2 (<code>SaleId</code>)</td></tr>
+<tr><td>A2</td><td>6 nov</td><td>₡4.000</td><td>V3 (<code>ForSaleId</code>)</td></tr>
+<tr><td>A3</td><td>10 nov</td><td>₡12.000</td><td>—</td></tr>
+<tr><td colspan="2"><b>Total abonado</b></td><td colspan="2"><b>₡19.000</b></td></tr>
+</table>
+</div>
+</div>
+<table>
+<tr><th style="width:36%">Paso</th><th>V1</th><th>V2</th><th>V3</th><th>Bolsa</th></tr>
+<tr><td>Inicio</td><td>10.000</td><td>8.000</td><td>6.000</td><td>—</td></tr>
+<tr><td>A1 → V2 (le caben 3.000)</td><td>10.000</td><td>5.000</td><td>6.000</td><td>—</td></tr>
+<tr><td>A2 → V3 (le caben 4.000)</td><td>10.000</td><td>5.000</td><td>2.000</td><td>—</td></tr>
+<tr><td>A3 no apunta a nada</td><td>10.000</td><td>5.000</td><td>2.000</td><td>A3: 12.000</td></tr>
+<tr><td>La bolsa paga V1 (10.000)</td><td>0</td><td>5.000</td><td>2.000</td><td>A3: 2.000</td></tr>
+<tr><td>La bolsa paga V2 (2.000)</td><td>0</td><td>3.000</td><td>2.000</td><td>vacía</td></tr>
+<tr><td><b>Resultado (Owed)</b></td><td><b>Pagado con abonos</b></td><td><b>Debe ₡3.000</b></td><td><b>Debe ₡2.000</b></td><td></td></tr>
+</table>
+<p>Comprobación: ₡3.000 + ₡2.000 = ₡5.000, y el saldo de Ana es ₡24.000 − ₡19.000 = <b>₡5.000</b>. Siempre cuadra.</p>
+<div class="box warn"><span class="t">Consecuencia</span><p>Como se recalcula siempre, editar o borrar un fiado viejo o un abono puede cambiar el estado de fiados más nuevos. Eso es correcto y esperado.</p></div>
+
+<h2 id="c8-6">Clientes</h2>
+<ul>
+  <li><b>Nombres no únicos.</b> Antes de guardar, la interfaz llama a <code>GET /api/customers/similar</code> y, si hay alguien parecido, pregunta "¿Es otra persona?". Parecido (<code>CustomerNames.AreSimilar</code>) significa: el mismo nombre, todas las palabras de uno dentro del otro, o un error de tipeo pequeño (distancia de Levenshtein de 0, 1 o 2 según el largo del nombre).</li>
+  <li><b>Comparar nombres se hace en C#</b>, no en SQL, con <code>CustomerNames</code>: <code>ForComparison</code> quita tildes, mayúsculas y espacios de más ("ñ" cuenta como "n"); <code>SpanishOrder</code> ordena alfabéticamente en español. El <code>LIKE</code> y el <code>ORDER BY</code> de SQLite se equivocan con las tildes ("MARÍA" no encontraría "María", y "Ángela" quedaría después de "Zoila").</li>
+  <li><b>Búsqueda</b> (<code>MatchesSearch</code>): cada palabra buscada tiene que aparecer en el nombre, en cualquier orden, aunque sea parcialmente.</li>
+  <li><b>Solo se puede borrar un cliente que no debe nada</b> (<code>DeleteCustomer.FindBlockerAsync</code>, 409): "María todavía debe ₡8.000. Solo se puede borrar un cliente que esté al día." Un cliente borrado desaparece de listas, búsquedas y de la revisión de nombres parecidos, y su <code>GET</code>, <code>PUT</code> y <code>DELETE</code> responden 404. Sus fiados y abonos se quedan y ya no se pueden cambiar. Una venta al contado a su nombre sí se puede seguir editando (no mueve saldo) y mantiene el nombre, pero no se le puede asignar nada nuevo.</li>
+  <li><b>Estado de cuenta</b> (<code>GetStatement</code>): solo fiados y abonos, ordenados por fecha y luego por cuándo se anotaron, con el saldo después de cada movimiento; se devuelve del más nuevo al más viejo, así el primero muestra el saldo actual. Las compras al contado van aparte (<code>CashPurchases</code>).</li>
+</ul>
+
+<h2 id="c8-7">Gastos y tipos de gasto</h2>
+<ul>
+  <li>Un gasto cuenta el día de su <code>ExpenseDate</code>. Tiene un tipo y una nota opcional.</li>
+  <li><b>Los tipos son datos</b>, no código: se agregan con "Agregar tipo" (<code>POST /api/expense-categories</code>) o desde el formulario eligiendo "Otro", que pregunta "¿Qué gasto fue?" y manda ese texto como <code>newCategory</code>. Gasto y tipo nuevo se guardan juntos.</li>
+  <li>Ambos caminos pasan por <code>ExpenseCategories.ResolveAsync</code> y <code>CategoryNames</code>: se limpian los espacios, se pone mayúscula la primera letra, de 1 a 40 letras, y nunca "otro". Se comparan sin mayúsculas ni tildes: si ya hay un tipo con ese nombre se reutiliza (200), si había uno retirado se reactiva (200), y si no, se crea (201).</li>
+  <li>"Otro" como tal ya nunca se guarda en un gasto, y no se puede eliminar (409).</li>
+  <li><b>Un tipo nunca se borra, solo se retira</b> ("Eliminar", <code>DELETE /api/expense-categories/{id}</code>, borrado lógico): sus gastos viejos siguen mostrando su nombre y lo pueden conservar al editarse, pero ya no se ofrece para gastos nuevos.</li>
+  <li>Las listas de tipos van en orden alfabético español con "Otro" al final, y dicen cuántos gastos usa cada uno.</li>
+  <li>Gastos viejos guardados bajo "Otro" (de antes de este sistema) tienen lo que eran en la nota: Gastos lo muestra como su tipo, y al editarlo se precarga en "¿Qué gasto fue?", así al guardar se pasa a ese tipo.</li>
+</ul>
+
+<h2 id="c8-8">Resúmenes</h2>
+<p><code>GetSummary</code> (<code>GET /api/reports/summary</code>) <b>no suma nada por su cuenta</b>: llama a <code>ListSales</code>, <code>ListPayments</code>, <code>ListExpenses</code> y <code>ListCustomers</code> y combina sus resultados. Así los números de Resúmenes no pueden diferir de los de Ventas, Gastos o Clientes. Devuelve:</p>
+<table>
+<tr><th style="width:30%">Dato</th><th>Cómo se obtiene</th></tr>
+<tr><td>Entró (contado + abonos)</td><td><code>sales.CashTotal</code> + <code>payments.Total</code></td></tr>
+<tr><td>Gastado, por tipo</td><td><code>expenses.Total</code> y <code>expenses.ByCategory</code> (agrupado una vez en <code>ListExpenses</code>)</td></tr>
+<tr><td>Quedó</td><td>Entró − Gastado</td></tr>
+<tr><td>Fiado del período</td><td><code>sales.CreditTotal</code> (aparte, no es ingreso)</td></tr>
+<tr><td>Por cobrar en total</td><td>Lo que deben todos los clientes <b>hoy</b>, sin importar el período</td></tr>
+<tr><td>Cartones vendidos</td><td>Por tipo, contado y fiado juntos: lo que salió de la granja</td></tr>
+<tr><td>Día por día</td><td>Cada día con algún movimiento, con lo que entró y lo que se gastó (un día con solo un fiado aparece con ₡0)</td></tr>
+<tr><td>Mejores clientes</td><td>Los 10 primeros por total (luego cartones, luego nombre), "otros" sumados en una línea, y aparte "Ventas sin cliente". Siempre: top + otros + sin cliente = contado + fiado del período.</td></tr>
+</table>
+<p>Límite: un resumen no puede abarcar más de 366 días ("El período no puede ser de más de un año."). Las semanas empiezan el lunes, y la semana o el mes en curso llegan solo hasta hoy.</p>

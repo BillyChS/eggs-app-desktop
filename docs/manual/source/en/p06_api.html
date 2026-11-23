@@ -1,0 +1,143 @@
+
+<h1 class="chapter" id="c6"><span class="num">Chapter 6</span>The API layer (EggsApp.Api)</h1>
+
+<h2 id="c6-1">Two ways to start the same API</h2>
+<p>The API can run in two ways, and both use the same setup (<code>EggsAppHostExtensions.cs</code>):</p>
+<table>
+<tr><th style="width:20%"></th><th>On its own (development)</th><th>Inside the window (the real app)</th></tr>
+<tr><td>Started by</td><td><code>Program.cs</code>, with <code>dotnet run --project src/EggsApp.Api</code></td><td><code>EmbeddedApiHost.StartAsync</code>, called from <code>App.xaml.cs</code></td></tr>
+<tr><td>Address</td><td><code>http://localhost:5080</code> (fixed, in <code>launchSettings.json</code>)</td><td><code>http://127.0.0.1:&lt;random port&gt;</code></td></tr>
+<tr><td>Database</td><td><code>eggs.dev.db</code> (or whatever <code>Database:Path</code> says)</td><td><code>eggs.db</code>, the real data</td></tr>
+<tr><td>Swagger</td><td>Yes, at <code>/swagger</code></td><td>Never</td></tr>
+<tr><td>Automatic backups</td><td>No</td><td>Yes (<code>Backup:Enabled = true</code>)</td></tr>
+<tr><td>Environment</td><td>Development</td><td>Production</td></tr>
+</table>
+<div class="box ok"><span class="t">Why there are two databases</span><p>So that nothing done while programming (manual tests, migrations with <code>dotnet ef</code>) can ever touch the real data. <code>AppDbContextFactory</code>, used by the <code>dotnet ef</code> tools, also always points to <code>eggs.dev.db</code>.</p></div>
+
+<h3>AddEggsApp(): the services</h3>
+<pre><code>builder.Services.AddDbContext&lt;AppDbContext&gt;(...)  <span class="c">// the database, at the path in Database:Path</span>
+builder.Services.TryAddSingleton(FailureLog.Default) <span class="c">// the failure log</span>
+builder.Services.TryAddSingleton(new BackupClock())  <span class="c">// the clock (replaceable in tests)</span>
+builder.Services.AddSingleton&lt;DatabaseBackups&gt;()     <span class="c">// the backups</span>
+builder.Services.AddHostedService&lt;BackupWorker&gt;()    <span class="c">// the task that backs up every hour</span></code></pre>
+
+<h3>UseEggsApp(): the order in which a request is handled</h3>
+<ol>
+  <li><code>UseDefaultFiles()</code> + <code>UseStaticFiles()</code>: if the request is for a file that exists in <code>wwwroot</code> (JS, CSS, icon), it is returned. <code>index.html</code> is sent with <code>Cache-Control: no-cache</code>, so after an update the old interface is never shown.</li>
+  <li>The <code>/api</code> group with each area's endpoints: <code>MapHealth</code>, <code>MapCustomers</code>, <code>MapSales</code>, <code>MapPayments</code>, <code>MapExpenses</code>, <code>MapReports</code>, <code>MapBackups</code>.</li>
+  <li>Any other route under <code>/api/…</code> → 404.</li>
+  <li>Any other route (for example <code>/clientes/abc</code>) → <code>index.html</code>. That way React decides which screen to show, and reloading the page on any screen works.</li>
+</ol>
+
+<h2 id="c6-2">Vertical Slice Architecture: how the code is organized</h2>
+<p>Many applications split code by <i>kind</i> (all controllers together, all services together…). Here it is split by <b>feature</b>: each folder in <code>Features/</code> holds everything for one area, and inside it there is <b>one file per action</b>. One complete action, from the route to the database, is a "vertical slice".</p>
+<pre><code>Features/Sales/
+  Sale.cs               <span class="c">The Sale and SaleItem entities, and how they are stored (EF configuration).</span>
+  SaleContracts.cs      <span class="c">What comes in (SaleCommand) and what goes out (SaleDetail, SaleListResponse).</span>
+  SaleValidator.cs      <span class="c">Checks the command and turns it into SaleFields, or returns Spanish errors.</span>
+  SaleEndpoints.cs      <span class="c">The /api/sales routes and which action each one calls.</span>
+  CreateSale.cs         <span class="c">Action: create.       UpdateSale.cs  Action: edit.</span>
+  DeleteSale.cs         <span class="c">Action: delete.       GetSale.cs     Action: read one.</span>
+  ListSales.cs          <span class="c">Action: list.         FindLastPrices.cs  Action: last prices.</span>
+  SaleLines.cs          <span class="c">Helper: writes the lines and calculates the total.</span>
+  SaleCredit.cs         <span class="c">Rules for credit sales and the payment made with the sale.</span>
+  SaleStatuses.cs       <span class="c">Works out what each credit sale still owes (Chapter 8).</span></code></pre>
+<p>The areas are: <b>Sales</b>, <b>Payments</b> (abonos), <b>Customers</b>, <b>Expenses</b> (expenses and expense types), <b>Reports</b> (summaries), <b>Backups</b>, <b>Health</b> and <b>Common</b> (shared pieces).</p>
+<div class="box idea"><span class="t">The order in which a new action is built</span><p>Command → Validator → Handler → Entity → Endpoint → Migration. That is: first what data comes in, then how it is checked, then what it does, then how it is stored, then the route, and finally the database change.</p></div>
+
+<h2 id="c6-3">A request's journey, piece by piece</h2>
+<figure>
+<svg viewBox="0 0 760 170" xmlns="http://www.w3.org/2000/svg" font-family="Inter, sans-serif" font-size="11">
+  <defs><marker id="a6" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1e40af"/></marker></defs>
+  <g text-anchor="middle">
+  <rect x="5" y="20" width="110" height="64" rx="8" fill="#0f1b3d"/><text x="60" y="46" fill="#fff" font-weight="700">JSON</text><text x="60" y="64" fill="#c3cbe0">POST /api/sales</text>
+  <rect x="135" y="20" width="110" height="64" rx="8" fill="#e6ecfb" stroke="#1e40af"/><text x="190" y="46" font-weight="700" fill="#1e40af">Command</text><text x="190" y="64" fill="#4a5468">SaleCommand</text>
+  <rect x="265" y="20" width="110" height="64" rx="8" fill="#e6ecfb" stroke="#1e40af"/><text x="320" y="46" font-weight="700" fill="#1e40af">Validator</text><text x="320" y="64" fill="#4a5468">SaleValidator</text>
+  <rect x="395" y="20" width="110" height="64" rx="8" fill="#e6ecfb" stroke="#1e40af"/><text x="450" y="46" font-weight="700" fill="#1e40af">Fields</text><text x="450" y="64" fill="#4a5468">SaleFields</text>
+  <rect x="525" y="20" width="110" height="64" rx="8" fill="#fff4e3" stroke="#7a3a00"/><text x="580" y="46" font-weight="700" fill="#7a3a00">Handler</text><text x="580" y="64" fill="#4a5468">CreateSale</text>
+  <rect x="655" y="20" width="100" height="64" rx="8" fill="#e8f5ec" stroke="#14632b"/><text x="705" y="46" font-weight="700" fill="#14632b">SQLite</text><text x="705" y="64" fill="#4a5468">SaveChanges</text>
+  </g>
+  <g stroke="#1e40af" stroke-width="1.6"><line x1="115" y1="52" x2="131" y2="52" marker-end="url(#a6)"/><line x1="245" y1="52" x2="261" y2="52" marker-end="url(#a6)"/><line x1="375" y1="52" x2="391" y2="52" marker-end="url(#a6)"/><line x1="505" y1="52" x2="521" y2="52" marker-end="url(#a6)"/><line x1="635" y1="52" x2="651" y2="52" marker-end="url(#a6)"/></g>
+  <path d="M320,84 v34 h-260 v-28" fill="none" stroke="#a31515" stroke-width="1.5" marker-end="url(#a6)"/>
+  <text x="190" y="132" fill="#a31515" text-anchor="middle">field errors → 400 ValidationProblem</text>
+  <path d="M580,84 v50 h-520 v-44" fill="none" stroke="#7a3a00" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="580" y="150" fill="#7a3a00" text-anchor="middle">Outcome → 201 / 200 / 204, or 400, 404, 409</text>
+</svg>
+<figcaption>Figure 6.1 — A request comes in as text, is checked, becomes safe data, and only then is executed.</figcaption>
+</figure>
+
+<h3>1. Command: what the interface sends</h3>
+<p>A C# <code>record</code> with every field as text or nullable, so that <b>reading the JSON never fails</b>: any problem is reported by the validator with a Spanish message.</p>
+<pre><code><span class="k">public sealed record</span> SaleCommand(
+    <span class="k">string</span>? Date,                          <span class="c">// "2026-11-23"</span>
+    IReadOnlyList&lt;SaleItemCommand?&gt;? Items,
+    <span class="k">bool</span> IsCredit = <span class="k">false</span>,
+    Guid? CustomerId = <span class="k">null</span>,
+    <span class="k">long</span>? PaidNow = <span class="k">null</span>,
+    NewCustomerCommand? NewCustomer = <span class="k">null</span>);</code></pre>
+
+<h3>2. Validator: checks and translates</h3>
+<p><code>SaleValidator.Validate(command)</code> returns two things: a dictionary of errors by field (for example <code>"items[1].unitPrice" → "Escriba el precio por cartón."</code>, "Enter the price per carton.") and, only when there are no errors, a <code>SaleFields</code> that already has safe types (<code>DateOnly</code>, <code>CartonType</code>, <code>long</code>). The field names in the errors are the same ones the interface uses, so it shows each message next to its input.</p>
+
+<h3>3. Handler: the action</h3>
+<p>A static class with a <code>HandleAsync(AppDbContext db, …)</code> method. It is the only thing that reads and writes the database. For example, the whole of <code>CreateSale</code>:</p>
+<pre><code><span class="k">public static async</span> Task&lt;Outcome&lt;SaleDetail&gt;&gt; HandleAsync(AppDbContext db, SaleFields fields)
+{
+    <span class="c">// Does the chosen customer still exist?</span>
+    <span class="k">if</span> (<span class="k">await</span> SaleCredit.CheckNewCustomerAsync(db, fields.CustomerId) <span class="k">is</span> { } problem)
+        <span class="k">return</span> Outcome&lt;SaleDetail&gt;.Invalid(SaleCredit.CustomerField, problem);
+
+    <span class="k">var</span> sale = <span class="k">new</span> Sale {
+        SaleDate = fields.Date,
+        IsCredit = fields.IsCredit,
+        CustomerId = SaleCredit.ResolveCustomer(db, fields),  <span class="c">// creates the new customer if one is sent</span>
+    };
+    db.Sales.Add(sale);
+    SaleLines.Add(db, sale, fields.Items);                    <span class="c">// lines + total (the server calculates it)</span>
+    SaleCredit.ApplyPaidNow(db, sale, current: <span class="k">null</span>, fields.PaidNow); <span class="c">// "¿Pagó algo ahora?" payment</span>
+    <span class="k">await</span> db.SaveChangesAsync();                             <span class="c">// ONE transaction: all or nothing</span>
+
+    <span class="k">return</span> Outcome&lt;SaleDetail&gt;.Done(<span class="k">await</span> SaleCredit.DescribeAsync(db, sale));
+}</code></pre>
+<div class="box idea"><span class="t">All or nothing</span><p>The sale, its lines, the payment made on the spot and a new customer are added to the context and written by <b>a single</b> <code>SaveChangesAsync()</code>. EF Core does it in one transaction: if anything fails, nothing is half-saved.</p></div>
+
+<h3>4. Outcome: the result of an action that writes</h3>
+<p><code>Features/Common/Outcome.cs</code> defines a result with four possibilities and turns it into the HTTP response:</p>
+<table>
+<tr><th style="width:30%">Outcome</th><th style="width:22%">HTTP response</th><th>When</th></tr>
+<tr><td><code>Done(value)</code></td><td>200, 201 or 204</td><td>It worked. The endpoint picks which.</td></tr>
+<tr><td><code>Invalid(field, message)</code></td><td>400 with <code>errors</code></td><td>A field is wrong, but it can only be known by looking at the database (e.g. "Ese cliente ya no existe" — that customer no longer exists).</td></tr>
+<tr><td><code>Refused(message)</code></td><td>409 with <code>{ "message": … }</code></td><td>The whole action goes against a business rule (e.g. deleting a customer who owes money).</td></tr>
+<tr><td><code>NotFound()</code></td><td>404</td><td>Nothing active with that id.</td></tr>
+</table>
+<p>The 409 message (<code>Refusal</code>) is written to be shown to the person as-is. The interface reads it from <code>ApiError.refusal</code>.</p>
+
+<h3>5. Endpoint: the route</h3>
+<pre><code>sales.MapPost(<span class="s">"/"</span>, <span class="k">async</span> (AppDbContext db, SaleCommand command) =&gt;
+{
+    <span class="k">var</span> (errors, fields) = SaleValidator.Validate(command);
+    <span class="k">if</span> (fields <span class="k">is null</span>) <span class="k">return</span> Results.ValidationProblem(errors);   <span class="c">// 400</span>
+
+    <span class="k">var</span> outcome = <span class="k">await</span> CreateSale.HandleAsync(db, fields);
+    <span class="k">return</span> outcome.ToResult(sale =&gt; Results.Created(<span class="s">$"/api/sales/{sale.Id}"</span>, sale)); <span class="c">// 201</span>
+}).WithName(<span class="s">"CreateSale"</span>);</code></pre>
+<p>ASP.NET Core supplies the <code>AppDbContext</code> automatically (dependency injection) and turns the JSON body into a <code>SaleCommand</code>.</p>
+
+<h2 id="c6-4">Shared pieces (Features/Common)</h2>
+<table>
+<tr><th style="width:24%">File</th><th>What it does</th></tr>
+<tr><td><code>CalendarDays.cs</code></td><td>Reads <code>YYYY-MM-DD</code> dates. <code>Read</code> requires a real date, not before 2000 and not in the future ("La fecha no puede ser futura." — the date can't be in the future). <code>ReadRange</code> reads the <code>from</code> and <code>to</code> parameters of the lists.</td></tr>
+<tr><td><code>Colones.cs</code></td><td><code>Format(8000)</code> → <code>"₡8.000"</code>, done by hand because no .NET culture gives exactly that format. Used in server messages.</td></tr>
+<tr><td><code>Outcome.cs</code></td><td><code>Outcome&lt;T&gt;</code> and <code>Refusal</code>, described above.</td></tr>
+</table>
+
+<h2 id="c6-5">Hosting: what isn't business logic</h2>
+<table>
+<tr><th style="width:28%">File</th><th>What it does</th></tr>
+<tr><td><code>EmbeddedApiHost.cs</code></td><td>Starts and stops the API inside the window (Chapter 5). Reads <code>settings.json</code> if it exists; if it has a mistake, it logs and ignores it: it never keeps the app from opening.</td></tr>
+<tr><td><code>AppDataPaths.cs</code></td><td>The data paths: <code>Root</code> = <code>%LocalAppData%\EggsApp</code>, <code>Logs</code>, <code>Database</code> (<code>eggs.db</code>), <code>DevDatabase</code> (<code>eggs.dev.db</code>).</td></tr>
+<tr><td><code>AppVersion.cs</code></td><td>Reads the assembly version: <code>Full</code> ("1.3.0+commit", for the log) and <code>Display</code> ("1.3.0", for the screen).</td></tr>
+<tr><td><code>FailureLog.cs</code></td><td>Writes failures to one text file per day (Chapter 12). Never throws.</td></tr>
+<tr><td><code>FailureLogLoggerProvider.cs</code></td><td>Connects ASP.NET Core logging to <code>FailureLog</code>: everything at Error or Critical level (for example, an exception inside a request) ends up in the file.</td></tr>
+<tr><td><code>FrontendNotFoundException.cs</code></td><td>Thrown if <code>wwwroot\index.html</code> is missing, so a blank page is never shown.</td></tr>
+</table>

@@ -1,0 +1,105 @@
+
+<h1 class="chapter" id="c13"><span class="num">Capítulo 13</span>Compilar, probar, publicar e instalar</h1>
+
+<h2 id="c13-1">Lo que hay que tener instalado</h2>
+<table>
+<tr><th style="width:30%">Herramienta</th><th>Para qué</th></tr>
+<tr><td>.NET 10 SDK (10.0.402 o más nuevo de la misma línea)</td><td>Compilar y probar el servidor y la ventana.</td></tr>
+<tr><td>Node.js 24+ y pnpm</td><td>Compilar y probar la interfaz.</td></tr>
+<tr><td>Windows</td><td>Para correr la app de escritorio (la API y la interfaz se pueden desarrollar en cualquier sistema).</td></tr>
+<tr><td>Inno Setup 6 (<code>winget install JRSoftware.InnoSetup</code>)</td><td>Solo para crear el instalador.</td></tr>
+<tr><td><code>dotnet tool restore</code></td><td>Una vez por copia: instala <code>dotnet-ef</code> para las migraciones.</td></tr>
+</table>
+
+<h2 id="c13-2">Comandos del día a día</h2>
+<pre><code>dotnet build                                 <span class="c"># compila todo; debe dar CERO advertencias</span>
+dotnet test                                  <span class="c"># pruebas del servidor</span>
+dotnet run --project src/EggsApp.Api         <span class="c"># API sola: http://localhost:5080/swagger</span>
+dotnet run --project src/EggsApp.Desktop     <span class="c"># la app de escritorio (antes: pnpm build)</span>
+
+cd src/web
+pnpm install                                 <span class="c"># una vez, o cuando cambia package.json</span>
+pnpm dev                                     <span class="c"># interfaz con recarga en caliente (y /dev/componentes)</span>
+pnpm build                                   <span class="c"># compila la interfaz a src/EggsApp.Api/wwwroot</span>
+pnpm lint                                    <span class="c"># revisa el estilo</span>
+pnpm test                                    <span class="c"># pruebas de la interfaz</span></code></pre>
+<div class="box ok"><span class="t">La forma más cómoda de trabajar en la interfaz</span><p>Correr la API sola (<code>dotnet run --project src/EggsApp.Api</code>) y en otra terminal <code>pnpm dev</code>, y abrir la dirección que da Vite. Los cambios se ven al guardar, sin compilar. Se trabaja sobre <code>eggs.dev.db</code>, nunca sobre los datos reales.</p></div>
+<p>Notas: <code>dotnet build</code> y <code>dotnet test</code> nunca corren pnpm ni necesitan la interfaz compilada. La API solo detecta <code>wwwroot</code> si existe al arrancar, así que después del primer <code>pnpm build</code> hay que reiniciarla.</p>
+
+<h2 id="c13-3">Las pruebas automáticas</h2>
+<h3>Servidor (tests/EggsApp.Tests, xUnit)</h3>
+<p>Son pruebas de integración: <code>EggsAppFactory</code> (un <code>WebApplicationFactory&lt;Program&gt;</code>) arranca la API de verdad apuntando a una base de datos en una carpeta temporal (<code>TestDatabaseFolder</code>), le hace pedidos HTTP reales y revisa las respuestas y lo que quedó guardado (puede abrir la base directamente con <code>ConnectToDatabase()</code>).</p>
+<table>
+<tr><th style="width:42%">Archivo</th><th>Qué prueba</th></tr>
+<tr><td><code>Sales/SaleEndpointsTests.cs</code></td><td>Crear, editar, borrar y listar ventas; validaciones; totales.</td></tr>
+<tr><td><code>Sales/BuyerAndPaidNowTests.cs</code></td><td>Cliente en ventas al contado, cliente nuevo desde la venta, "¿Pagó algo ahora?".</td></tr>
+<tr><td><code>Sales/SaleStatusTests.cs</code></td><td>El reparto de abonos entre fiados (<code>SaleStatuses</code>).</td></tr>
+<tr><td><code>Payments/CreditEndpointsTests.cs</code></td><td>Abonos, saldos, que nunca baje de cero, cambios a fiados rechazados.</td></tr>
+<tr><td><code>Payments/SalePaymentTests.cs</code></td><td>El botón Abonar (<code>ForSaleId</code>) y "Ver abonos".</td></tr>
+<tr><td><code>Customers/…</code></td><td>Endpoints de clientes y comparación de nombres.</td></tr>
+<tr><td><code>Expenses/ExpenseEndpointsTests.cs</code></td><td>Gastos y tipos de gasto (crear, reutilizar, reactivar, retirar, "Otro").</td></tr>
+<tr><td><code>Reports/SummaryEndpointTests.cs</code></td><td>Que los resúmenes cuadren con las listas.</td></tr>
+<tr><td><code>Backups/…</code></td><td>Respaldos, nombres, poda, advertencias.</td></tr>
+<tr><td><code>Data/…</code>, <code>Hosting/…</code>, <code>SpaHosting/…</code>, <code>Health/…</code></td><td>Contexto, migrador, copia de SQLite, host embebido, registro de fallas, servir la interfaz, estado.</td></tr>
+</table>
+<div class="box warn"><span class="t">Pruebas que arrancan EmbeddedApiHost</span><p>Tienen que apagar la segunda ubicación de respaldos o apuntarla a una carpeta temporal; si no, escribirían en el OneDrive real.</p></div>
+<h3>Interfaz (Vitest)</h3>
+<p>Los archivos <code>*.test.ts(x)</code> están junto al código que prueban. <code>test/api.tsx</code> reemplaza <code>fetch</code> con una API falsa (<code>fakeApi()</code>): cada prueba dice qué responde cada ruta y después revisa qué pedidos se hicieron. Las pantallas se dibujan con el enrutador real en memoria. <code>test/setup.ts</code> hace fallar la prueba si alguna pantalla se cae durante ella. La zona horaria se fija en <code>America/Costa_Rica</code> para que los errores de fechas aparezcan también en máquinas en UTC.</p>
+
+<h2 id="c13-4">Integración continua (GitHub Actions)</h2>
+<ul>
+  <li>Cada pull request detecta qué partes cambiaron y corre <b>Backend CI</b> (Windows: restore, build con <code>-warnaserror</code>, test) y/o <b>Frontend CI</b> (Ubuntu: pnpm install, lint, build). El trabajo <code>ci-gate</code> resume el resultado y es el único requerido en <code>main</code>.</li>
+  <li>Los pushes a <code>main</code> corren ambos. CodeQL revisa seguridad. Dependabot propone actualizaciones semanales.</li>
+  <li><code>installer.yml</code> construye el instalador cuando se publica una etiqueta <code>v*</code> y crea un GitHub Release con el instalador y su SHA-256. Falla si la etiqueta no coincide con <code>&lt;Version&gt;</code>.</li>
+</ul>
+
+<h2 id="c13-5">La versión</h2>
+<p>Se pone <b>solo</b> en <code>&lt;Version&gt;</code> de <code>Directory.Build.props</code>. Aparece abajo a la izquierda de la barra lateral ("Versión 1.3.0"), en la línea de arranque del registro, en <code>GET /api/health</code>, en el nombre del instalador y en la lista de programas de Windows. Se sube en el mismo pull request que cambia lo que se entrega: el último número para arreglos, el del medio para funciones nuevas, el primero para cambios en cómo se usa la app.</p>
+
+<h2 id="c13-6">Publicar y crear el instalador</h2>
+<pre><code>dotnet publish src/EggsApp.Desktop -p:PublishProfile=win-x64       <span class="c"># → src/EggsApp.Desktop/bin/publish/win-x64</span>
+powershell -ExecutionPolicy Bypass -File installer\build.ps1      <span class="c"># → artifacts\installer\EggsApp-Setup-1.3.0.exe</span></code></pre>
+<p>Qué hace la publicación:</p>
+<ul>
+  <li>Es <b>self-contained</b>: incluye .NET, así la PC solo necesita el runtime de WebView2 (que trae Windows 11).</li>
+  <li><code>Frontend.targets</code> corre <code>pnpm install --frozen-lockfile</code> y <code>pnpm build</code> y copia <code>wwwroot</code> a la salida. Con <code>-p:SkipFrontendBuild=true</code> se usa el <code>wwwroot</code> que ya existe.</li>
+  <li>Se quitan archivos que la app nunca usa: <code>EggsApp.Api.exe</code> y su runtimeconfig (la API solo corre adentro), <code>appsettings.Development.json</code> y los <code>.xml</code> de documentación. Los <code>.pdb</code> se quedan para que los errores en el registro tengan número de línea.</li>
+</ul>
+<p><code>build.ps1</code> además revisa que estén los archivos indispensables (<code>EggsApp.Desktop.exe</code>, <code>EggsApp.Api.dll</code>, <code>appsettings.json</code>, <code>e_sqlite3.dll</code>, <code>wwwroot\index.html</code>), que no se haya colado ninguno de los quitados ni ningún <code>.db</code>, y al final imprime el tamaño (unos 55 MB) y el SHA-256.</p>
+
+<h3>Qué hace el instalador (EggsApp.iss)</h3>
+<table>
+<tr><th style="width:32%">Comportamiento</th><th>Detalle</th></tr>
+<tr><td>Por usuario, sin administrador</td><td>Instala en <code>%LocalAppData%\Programs\Eggs App</code>. Accesos directos en el escritorio y el menú Inicio.</td></tr>
+<tr><td>Nunca toca los datos</td><td>No hay <code>[InstallDelete]</code> ni <code>[UninstallDelete]</code> fuera de la carpeta del programa. El único borrado es <code>{app}\wwwroot</code> antes de copiar, para que no se acumulen archivos viejos de la interfaz.</td></tr>
+<tr><td>Identidad fija</td><td><code>AppId</code> = <code>C1F4550E-3E5E-42BF-AB37-3831F5322F25</code>. Nunca se cambia: así una actualización encuentra la instalación anterior.</td></tr>
+<tr><td>Pide cerrar la app</td><td>Usa el mutex de <code>SingleInstance</code>. Nunca la cierra por su cuenta (se podría perder algo que se está escribiendo).</td></tr>
+<tr><td>No permite bajar de versión</td><td>Si la versión instalada es más nueva: "Ya está instalada la versión…", y no cambia nada.</td></tr>
+<tr><td>Revisa WebView2</td><td>Si falta, avisa con el enlace de descarga y deja terminar la instalación.</td></tr>
+<tr><td>Todo en español</td><td>Y el mensaje de desinstalar aclara que los datos no se borran.</td></tr>
+<tr><td>Registro de instalación</td><td><code>%TEMP%\Setup Log AAAA-MM-DD #NNN.txt</code>.</td></tr>
+</table>
+
+<h2 id="c13-7">Instalar y actualizar en la PC</h2>
+<h3>Antes de la primera instalación</h3>
+<ol>
+  <li><b>Smart App Control</b> (Seguridad de Windows → Control de aplicaciones y del explorador) tiene que estar <b>Desactivado</b>: si está Activado o en Evaluación, bloquea apps sin firma, como esta, sin opción de abrirlas.</li>
+  <li><b>OneDrive:</b> iniciar sesión con la cuenta de los respaldos y dejarlo arrancando con Windows.</li>
+  <li>Si se copió alguna versión a mano antes, borrar esa carpeta y sus accesos directos. <b>Nunca borrar <code>%LocalAppData%\EggsApp</code></b>: son los datos.</li>
+</ol>
+<h3>Instalar o actualizar</h3>
+<ol>
+  <li>Copiar <code>EggsApp-Setup-&lt;versión&gt;.exe</code> (USB o desde el GitHub Release). Opcional: comparar <code>Get-FileHash</code> con el SHA-256.</li>
+  <li>Ejecutarlo. SmartScreen dirá "Windows protegió su PC": <b>Más información → Ejecutar de todas formas</b>.</li>
+  <li>Si es una actualización y la app está abierta, el instalador pide cerrarla y espera.</li>
+  <li><b>Instalar</b> → <b>Finalizar</b> con "Abrir Eggs App" marcado. Los datos, respaldos y <code>settings.json</code> quedan igual. Si la versión cambia la base, la app la copia a <code>backups\</code> antes de migrar.</li>
+</ol>
+<h3>Qué revisar después</h3>
+<ul>
+  <li>Abajo a la izquierda dice <b>Versión X.Y.Z</b>.</li>
+  <li>Están las últimas ventas, abonos y gastos.</li>
+  <li>La barra lateral dice "Último respaldo: hoy …" sin advertencia.</li>
+  <li>El registro del día tiene <code>Started. Version X.Y.Z+…</code> (y, si cambió la base, <code>Applied migrations: …</code>).</li>
+</ul>
+<h3>Desinstalar o volver a una versión anterior</h3>
+<p>Configuración → Aplicaciones → Eggs App → Desinstalar quita solo el programa; los datos se quedan y reaparecen al reinstalar. Para volver atrás: desinstalar e instalar la versión vieja. Si la nueva había cambiado la base, la vieja se niega a abrirla ("No se pudo abrir Eggs App. No se borró ningún dato."); entonces se reinstala la nueva, o se restaura la copia previa a la migración (perdiendo lo anotado después).</p>
