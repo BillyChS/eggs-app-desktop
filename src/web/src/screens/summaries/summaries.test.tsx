@@ -1,17 +1,11 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { todayLocal } from '../../lib/dates'
 import { routes } from '../../routes'
 
 const TODAY = todayLocal()
-
-/** Worked out here, apart from the screen's own code: the Monday on or before today. */
-function mondayOfThisWeek() {
-  const now = new Date()
-  return todayLocal(new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7)))
-}
 
 const FIRST_OF_MONTH = `${TODAY.slice(0, 8)}01`
 
@@ -123,24 +117,26 @@ describe('Resúmenes', () => {
   })
 
   it('switches between Hoy, Esta semana and Este mes, with weeks from Monday', async () => {
+    // A Wednesday: on a Monday this week and today are the same range, and nothing new would load.
+    vi.useFakeTimers({ now: new Date(2026, 10, 4, 12), toFake: ['Date'] })
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
+
     const { router, user } = open('/resumenes')
     await screen.findByText('No hubo ventas, abonos ni gastos en este período.')
 
     await user.click(button('Hoy'))
     await screen.findByText('No hubo ventas, abonos ni gastos en este período.')
     expect(button('Hoy').getAttribute('aria-pressed')).toBe('true')
-    expect(router.state.location.search).toBe(`?periodo=dia&desde=${TODAY}`)
+    expect(router.state.location.search).toBe('?periodo=dia&desde=2026-11-04')
 
     await user.click(button('Esta semana'))
     await screen.findByText('No hubo ventas, abonos ni gastos en este período.')
     expect(button('Esta semana').getAttribute('aria-pressed')).toBe('true')
     expect(button('Hoy').getAttribute('aria-pressed')).toBe('false')
 
-    expect(summaryCalls()).toEqual([
-      `${FIRST_OF_MONTH}..${TODAY}`,
-      `${TODAY}..${TODAY}`,
-      `${mondayOfThisWeek()}..${TODAY}`,
-    ])
+    expect(summaryCalls()).toEqual(['2026-11-01..2026-11-04', '2026-11-04..2026-11-04', '2026-11-02..2026-11-04'])
   })
 
   it('shows the three big numbers first, with a negative Quedó in red words and a minus sign', async () => {
