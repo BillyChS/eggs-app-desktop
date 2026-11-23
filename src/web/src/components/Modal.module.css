@@ -8,6 +8,10 @@
   text-align: center;
 }
 
+.wide {
+  width: min(1120px, calc(100vw - 2 * var(--space-xl)));
+}
+
 .dialog::backdrop {
   background-color: var(--color-backdrop);
 }
@@ -41,6 +45,29 @@
 }
 
 .message {
+  margin-bottom: var(--space-lg);
+  font-size: var(--font-size-input);
+}
+
+/* A dialog with a summary or a field: read from the left, and never taller than the window, so its buttons stay in
+   sight. Only the part that can grow (a list) scrolls, inside the body. */
+.withBody[open] {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 2 * var(--space-lg));
+  text-align: left;
+}
+
+.withBody .title {
+  text-align: center;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  gap: var(--space-md);
+  min-height: 0;
   margin-bottom: var(--space-lg);
   font-size: var(--font-size-input);
 }

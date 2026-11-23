@@ -1,26 +1,8 @@
-import { formatDateLong } from '../../lib/dates'
 import { formatColones } from '../../lib/money'
 import type { CartonType, Sale, SaleItemInput } from '../../services/sales'
 
 /** Must match SaleValidator.PaidInFullMessage, which the API sends for the same case. */
 export const PAID_IN_FULL = 'Si pagó todo, es una venta al contado.'
-
-/** The success message: the total, who, the day, and for a fiado with a payment, what's still owed for it. */
-export function describeSaved(sale: Sale): string {
-  const total = formatColones(sale.total)
-  const when = formatDateLong(sale.date)
-
-  if (!sale.isCredit) {
-    return sale.customer
-      ? `Venta guardada: ${total} a ${sale.customer.name}, ${when}.`
-      : `Venta guardada: ${total}, ${when}.`
-  }
-
-  const saved = `Venta fiada guardada: ${total} a ${sale.customer!.name}, ${when}.`
-  const left = formatColones(sale.total - sale.paidNow)
-
-  return sale.paidNow > 0 ? `${saved} Pagó ${formatColones(sale.paidNow)} y queda debiendo ${left} de esta venta.` : saved
-}
 
 export const CARTONS: { type: CartonType; eggs: number; label: string }[] = [
   { type: 'A', eggs: 15, label: 'Cartón de 15 huevos' },
@@ -99,3 +81,31 @@ export function deleteQuestion(sale: Sale, owedNow: number | null): string {
   const after = owedNow - (sale.total - sale.paidNow)
   return `${withAbono} Su saldo bajará de ${formatColones(owedNow)} a ${formatColones(after)}.`
 }
+
+/** "1 cartón de 15 a ₡1.500", "3 cartones de 30 a ₡2.800": one line of the Ventana de confirmación. */
+export function describeItem({ cartonType, quantity, unitPrice }: SaleItemInput): string {
+  return `${quantity} ${quantity === 1 ? 'cartón' : 'cartones'} de ${eggsIn(cartonType)} a ${formatColones(unitPrice)}`
+}
+
+/**
+ * How it was paid, in the Ventana de confirmación. A fiado with something paid now is "Mixto" there only: in the form
+ * it's still "Fiado" with "¿Pagó algo ahora?".
+ */
+export function describePaidWith(isCredit: boolean, paidNow: number, total: number): string {
+  if (!isCredit) {
+    return 'Al contado'
+  }
+
+  return paidNow > 0
+    ? `Mixto: pagó ${formatColones(paidNow)} ahora y quedan ${formatColones(total - paidNow)} fiados`
+    : 'Fiado'
+}
+
+/** "₡500", or "₡500 (de un abono de ₡2.000)" when only part of that abono went to this sale. */
+/** "(de un abono de ₡2.000)", under the part of it that paid this sale; nothing when all of it did. */
+export function describeShareOf({ applied, amount }: { applied: number; amount: number }): string | null {
+  return applied < amount ? `(de un abono de ${formatColones(amount)})` : null
+}
+
+/** Must match CreateSalePayment.TooMuchMessage, which the API sends for the same case. */
+export const tooMuch = (owed: number) => `El abono no puede ser mayor a lo que debe (${formatColones(owed)}).`

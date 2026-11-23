@@ -24,6 +24,29 @@ public static class PaymentEndpoints
                 })
             .WithName("CreatePayment");
 
+        // From a credit sale's Abonar button: paid today, toward that sale first.
+        api.MapPost(
+                "/sales/{saleId:guid}/payments",
+                async (AppDbContext db, Guid saleId, SalePaymentCommand command) =>
+                {
+                    var (errors, amount) = SalePaymentValidator.Validate(command);
+
+                    if (amount is not { } valid)
+                    {
+                        return Results.ValidationProblem(errors);
+                    }
+
+                    var outcome = await CreateSalePayment.HandleAsync(db, saleId, valid);
+                    return outcome.ToResult(payment => Results.Created($"/api/payments/{payment.Id}", payment));
+                })
+            .WithName("CreateSalePayment");
+
+        api.MapGet("/sales/{saleId:guid}/payments", async (AppDbContext db, Guid saleId) =>
+                await GetSalePayments.HandleAsync(db, saleId) is { } found
+                    ? Results.Ok(found)
+                    : Results.NotFound())
+            .WithName("GetSalePayments");
+
         var payments = api.MapGroup("/payments");
 
         payments.MapGet("/", async (AppDbContext db, string? from, string? to) =>

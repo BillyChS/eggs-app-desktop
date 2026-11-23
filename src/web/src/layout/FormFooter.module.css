@@ -1,0 +1,39 @@
+/* The bar under a sale or expense form, in Screen's footer. */
+
+/* The total next to the buttons it's saved with, on the right; Borrar venta or Borrar gasto, when there is one, alone
+   on the left. */
+.end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-md) 40px;
+  margin-left: auto;
+}
+
+.total {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-md);
+}
+
+.total span {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.total strong {
+  font-size: 32px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.buttons > button {
+  padding: 0 28px;
+}

@@ -70,9 +70,20 @@
   padding: 6px var(--content-x) 36px;
 }
 
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-md) var(--space-lg);
+  padding: 18px var(--space-page) 22px;
+  border-top: 1px solid var(--color-divider);
+  background-color: var(--color-surface);
+}
+
 /* Narrower margins at 1366×768, where every column of a table counts. */
 @media (max-width: 1500px) {
-  .header {
+  .header,
+  .footer {
     padding-right: var(--space-lg);
     padding-left: var(--space-lg);
   }

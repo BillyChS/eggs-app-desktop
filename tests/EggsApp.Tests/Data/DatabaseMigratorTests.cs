@@ -160,7 +160,8 @@ public sealed class DatabaseMigratorTests : IDisposable
             applied => Assert.EndsWith("_AddCreditSales", applied),
             applied => Assert.EndsWith("_AddExpenses", applied),
             applied => Assert.EndsWith("_LinkAbonosToSales", applied),
-            applied => Assert.EndsWith("_AllowCustomerOnCashSales", applied));
+            applied => Assert.EndsWith("_AllowCustomerOnCashSales", applied),
+            applied => Assert.EndsWith("_AddPaymentForSale", applied));
 
         const string HasSales = "SELECT COUNT(*) FROM sqlite_master WHERE name IN ('Sales', 'SaleItems')";
         var backup = Assert.Single(_folder.Backups());
@@ -209,7 +210,8 @@ public sealed class DatabaseMigratorTests : IDisposable
             applied => Assert.EndsWith("_AddCreditSales", applied),
             applied => Assert.EndsWith("_AddExpenses", applied),
             applied => Assert.EndsWith("_LinkAbonosToSales", applied),
-            applied => Assert.EndsWith("_AllowCustomerOnCashSales", applied));
+            applied => Assert.EndsWith("_AllowCustomerOnCashSales", applied),
+            applied => Assert.EndsWith("_AddPaymentForSale", applied));
         Assert.Single(_folder.Backups());
 
         using var migrated = _folder.Connect();
@@ -269,7 +271,8 @@ public sealed class DatabaseMigratorTests : IDisposable
             result.AppliedMigrations,
             applied => Assert.EndsWith("_AddExpenses", applied),
             applied => Assert.EndsWith("_LinkAbonosToSales", applied),
-            applied => Assert.EndsWith("_AllowCustomerOnCashSales", applied));
+            applied => Assert.EndsWith("_AllowCustomerOnCashSales", applied),
+            applied => Assert.EndsWith("_AddPaymentForSale", applied));
         Assert.Single(_folder.Backups());
 
         using (var migrated = _folder.Connect())
@@ -354,7 +357,8 @@ public sealed class DatabaseMigratorTests : IDisposable
         Assert.Collection(
             result.AppliedMigrations,
             applied => Assert.EndsWith("_LinkAbonosToSales", applied),
-            applied => Assert.EndsWith("_AllowCustomerOnCashSales", applied));
+            applied => Assert.EndsWith("_AllowCustomerOnCashSales", applied),
+            applied => Assert.EndsWith("_AddPaymentForSale", applied));
         Assert.Single(_folder.Backups());
 
         using var migrated = _folder.Connect();
@@ -395,6 +399,58 @@ public sealed class DatabaseMigratorTests : IDisposable
             var exception = Assert.Throws<SqliteException>(() => TestDatabaseFolder.Execute(migrated, sql));
             Assert.Contains(constraint, exception.Message);
         }
+    }
+
+    // The version before Abonar: its copy is made before AddPaymentForSale runs, and its abonos stay tied to no sale.
+    [Fact]
+    public async Task DatabaseFromBeforeAbonar_IsCopiedFirst_AndItsAbonosGainANullForSaleId()
+    {
+        await using (var previous = CreateContext())
+        {
+            await previous.GetService<IMigrator>().MigrateAsync("AllowCustomerOnCashSales");
+        }
+
+        using (var connection = _folder.Connect())
+        {
+            TestDatabaseFolder.Execute(
+                connection,
+                """
+                INSERT INTO Customers (Id, Name, CreatedAt, UpdatedAt, IsDeleted)
+                    VALUES ('c1', 'María', '2024-11-01 08:00:00', '2024-11-01 08:00:00', 0);
+                INSERT INTO Sales (Id, SaleDate, Total, IsCredit, CustomerId, CreatedAt, UpdatedAt, IsDeleted)
+                    VALUES ('s1', '2024-11-03', 5000, 1, 'c1', '2024-11-03 10:00:00', '2024-11-03 10:00:00', 0);
+                INSERT INTO Payments (Id, CustomerId, PaymentDate, Amount, SaleId, CreatedAt, UpdatedAt, IsDeleted) VALUES
+                    ('p1', 'c1', '2024-11-03', 1000, 's1', '2024-11-03 10:00:00', '2024-11-03 10:00:00', 0),
+                    ('p2', 'c1', '2024-11-04', 2000, NULL, '2024-11-04 09:00:00', '2024-11-04 09:00:00', 0);
+                """);
+        }
+
+        var result = await MigrateWithRealContextAsync();
+
+        Assert.EndsWith("_AddPaymentForSale", Assert.Single(result.AppliedMigrations));
+        var backup = Assert.Single(_folder.Backups());
+
+        const string HasForSaleId = "SELECT COUNT(*) FROM pragma_table_info('Payments') WHERE name = 'ForSaleId'";
+        const string LastMigration = "SELECT MigrationId FROM __EFMigrationsHistory ORDER BY MigrationId DESC LIMIT 1";
+
+        using (var copy = _folder.Connect(backup))
+        {
+            Assert.Equal(0L, TestDatabaseFolder.Scalar(copy, HasForSaleId));
+            Assert.EndsWith("_AllowCustomerOnCashSales", (string)TestDatabaseFolder.Scalar(copy, LastMigration)!);
+            Assert.Equal(2L, TestDatabaseFolder.Scalar(copy, "SELECT COUNT(*) FROM Payments"));
+        }
+
+        using var migrated = _folder.Connect();
+        Assert.Equal(1L, TestDatabaseFolder.Scalar(migrated, HasForSaleId));
+        Assert.Equal(
+            "p1,s1,|p2,,",
+            TestDatabaseFolder.Scalar(
+                migrated,
+                "SELECT group_concat(Id || ',' || ifnull(SaleId, '') || ',' || ifnull(ForSaleId, ''), '|') " +
+                "FROM (SELECT * FROM Payments ORDER BY Id)"));
+        Assert.Equal("ok", TestDatabaseFolder.Scalar(migrated, "PRAGMA integrity_check"));
+        TestDatabaseFolder.Execute(migrated, "PRAGMA foreign_keys = ON;");
+        Assert.Null(TestDatabaseFolder.Scalar(migrated, "PRAGMA foreign_key_check"));
     }
 
     [Fact]

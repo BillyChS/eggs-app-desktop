@@ -40,7 +40,7 @@ function emptyAnswer(input: RequestInfo | URL): Response {
     case '/api/customers':
       return json({ items: [], owedTotal: 0 })
     case '/api/expenses':
-      return json({ expenses: [], total: 0 })
+      return json({ expenses: [], total: 0, byCategory: [] })
     case '/api/expense-categories':
       return json([])
     default:

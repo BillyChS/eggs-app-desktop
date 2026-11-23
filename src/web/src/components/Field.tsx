@@ -16,7 +16,7 @@ interface Props {
   error?: string
   /** Shown under the input, for text that helps confirm the value. */
   hint?: ReactNode
-  /** Something fixed to the left of the input, like the ₡ sign. */
+  /** Something fixed inside the input, at its left edge, like the ₡ sign. */
   prefix?: string
   children: (input: InputProps) => ReactNode
 }
@@ -33,7 +33,7 @@ export function Field({ label, hideLabel, error, hint, prefix, children }: Props
       <label htmlFor={id} className={hideLabel ? styles.hiddenLabel : styles.label}>
         {label}
       </label>
-      <div className={styles.row}>
+      <div className={prefix ? `${styles.row} ${styles.withPrefix}` : styles.row}>
         {prefix && (
           <span className={styles.prefix} aria-hidden="true">
             {prefix}
@@ -41,7 +41,7 @@ export function Field({ label, hideLabel, error, hint, prefix, children }: Props
         )}
         {children({
           id,
-          className: error ? `${styles.input} ${styles.invalid}` : styles.input,
+          className: [styles.input, error && styles.invalid].filter(Boolean).join(' '),
           'aria-invalid': Boolean(error),
           'aria-describedby': describedBy,
         })}

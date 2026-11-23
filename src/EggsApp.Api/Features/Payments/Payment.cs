@@ -7,8 +7,9 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace EggsApp.Api.Features.Payments;
 
 /// <summary>
-/// An abono: money a customer paid toward what they owe. It lowers their balance as a whole and isn't tied to any one
-/// credit sale. It counts as income on <see cref="PaymentDate"/>.
+/// An abono: money a customer paid toward what they owe. It lowers their balance as a whole; one that points at a credit
+/// sale (<see cref="SaleId"/> or <see cref="ForSaleId"/>) pays that sale first (see SaleStatuses). It counts as income
+/// on <see cref="PaymentDate"/>.
 /// </summary>
 public sealed class Payment : BaseEntity
 {
@@ -31,6 +32,13 @@ public sealed class Payment : BaseEntity
     /// its total. Null for an abono entered on its own.
     /// </summary>
     public Guid? SaleId { get; set; }
+
+    /// <summary>
+    /// The credit sale it was paid toward from that sale's Abonar button, which it pays first. Unlike
+    /// <see cref="SaleId"/>, it doesn't follow the sale: it's changed and deleted like any abono, and if the sale is
+    /// lowered, moved or deleted, what doesn't fit in it pays the customer's other fiados. Null for any other abono.
+    /// </summary>
+    public Guid? ForSaleId { get; init; }
 }
 
 internal sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
@@ -48,6 +56,12 @@ internal sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         builder.HasOne<Sale>()
             .WithMany()
             .HasForeignKey(payment => payment.SaleId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Sales are only ever soft-deleted, so Restrict never blocks one; SaleStatuses skips a deleted target.
+        builder.HasOne<Sale>()
+            .WithMany()
+            .HasForeignKey(payment => payment.ForSaleId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.ToTable(table => table.HasCheckConstraint("CK_Payments_AmountIsPositive", "\"Amount\" > 0"));

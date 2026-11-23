@@ -1,0 +1,51 @@
+/* Label on the left, what it is on the right, one per line, in the dialog's large text. */
+.summary {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 12px var(--space-lg);
+  margin: 0;
+  font-size: 20px;
+}
+
+/* Each label and its value: rows of the summary's grid. */
+.row {
+  display: contents;
+}
+
+.summary dt {
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.summary dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.amount {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 2px solid var(--color-divider);
+}
+
+.amount span {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.amount strong {
+  font-size: var(--font-size-number);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.error {
+  padding: var(--space-sm) var(--space-md);
+  border: 2px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+  color: var(--color-danger);
+  font-weight: 700;
+}

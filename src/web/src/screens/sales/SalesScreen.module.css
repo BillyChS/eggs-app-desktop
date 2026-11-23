@@ -10,89 +10,6 @@
   gap: 10px;
 }
 
-/* ── Period ─────────────────────────────────────────────────────────────────────────────────────────────────────── */
-
-.periodBar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--space-md);
-}
-
-.periods {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-xs);
-}
-
-.period {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  min-height: var(--size-button);
-  padding: 0 22px;
-  border: 2px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background-color: var(--color-surface);
-  color: var(--color-text);
-  font-size: var(--font-size-button);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.period:hover {
-  background-color: var(--color-back);
-}
-
-.pressed {
-  border-color: var(--color-primary);
-  background-color: var(--color-primary-soft);
-  color: var(--color-primary);
-}
-
-.dateField {
-  width: 240px;
-}
-
-.months {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: 4px;
-  border: 2px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background-color: var(--color-surface);
-}
-
-.arrow {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--size-small-button);
-  height: var(--size-small-button);
-  border: none;
-  border-radius: var(--radius-sm);
-  background-color: var(--color-surface-sunken);
-  color: var(--color-primary);
-  cursor: pointer;
-}
-
-/* Not just paler: dashed too, so it reads as "not now" without relying on color. */
-.arrow:disabled {
-  outline: 2px dashed var(--color-border);
-  outline-offset: -2px;
-  background-color: var(--color-background);
-  color: var(--color-text-muted);
-  cursor: not-allowed;
-}
-
-.monthName {
-  min-width: 200px;
-  font-size: 19px;
-  font-weight: 600;
-  text-align: center;
-}
-
 /* ── Cards ──────────────────────────────────────────────────────────────────────────────────────────────────────── */
 
 .cards {
@@ -301,13 +218,8 @@
   font-size: var(--font-size-small);
 }
 
-.phone,
 .note {
   color: var(--color-text-soft);
-}
-
-.phone {
-  white-space: nowrap;
 }
 
 .number {
@@ -379,6 +291,28 @@
 
 .edit:hover {
   background-color: var(--color-back);
+}
+
+/* Abonar: the one a fiado that still owes is there for, so it's filled in, ahead of Editar and Eliminar. */
+.pay {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: var(--size-small-button);
+  padding: 0 var(--space-md);
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: var(--font-size-button);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pay:hover {
+  border-color: var(--color-primary-hover);
+  background-color: var(--color-primary-hover);
 }
 
 .remove {

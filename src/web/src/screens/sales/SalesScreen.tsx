@@ -1,24 +1,26 @@
-import { CalendarDays, ChevronLeft, ChevronRight, Pencil, Plus, Search, Trash2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { Eye, HandCoins, Pencil, Plus, Search, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Button } from '../../components/Button'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
-import { DateInput } from '../../components/DateInput'
 import { useMessages } from '../../components/messages'
 import { Screen } from '../../layout/Screen'
 import { useOneAtATime } from '../../layout/useOneAtATime'
-import { formatDateLong, formatDateShort, todayLocal, yesterdayLocal } from '../../lib/dates'
+import { formatDateLong, todayLocal, yesterdayLocal } from '../../lib/dates'
 import { formatColones } from '../../lib/money'
 import { getCustomer, type CustomerRef } from '../../services/customers'
 import { ApiError } from '../../services/http'
 import { deletePayment, type Payment } from '../../services/payments'
 import { deleteSale, type Sale } from '../../services/sales'
 import { describeBalanceNow, statementOf } from '../customers/customerText'
-import { describePeriod, isCurrent, periodOf, rangeOf, step } from '../summaries/periods'
+import { PeriodBar } from '../PeriodBar'
+import { dayInPeriod } from '../periodView'
+import { describePeriod, rangeOf } from '../summaries/periods'
+import { AbonoDialog } from './AbonoDialog'
 import { deleteQuestion, describeCartons, NO_NAME, statusOf } from './saleText'
 import styles from './SalesScreen.module.css'
 import { matchesSearch } from './salesSearch'
-import { canHaveSales, useSalesView, viewQuery, type SalesTab, type SalesView } from './salesView'
+import { useSalesView, viewQuery, type SalesTab, type SalesView } from './salesView'
 import { useSalesPage, type SalesPage } from './useSalesPage'
 
 const nameOf = (customer: CustomerRef | null) =>
@@ -26,138 +28,18 @@ const nameOf = (customer: CustomerRef | null) =>
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`
 
-/** "3 nov 2026", on the Otro día button once a day is picked. */
-const shortDay = (day: string) => formatDateShort(day)?.split(' ').slice(1).join(' ') ?? day
-
-/** "dom 8 nov", in a month's rows: the month and year are in the title already. */
-const dayInMonth = (day: string) => formatDateShort(day)?.split(' ').slice(0, 3).join(' ') ?? day
-
-/** How each period is said in the cards: "Entró hoy", "Fiado ese día"… */
+/** How each period is said in the cards: "Entró hoy", "Fiado ese día", "Entró en la semana"… */
 function periodWord(view: SalesView): string {
   if (view.period.kind === 'month') {
     return 'en el mes'
   }
 
-  const day = view.period.start
-  return day === todayLocal() ? 'hoy' : day === yesterdayLocal() ? 'ayer' : 'ese día'
-}
-
-/** Hoy, Ayer, Otro día and Este mes; in a month, ‹ › to go through the months, never past the current one. */
-function PeriodBar({ view, onChange }: { view: SalesView; onChange: (view: SalesView) => void }) {
-  const today = todayLocal()
-  const yesterday = yesterdayLocal()
-  const { period } = view
-  const isDay = period.kind === 'day'
-  const otherDay = isDay && period.start !== today && period.start !== yesterday
-
-  const [picking, setPicking] = useState(false)
-  // What's in the date field, which while typing a year can be something like 0002-11-04 or nothing at all. The list
-  // stays on its day until the field holds a day it can show, and the field goes back to that day when it's left.
-  const [typing, setTyping] = useState<string | null>(null)
-  const dateRef = useRef<HTMLInputElement>(null)
-  // Otro día puts focus in the date field, once it's on screen.
-  const [focusRequest, setFocusRequest] = useState(0)
-
-  useEffect(() => {
-    if (focusRequest > 0) {
-      dateRef.current?.focus()
-    }
-  }, [focusRequest])
-
-  const showDay = (day: string) => onChange({ ...view, period: { kind: 'day', start: day } })
-
-  const changeDate = (next: string) => {
-    if (canHaveSales(next)) {
-      setTyping(null)
-      showDay(next)
-    } else {
-      setTyping(next)
-    }
+  if (view.period.kind === 'week') {
+    return 'en la semana'
   }
 
-  const periodButton = (label: string, pressed: boolean, onClick: () => void, icon?: boolean) => (
-    <button
-      type="button"
-      className={pressed ? `${styles.period} ${styles.pressed}` : styles.period}
-      aria-pressed={pressed}
-      onClick={onClick}
-    >
-      {icon && <CalendarDays size={22} aria-hidden="true" />}
-      {label}
-    </button>
-  )
-
-  const showsDateField = isDay && (picking || otherDay)
-  const next = step(period, 1)
-
-  return (
-    <div className={styles.periodBar}>
-      <div role="group" aria-label="Período" className={styles.periods}>
-        {periodButton('Hoy', isDay && period.start === today, () => {
-          setPicking(false)
-          showDay(today)
-        })}
-        {periodButton('Ayer', isDay && period.start === yesterday, () => {
-          setPicking(false)
-          showDay(yesterday)
-        })}
-        {periodButton(
-          otherDay ? shortDay(period.start) : 'Otro día',
-          otherDay,
-          () => {
-            setPicking(true)
-            // On a month, it opens on today, ready for another day to be typed or picked.
-            if (!isDay) {
-              showDay(today)
-            }
-            setFocusRequest((current) => current + 1)
-          },
-          true,
-        )}
-        {periodButton('Este mes', !isDay, () => {
-          setPicking(false)
-          onChange({ ...view, period: { kind: 'month', start: periodOf('month', today).start } })
-        })}
-      </div>
-
-      {showsDateField && (
-        <div className={styles.dateField}>
-          <DateInput
-            ref={dateRef}
-            label="Día"
-            value={typing ?? period.start}
-            onChange={changeDate}
-            max={today}
-            hideWrittenDate
-            onBlur={() => setTyping(null)}
-          />
-        </div>
-      )}
-
-      {!isDay && (
-        <div className={styles.months}>
-          <button
-            type="button"
-            className={styles.arrow}
-            aria-label="Mes anterior"
-            onClick={() => onChange({ ...view, period: { kind: 'month', start: step(period, -1).start } })}
-          >
-            <ChevronLeft size={26} aria-hidden="true" />
-          </button>
-          <span className={styles.monthName}>{describePeriod(period)}</span>
-          <button
-            type="button"
-            className={styles.arrow}
-            aria-label="Mes siguiente"
-            disabled={isCurrent(period) || next.start > today}
-            onClick={() => onChange({ ...view, period: { kind: 'month', start: next.start } })}
-          >
-            <ChevronRight size={26} aria-hidden="true" />
-          </button>
-        </div>
-      )}
-    </div>
-  )
+  const day = view.period.start
+  return day === todayLocal() ? 'hoy' : day === yesterdayLocal() ? 'ayer' : 'ese día'
 }
 
 function Cards({ page, view }: { page: SalesPage; view: SalesView }) {
@@ -177,7 +59,9 @@ function Cards({ page, view }: { page: SalesPage; view: SalesView }) {
         </span>
       </div>
       <div className={styles.card}>
-        <span className={styles.cardLabel}>{view.period.kind === 'month' ? 'Fiado del mes' : `Fiado ${word}`}</span>
+        <span className={styles.cardLabel}>
+          {view.period.kind === 'month' ? 'Fiado del mes' : view.period.kind === 'week' ? 'Fiado de la semana' : `Fiado ${word}`}
+        </span>
         <strong className={`${styles.cardNumber} ${styles.owedNumber}`}>{formatColones(summary.creditSold)}</strong>
         <span className={styles.cardDetail}>{plural(creditCount, 'venta fiada', 'ventas fiadas')}</span>
       </div>
@@ -208,6 +92,16 @@ function footerText(tab: SalesTab, count: number): string {
   return `${plural(count, 'venta', 'ventas')} ${tab === 'fiado' ? (count === 1 ? 'fiada' : 'fiadas') : 'al contado'}`
 }
 
+/** "Abono a la venta del 3 de noviembre": an abono from a fiado's Abonar button, while that sale is still there. */
+function describePaymentKind(payment: Payment): string {
+  if (payment.saleId) {
+    return 'Abono al hacer la venta'
+  }
+
+  const saleDay = payment.forSaleDate ? formatDateLong(payment.forSaleDate) : null
+  return saleDay ? `Abono a la venta del ${saleDay.split(', ')[1] ?? saleDay}` : 'Abono'
+}
+
 /** What's being deleted, with the question to ask about it once it's ready. */
 type Deleting = { kind: 'sale'; sale: Sale; question: string } | { kind: 'payment'; payment: Payment; question: string; balance: number | null }
 
@@ -220,8 +114,11 @@ export function SalesScreen() {
   const { page, failed, reload } = useSalesPage(from, to)
   const [search, setSearch] = useState('')
   const [deleting, setDeleting] = useState<Deleting | null>(null)
+  // The fiado whose Abonar (or Ver abonos, once it's paid) is open.
+  const [paying, setPaying] = useState<{ sale: Sale; readOnly: boolean } | null>(null)
 
-  const isMonth = view.period.kind === 'month'
+  // A week or a month: its rows say their day.
+  const isRange = view.period.kind !== 'day'
   const query = viewQuery(view)
 
   const sales = page?.sales.sales ?? []
@@ -312,7 +209,12 @@ export function SalesScreen() {
         : `${statementOf(payment.customer.id)}/abonos/${payment.id}/editar${query}`,
     )
 
-  const subtitle = isMonth ? `Todas las ventas de ${describePeriod(view.period)}` : formatDateLong(view.period.start)
+  const subtitle =
+    view.period.kind === 'month'
+      ? `Todas las ventas de ${describePeriod(view.period)}`
+      : view.period.kind === 'week'
+        ? `Todas las ventas del ${describePeriod(view.period)}`
+        : formatDateLong(view.period.start)
 
   return (
     <Screen
@@ -328,7 +230,7 @@ export function SalesScreen() {
       }
     >
       <div className={styles.page}>
-        <PeriodBar view={view} onChange={setView} />
+        <PeriodBar period={view.period} onChange={(period) => setView({ ...view, period })} />
 
         {failed ? (
           <div className={styles.message}>
@@ -376,9 +278,8 @@ export function SalesScreen() {
                 <table className={styles.table}>
                   <thead>
                     <tr>
-                      {isMonth && <th scope="col">Fecha</th>}
+                      {isRange && <th scope="col">Fecha</th>}
                       <th scope="col">Nombre</th>
-                      <th scope="col">Teléfono</th>
                       <th scope="col" className={styles.number}>
                         {view.tab === 'abonos' ? 'Monto' : 'Precio de venta'}
                       </th>
@@ -392,14 +293,11 @@ export function SalesScreen() {
                     {view.tab === 'abonos'
                       ? shownPayments.map((payment) => (
                           <tr key={payment.id}>
-                            {isMonth && <td className={styles.date}>{dayInMonth(payment.date)}</td>}
+                            {isRange && <td className={styles.date}>{dayInPeriod(payment.date)}</td>}
                             <td>
                               <span className={styles.name}>{nameOf(payment.customer)}</span>
-                              <span className={styles.detail}>
-                                {payment.saleId ? 'Abono al hacer la venta' : 'Abono'}
-                              </span>
+                              <span className={styles.detail}>{describePaymentKind(payment)}</span>
                             </td>
-                            <td className={styles.phone}>{payment.customer.phone || '—'}</td>
                             <td className={`${styles.number} ${styles.amount}`}>{formatColones(payment.amount)}</td>
                             <td className={styles.note}>{payment.note ?? ''}</td>
                             <td>
@@ -441,20 +339,41 @@ export function SalesScreen() {
 
                           return (
                             <tr key={sale.id}>
-                              {isMonth && <td className={styles.date}>{dayInMonth(sale.date)}</td>}
+                              {isRange && <td className={styles.date}>{dayInPeriod(sale.date)}</td>}
                               <td>
                                 <span className={sale.customer ? styles.name : `${styles.name} ${styles.noName}`}>
                                   {name}
                                 </span>
                                 <span className={styles.detail}>{describeCartons(sale.items)}</span>
                               </td>
-                              <td className={styles.phone}>{sale.customer?.phone || '—'}</td>
                               <td className={`${styles.number} ${styles.amount}`}>{formatColones(sale.total)}</td>
                               <td>
                                 <span className={`${styles.badge} ${styles[status.tone]}`}>{status.text}</span>
                               </td>
                               <td>
                                 <div className={styles.actions}>
+                                  {sale.isCredit &&
+                                    (sale.owed > 0 ? (
+                                      <button
+                                        type="button"
+                                        className={styles.pay}
+                                        aria-label={`Abonar a la venta de ${name}`}
+                                        onClick={() => setPaying({ sale, readOnly: false })}
+                                      >
+                                        <HandCoins size={20} aria-hidden="true" />
+                                        Abonar
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        className={styles.edit}
+                                        aria-label={`Ver abonos de la venta de ${name}`}
+                                        onClick={() => setPaying({ sale, readOnly: true })}
+                                      >
+                                        <Eye size={20} aria-hidden="true" />
+                                        Ver abonos
+                                      </button>
+                                    ))}
                                   <button
                                     type="button"
                                     className={styles.edit}
@@ -496,6 +415,19 @@ export function SalesScreen() {
           </>
         )}
       </div>
+
+      {paying && (
+        <AbonoDialog
+          key={paying.sale.id}
+          sale={paying.sale}
+          readOnly={paying.readOnly}
+          onClose={() => setPaying(null)}
+          onChanged={() => {
+            setPaying(null)
+            reload()
+          }}
+        />
+      )}
 
       {deleting && (
         <ConfirmDialog

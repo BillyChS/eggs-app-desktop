@@ -7,9 +7,23 @@ public static class ExpenseEndpoints
 {
     public static RouteGroupBuilder MapExpenses(this RouteGroupBuilder api)
     {
-        api.MapGet("/expense-categories", async (AppDbContext db) =>
-                Results.Ok(await ExpenseCategories.ListActiveAsync(db)))
+        var categories = api.MapGroup("/expense-categories");
+
+        categories.MapGet("/", async (AppDbContext db, bool? includeRetired) =>
+                Results.Ok(await ExpenseCategories.ListAsync(db, includeRetired ?? false)))
             .WithName("ListExpenseCategories");
+
+        // 201 for a new type; 200 for one that had the name already, reactivated if it was retired.
+        categories.MapPost("/", async (AppDbContext db, CategoryCommand command) =>
+                (await CreateCategory.HandleAsync(db, command)).ToResult(result =>
+                    result.Resolved == ResolvedCategory.Created
+                        ? Results.Created($"/api/expense-categories/{result.Category.Id}", result.Category)
+                        : Results.Ok(result.Category)))
+            .WithName("CreateExpenseCategory");
+
+        categories.MapDelete("/{id:guid}", async (AppDbContext db, Guid id) =>
+                (await RetireCategory.HandleAsync(db, id)).ToResult(_ => Results.NoContent()))
+            .WithName("RetireExpenseCategory");
 
         var expenses = api.MapGroup("/expenses");
 

@@ -2,13 +2,15 @@ import { screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { formatDateLong, todayLocal, yesterdayLocal } from '../../lib/dates'
 import { addressOf, fakeApi, json, noContent, openApp } from '../../test/api'
-import { periodOf, rangeOf, step } from '../summaries/periods'
+import { describePeriod, periodOf, rangeOf, step } from '../summaries/periods'
 
 const TODAY = todayLocal()
 const YESTERDAY = yesterdayLocal()
 const OLD_DAY = '2026-01-05'
 const THIS_MONTH = periodOf('month', TODAY)
 const LAST_MONTH = step(THIS_MONTH, -1)
+const THIS_WEEK = periodOf('week', TODAY)
+const LAST_WEEK = step(THIS_WEEK, -1)
 
 const line = (cartonType: 'A' | 'B', quantity: number, unitPrice: number) => ({
   cartonType,
@@ -198,6 +200,62 @@ describe('Ventas: the period', () => {
     expect(addressOf(router)).toBe(`/ventas?mes=${THIS_MONTH.start.slice(0, 7)}`)
   })
 
+  it('the period buttons are Hoy, Ayer, Otro día, Esta semana and Este mes', async () => {
+    openApp('/ventas')
+    await screen.findByRole('table')
+
+    expect(
+      within(screen.getByRole('group', { name: 'Período' }))
+        .getAllByRole('button')
+        .map((item) => item.textContent),
+    ).toEqual(['Hoy', 'Ayer', 'Otro día', 'Esta semana', 'Este mes'])
+  })
+
+  it('Esta semana asks from Monday to today, adds the Fecha column, and stops › at this week', async () => {
+    serveDay()
+    const { router, user } = openApp('/ventas?pestana=fiado')
+    await screen.findByRole('table')
+
+    await user.click(button('Esta semana'))
+
+    expect(addressOf(router)).toBe(`/ventas?semana=${THIS_WEEK.start}&pestana=fiado`)
+    expect(pressed('Esta semana')).toBe('true')
+    await waitFor(() => expect(lastQuery('/api/sales').get('from')).toBe(THIS_WEEK.start))
+    for (const path of ['/api/sales', '/api/payments', '/api/reports/summary']) {
+      expect(lastQuery(path).get('from')).toBe(THIS_WEEK.start)
+      expect(lastQuery(path).get('to')).toBe(TODAY)
+    }
+    expect(await screen.findByRole('columnheader', { name: 'Fecha' })).toBeTruthy()
+    expect(screen.getByText(`Todas las ventas del ${describePeriod(THIS_WEEK)}`)).toBeTruthy()
+    expect(screen.getByText('Entró en la semana')).toBeTruthy()
+    expect(screen.getByText('Fiado de la semana')).toBeTruthy()
+    expect((button('Semana siguiente') as HTMLButtonElement).disabled).toBe(true)
+    const [weekday] = rows()[0][0]!.split(' ')
+    expect(weekday).toMatch(/^(dom|lun|mar|mié|jue|vie|sáb)$/)
+  })
+
+  it('‹ goes to the whole of last week, and › comes back to this one', async () => {
+    const { router, user } = openApp(`/ventas?semana=${THIS_WEEK.start}`)
+    await screen.findByRole('table')
+
+    await user.click(button('Semana anterior'))
+
+    expect(addressOf(router)).toBe(`/ventas?semana=${LAST_WEEK.start}`)
+    await waitFor(() => expect(lastQuery('/api/sales').get('from')).toBe(LAST_WEEK.start))
+    expect(lastQuery('/api/sales').get('to')).toBe(rangeOf(LAST_WEEK).to)
+
+    await user.click(button('Semana siguiente'))
+    expect(addressOf(router)).toBe(`/ventas?semana=${THIS_WEEK.start}`)
+  })
+
+  it('a day typed in the address as a week shows its whole week, from Monday', async () => {
+    const { router } = openApp(`/ventas?semana=${rangeOf(LAST_WEEK).to}`)
+    await screen.findByRole('table')
+
+    expect(lastQuery('/api/sales').get('from')).toBe(LAST_WEEK.start)
+    expect(addressOf(router)).toBe(`/ventas?semana=${rangeOf(LAST_WEEK).to}`)
+  })
+
   it('a month shows the day of each row', async () => {
     serveDay()
     openApp(`/ventas?mes=${THIS_MONTH.start.slice(0, 7)}&pestana=fiado`)
@@ -254,9 +312,13 @@ describe('Ventas: the list', () => {
 
     await screen.findByRole('table')
     expect(rows()).toEqual([
-      ['Doña Rosa Vargas3 cartones de 30', '8812-4455', '₡13.500', 'Pagado'],
-      ['Cliente sin nombre2 cartones de 15', '—', '₡4.000', 'Pagado'],
+      ['Doña Rosa Vargas3 cartones de 30', '₡13.500', 'Pagado'],
+      ['Cliente sin nombre2 cartones de 15', '₡4.000', 'Pagado'],
     ])
+    expect(screen.queryByRole('columnheader', { name: 'Teléfono' })).toBeNull()
+    // A cash sale has nothing to pay.
+    expect(screen.queryByRole('button', { name: /^Abonar/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Ver abonos/ })).toBeNull()
     expect(footer()).toBe('2 ventas al contadoTotal ₡17.500')
   })
 
@@ -269,9 +331,10 @@ describe('Ventas: the list', () => {
 
     expect(addressOf(router)).toBe(`/ventas?fecha=${TODAY}&pestana=fiado`)
     expect(rows()).toEqual([
-      ['Don Luis Mora2 cartones de 30', '8703-2291', '₡10.000', 'Debe ₡6.000'],
-      ['María Rodríguez3 cartones de 15', '—', '₡6.000', 'Pagado con abonos'],
+      ['Don Luis Mora2 cartones de 30', '₡10.000', 'Debe ₡6.000'],
+      ['María Rodríguez3 cartones de 15', '₡6.000', 'Pagado con abonos'],
     ])
+    expect(screen.queryByRole('columnheader', { name: 'Teléfono' })).toBeNull()
     expect(footer()).toBe('2 ventas fiadasTotal ₡16.000')
   })
 
@@ -295,9 +358,10 @@ describe('Ventas: the list', () => {
 
     expect(screen.getByRole('columnheader', { name: 'Monto' })).toBeTruthy()
     expect(rows()).toEqual([
-      ['María RodríguezAbono', '—', '₡2.000', 'en efectivo'],
-      ['Don Luis MoraAbono al hacer la venta', '8703-2291', '₡4.000', ''],
+      ['María RodríguezAbono', '₡2.000', 'en efectivo'],
+      ['Don Luis MoraAbono al hacer la venta', '₡4.000', ''],
     ])
+    expect(screen.queryByRole('columnheader', { name: 'Teléfono' })).toBeNull()
     expect(footer()).toBe('2 abonosTotal ₡6.000')
     expect(screen.queryByRole('button', { name: 'Eliminar el abono de Don Luis Mora' })).toBeNull()
 
@@ -488,5 +552,174 @@ describe('Ventas: buttons', () => {
 
     expect(await screen.findAllByRole('alertdialog')).toHaveLength(1)
     expect(calls.filter((call) => call.method === 'DELETE')).toEqual([])
+  })
+})
+
+describe('Ventas: Abonar', () => {
+  const HISTORY_LUIS = {
+    sale: CREDIT_LUIS,
+    paid: 4500,
+    payments: [
+      { id: '9', date: YESTERDAY, applied: 500, amount: 2000, paidWithSale: false },
+      { id: '8', date: TODAY, applied: 4000, amount: 4000, paidWithSale: true },
+    ],
+  }
+
+  const dialog = () => screen.findByRole('alertdialog', { name: 'Abonar' })
+  const amount = () => screen.getByLabelText<HTMLInputElement>('¿Cuánto va a abonar?')
+  const posted = () => callsTo('POST', '/api/sales/3/payments').map((call) => call.body)
+
+  async function openAbonar() {
+    serveDay()
+    handlers['GET /api/sales/3/payments'] = () => json(HISTORY_LUIS)
+    handlers['POST /api/sales/3/payments'] = () =>
+      json({ id: '10', customer: LUIS, date: TODAY, amount: 1000, note: null, saleId: null, forSaleId: '3' }, 201)
+    const opened = openApp('/ventas?pestana=fiado')
+    await screen.findByRole('table')
+    await opened.user.click(button('Abonar a la venta de Don Luis Mora'))
+    return { ...opened, abonar: await dialog() }
+  }
+
+  it('a fiado that owes has Abonar first, then Editar and Eliminar; a paid one has Ver abonos', async () => {
+    serveDay()
+    openApp('/ventas?pestana=fiado')
+    await screen.findByRole('table')
+
+    const [luis, maria] = within(screen.getByRole('table')).getAllByRole('row').slice(1)
+    expect(within(luis).getAllByRole('button').map((item) => item.textContent)).toEqual(['Abonar', 'Editar', 'Eliminar'])
+    expect(within(maria).getAllByRole('button').map((item) => item.textContent)).toEqual([
+      'Ver abonos',
+      'Editar',
+      'Eliminar',
+    ])
+  })
+
+  it('shows the sale, what it owes, an empty amount, and its abonos newest first with their total', async () => {
+    const { abonar } = await openAbonar()
+
+    expect(abonar.textContent).toContain('ClienteDon Luis Mora')
+    expect(abonar.textContent).toContain(`Fecha de la venta${formatDateLong(TODAY)}`)
+    expect(abonar.textContent).toContain('Cartones2 cartones de 30')
+    expect(abonar.textContent).toContain('Total de la venta₡10.000')
+    expect(abonar.textContent).toContain('Debe: ₡6.000')
+    expect(amount().value).toBe('')
+    expect(document.activeElement).toBe(amount())
+    expect(abonar.textContent).toContain('Después de este abono le quedará: ₡6.000')
+
+    const list = await within(abonar).findByRole('list', { name: 'Abonos de esta venta' })
+    expect(within(list).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      `${formatDateLong(YESTERDAY)}₡500(de un abono de ₡2.000)`,
+      `${formatDateLong(TODAY)}al hacer la venta₡4.000`,
+    ])
+    expect(abonar.textContent).toContain('Total abonado: ₡4.500')
+  })
+
+  it('what it will owe follows the amount as it is typed', async () => {
+    const { user, abonar } = await openAbonar()
+
+    await user.type(amount(), '1500')
+    expect(abonar.textContent).toContain('Después de este abono le quedará: ₡4.500')
+
+    await user.type(amount(), '0')
+    expect(abonar.textContent).toContain('El abono no puede ser mayor a lo que debe (₡6.000).')
+  })
+
+  it('refuses an empty amount or more than it owes, without sending', async () => {
+    const { user, abonar } = await openAbonar()
+
+    await user.click(within(abonar).getByRole('button', { name: 'Guardar abono' }))
+    expect(within(abonar).getByText('Escriba cuánto va a abonar.')).toBeTruthy()
+    expect(document.activeElement).toBe(amount())
+
+    await user.type(amount(), '7000')
+    await user.click(within(abonar).getByRole('button', { name: 'Guardar abono' }))
+    expect(within(abonar).getAllByText('El abono no puede ser mayor a lo que debe (₡6.000).').length).toBeGreaterThan(0)
+    expect(screen.queryByRole('alertdialog', { name: '¿Guardar este abono?' })).toBeNull()
+    expect(posted()).toEqual([])
+  })
+
+  it('Enter in the amount goes to Guardar abono and never saves', async () => {
+    const { user, abonar } = await openAbonar()
+
+    await user.type(amount(), '1000{Enter}')
+
+    expect(document.activeElement).toBe(within(abonar).getByRole('button', { name: 'Guardar abono' }))
+    expect(screen.queryByRole('alertdialog', { name: '¿Guardar este abono?' })).toBeNull()
+    expect(posted()).toEqual([])
+  })
+
+  it('asks before saving; No sends nothing, Sí, guardar saves it, closes and loads the list again', async () => {
+    const { user, abonar } = await openAbonar()
+    await user.type(amount(), '1000')
+
+    await user.click(within(abonar).getByRole('button', { name: 'Guardar abono' }))
+    let question = await screen.findByRole('alertdialog', { name: '¿Guardar este abono?' })
+    expect(question.textContent).toContain('¿Guardar abono de ₡1.000 para Don Luis Mora? Le quedará ₡5.000.')
+    await user.click(within(question).getByRole('button', { name: 'No' }))
+    expect(posted()).toEqual([])
+    expect(amount().value).toBe('1.000')
+
+    const listsBefore = callsTo('GET', '/api/sales').length
+    await user.click(within(abonar).getByRole('button', { name: 'Guardar abono' }))
+    question = await screen.findByRole('alertdialog', { name: '¿Guardar este abono?' })
+    await user.click(within(question).getByRole('button', { name: 'Sí, guardar' }))
+
+    await waitFor(() => expect(posted()).toEqual([{ amount: 1000 }]))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    await waitFor(() => expect(callsTo('GET', '/api/sales').length).toBeGreaterThan(listsBefore))
+  })
+
+  it('opens with an empty amount every time', async () => {
+    const { user, abonar } = await openAbonar()
+    await user.type(amount(), '1000')
+    await user.click(within(abonar).getByRole('button', { name: 'Cancelar' }))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+
+    await user.click(button('Abonar a la venta de Don Luis Mora'))
+
+    await dialog()
+    expect(amount().value).toBe('')
+  })
+
+  it('what the API refuses about the amount shows on it, and the dialog stays', async () => {
+    const { user, abonar } = await openAbonar()
+    handlers['POST /api/sales/3/payments'] = () =>
+      json({ errors: { amount: ['El abono no puede ser mayor a lo que debe (₡500).'] } }, 400)
+    await user.type(amount(), '1000')
+
+    await user.click(within(abonar).getByRole('button', { name: 'Guardar abono' }))
+    const question = await screen.findByRole('alertdialog', { name: '¿Guardar este abono?' })
+    await user.click(within(question).getByRole('button', { name: 'Sí, guardar' }))
+
+    expect(await within(abonar).findByText('El abono no puede ser mayor a lo que debe (₡500).')).toBeTruthy()
+    expect(screen.getByRole('alertdialog', { name: 'Abonar' })).toBeTruthy()
+  })
+
+  it('Ver abonos shows the same summary and list, with nothing to type and only Cerrar', async () => {
+    serveDay()
+    handlers['GET /api/sales/4/payments'] = () => json({ sale: CREDIT_MARIA, paid: 0, payments: [] })
+    const { user } = openApp('/ventas?pestana=fiado')
+    await screen.findByRole('table')
+
+    await user.click(button('Ver abonos de la venta de María Rodríguez'))
+
+    const shown = await screen.findByRole('alertdialog', { name: 'Abonos de la venta' })
+    expect(shown.textContent).toContain('ClienteMaría Rodríguez')
+    expect(await within(shown).findByText('Todavía no hay abonos para esta venta.')).toBeTruthy()
+    expect(within(shown).queryByRole('textbox')).toBeNull()
+    expect(within(shown).getAllByRole('button').map((item) => item.textContent)).toEqual(['Cerrar'])
+
+    await user.click(within(shown).getByRole('button', { name: 'Cerrar' }))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+  })
+
+  it('an abono from Abonar says which sale it went to, in Abonos', async () => {
+    serveDay()
+    handlers['GET /api/payments'] = () =>
+      json({ payments: [{ ...ABONO_MARIA, forSaleId: '4', forSaleDate: '2026-11-03' }], total: 2000 })
+    openApp('/ventas?pestana=abonos')
+    await screen.findByRole('table')
+
+    expect(rows()[0][0]).toBe('María RodríguezAbono a la venta del 3 de noviembre de 2026')
   })
 })
