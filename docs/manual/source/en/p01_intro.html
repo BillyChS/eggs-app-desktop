@@ -1,0 +1,99 @@
+
+<!--TOC-->
+
+<h1 class="chapter" id="c1"><span class="num">Chapter 1</span>Introduction</h1>
+
+<h2 id="c1-1">What Eggs App is</h2>
+<p>Eggs App is a Windows desktop application that keeps the books of a small egg-selling business. It is used by a single person, elderly and non-technical, on their own computer. With it they record:</p>
+<ul>
+  <li><b>Cash sales ("al contado"):</b> the customer pays on the spot.</li>
+  <li><b>Credit sales ("fiados"):</b> the customer takes the eggs and pays later.</li>
+  <li><b>Partial payments ("abonos"):</b> payments a customer makes to lower what they owe.</li>
+  <li><b>Expenses ("gastos"):</b> what the business spends (feed, vitamins, cartons…).</li>
+  <li><b>Summaries ("resúmenes"):</b> how much came in, how much was spent and how much was left over in a day, a week or a month.</li>
+</ul>
+<p>All money is in <b>Costa Rican colones (₡)</b>, always whole numbers (there are no cents).</p>
+
+<h2 id="c1-2">Three decisions that explain almost all of the code</h2>
+<div class="box idea"><span class="t">1. No internet and no cloud</span>
+<p>Everything runs on the same computer: the screens, the "server" and the database. There are no user accounts and no passwords. The data lives in one file (<code>eggs.db</code>) inside the Windows user's folder.</p></div>
+<div class="box idea"><span class="t">2. The user is an elderly person</span>
+<p>That is why the buttons are large (56 pixels), text is never smaller than 18 pixels, each screen has few actions, everything important asks for confirmation, and messages are in plain Spanish that say what to do ("Por favor llame a Billy" — "Please call Billy").</p></div>
+<div class="box idea"><span class="t">3. Data must never be lost or go out of balance</span>
+<p>Nothing is ever really deleted (it is marked as deleted), totals and balances are always calculated from the records (never stored separately), there are automatic backups every day, and the server refuses any change that would leave a customer owing less than zero.</p></div>
+
+<h2 id="c1-3">How to read this manual</h2>
+<p>The manual goes from general to specific. If you know nothing about programming, read Chapter 2 (basic concepts) and Chapter 3 (architecture) first. Then go straight to the chapter for the part you need to work on.</p>
+<table>
+<tr><th style="width:42%">If you need to…</th><th>Read</th></tr>
+<tr><td>Understand how everything fits together</td><td>Chapters 3 and 4</td></tr>
+<tr><td>Understand the Windows window</td><td>Chapter 5</td></tr>
+<tr><td>Understand the server (the API)</td><td>Chapters 6 and 9</td></tr>
+<tr><td>Understand the database</td><td>Chapter 7</td></tr>
+<tr><td>Understand how balances, credit sales and payments are calculated</td><td>Chapter 8 (the most important one)</td></tr>
+<tr><td>Understand the screens</td><td>Chapter 10</td></tr>
+<tr><td>Follow one sale end to end</td><td>Chapter 11</td></tr>
+<tr><td>Backups, failure logs, restoring data</td><td>Chapter 12</td></tr>
+<tr><td>Build, test, create the installer and install</td><td>Chapter 13</td></tr>
+<tr><td>Add or change something in the code</td><td>Chapter 14</td></tr>
+<tr><td>Fix a problem on the PC</td><td>Chapter 15</td></tr>
+</table>
+<p>File, class and function names appear in <code>code font</code>, exactly as they are in the code. The code, its comments and commit messages are in English; everything the user sees is in Spanish. Spanish UI text is quoted as it appears on screen, with a translation where it helps. There is a glossary at the end.</p>
+
+<h2 id="c1-4">Business vocabulary</h2>
+<table>
+<tr><th style="width:24%">Word (UI Spanish)</th><th>What it means in the app</th><th style="width:26%">In the code</th></tr>
+<tr><td>Sale ("venta")</td><td>One complete purchase by a customer, like an invoice. It has one or more lines.</td><td><code>Sale</code></td></tr>
+<tr><td>Line</td><td>One row of the sale: carton type, quantity and price per carton.</td><td><code>SaleItem</code></td></tr>
+<tr><td>Carton of 15 / of 30</td><td>The two carton sizes that are sold.</td><td><code>CartonType.A</code> (15) and <code>CartonType.B</code> (30)</td></tr>
+<tr><td>Cash ("al contado")</td><td>A sale paid on the spot. It counts as income on the day of the sale.</td><td><code>IsCredit = false</code></td></tr>
+<tr><td>Credit sale ("fiado")</td><td>A sale on credit. It is not income: it is money owed.</td><td><code>IsCredit = true</code></td></tr>
+<tr><td>Partial payment ("abono")</td><td>A customer's payment that lowers what they owe. It is income on the day it is paid.</td><td><code>Payment</code></td></tr>
+<tr><td>Balance ("saldo")</td><td>What a customer owes now: their credit sales minus their payments.</td><td><code>Balance</code></td></tr>
+<tr><td>Expense / expense type</td><td>Money that went out of the business, and its category ("tipo de gasto").</td><td><code>Expense</code>, <code>ExpenseCategory</code></td></tr>
+<tr><td>"Cliente sin nombre"</td><td>"Customer with no name": a cash sale to someone unknown. It has no customer.</td><td><code>CustomerId = null</code></td></tr>
+<tr><td>"Entró" / "Gastado" / "Quedó"</td><td>Came in / Spent / Left over in a period.</td><td><code>CameIn</code>, <code>Spent</code>, <code>Net</code></td></tr>
+</table>
+
+<h1 class="chapter" id="c2"><span class="num">Chapter 2</span>Basic concepts to get started</h1>
+<p>This chapter explains, assuming nothing, the pieces the application is built from. If you already program, you can skip it.</p>
+
+<h2 id="c2-1">The three parts of an application like this</h2>
+<div class="two">
+<div class="box idea"><span class="t">Frontend (the user interface)</span><p>What the person sees and touches: buttons, tables, forms. Here it is built with <b>React</b>, a JavaScript library for building screens, written in <b>TypeScript</b> (JavaScript with types).</p></div>
+<div class="box idea"><span class="t">Backend (the server or API)</span><p>The program that receives requests from the interface ("save this sale", "give me today's sales"), checks the rules and talks to the database. Here it is built with <b>ASP.NET Core</b> in <b>C#</b>.</p></div>
+<div class="box idea"><span class="t">Database</span><p>Where data is stored permanently, in tables (like spreadsheets). Here it is <b>SQLite</b>: a complete database inside a single file.</p></div>
+</div>
+<p>What is special about Eggs App is that all three parts run <b>on the same computer and in the same program</b>. A fourth component, the desktop "shell" built with <b>WPF</b>, opens the Windows window and shows the interface inside it with <b>WebView2</b> (the Microsoft Edge browser engine, embedded).</p>
+
+<h2 id="c2-2">How they talk: HTTP, API and JSON</h2>
+<p>The interface and the server communicate the same way a browser talks to a website: with <b>HTTP</b> requests. Each request has a <b>method</b> that says what to do and a <b>path</b> that says what to do it to:</p>
+<table>
+<tr><th style="width:14%">Method</th><th style="width:30%">Used to</th><th>Example in Eggs App</th></tr>
+<tr><td><code>GET</code></td><td>Read something</td><td><code>GET /api/sales?from=2026-11-01&amp;to=2026-11-07</code> → that week's sales</td></tr>
+<tr><td><code>POST</code></td><td>Create something</td><td><code>POST /api/sales</code> → saves a new sale</td></tr>
+<tr><td><code>PUT</code></td><td>Replace / edit</td><td><code>PUT /api/sales/{id}</code> → changes a sale</td></tr>
+<tr><td><code>DELETE</code></td><td>Delete</td><td><code>DELETE /api/sales/{id}</code> → deletes a sale</td></tr>
+</table>
+<p>The set of all these paths is the <b>API</b> (application programming interface). Data travels as <b>JSON</b>, which is text with braces and quotes, for example:</p>
+<pre><code>{ "date": "2026-11-23", "isCredit": false, "customerId": null,
+  "items": [ { "cartonType": "A", "quantity": 3, "unitPrice": 2500 } ] }</code></pre>
+<p>The server answers with a <b>status code</b>: <code>200</code> (OK), <code>201</code> (created), <code>204</code> (OK, no content), <code>400</code> (the data has errors), <code>404</code> (doesn't exist), <code>409</code> (refused by a business rule).</p>
+
+<h2 id="c2-3">Other terms used throughout the manual</h2>
+<table>
+<tr><th style="width:26%">Term</th><th>What it is</th></tr>
+<tr><td>.NET 10</td><td>Microsoft's platform for running C# programs. It includes ASP.NET Core (web servers) and WPF (Windows windows).</td></tr>
+<tr><td>Kestrel</td><td>The web server built into ASP.NET Core. It is what "listens" for HTTP requests.</td></tr>
+<tr><td>Entity Framework Core (EF Core)</td><td>An <b>ORM</b>: it translates C# classes (like <code>Sale</code>) into database tables, and C# queries into SQL, so SQL doesn't have to be written by hand.</td></tr>
+<tr><td>Migration</td><td>A C# file that describes a change to the database structure (create a table, add a column). They are applied in order.</td></tr>
+<tr><td>Entity</td><td>A class that corresponds to a table. Each object is a row.</td></tr>
+<tr><td>Endpoint</td><td>One specific API route (for example <code>POST /api/sales</code>) and the code that handles it.</td></tr>
+<tr><td>Vite / pnpm</td><td>Vite builds the React interface into HTML/JS/CSS files. pnpm installs the JavaScript libraries.</td></tr>
+<tr><td>Component (React)</td><td>A reusable piece of interface, for example <code>Button</code> or <code>Modal</code>.</td></tr>
+<tr><td>Hook (React)</td><td>A function whose name starts with <code>use…</code> that gives a component state or behavior, for example <code>useLoad</code>.</td></tr>
+<tr><td>Route (React Router)</td><td>The address of a screen inside the interface, for example <code>/ventas</code> or <code>/clientes/123</code>.</td></tr>
+<tr><td>Soft delete</td><td>Instead of removing a row, it is given <code>IsDeleted = true</code> and hidden from queries. The data is still there.</td></tr>
+<tr><td>GUID</td><td>A unique 128-bit identifier, like <code>5d1f3c0e-6a51-…</code>. Every row has one as its key.</td></tr>
+<tr><td>Automated test</td><td>Code that exercises the program and checks it does the right thing. Run with <code>dotnet test</code> and <code>pnpm test</code>.</td></tr>
+</table>

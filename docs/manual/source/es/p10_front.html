@@ -1,0 +1,124 @@
+
+<h1 class="chapter" id="c10"><span class="num">Capítulo 10</span>La interfaz (src/web)</h1>
+
+<h2 id="c10-1">Cómo arranca la interfaz</h2>
+<p><code>index.html</code> tiene un <code>&lt;div id="root"&gt;</code> vacío. <code>main.tsx</code> crea el enrutador con las rutas de <code>routes.tsx</code> y lo dibuja ahí:</p>
+<pre><code><span class="k">const</span> router = createBrowserRouter(routes)
+createRoot(document.getElementById(<span class="s">'root'</span>)!).render(&lt;StrictMode&gt;&lt;RouterProvider router={router} /&gt;&lt;/StrictMode&gt;)</code></pre>
+<p>Todas las rutas están dentro de <code>AppLayout</code>, que pone la barra lateral (<code>Sidebar</code>) a la izquierda y la pantalla actual a la derecha, y envuelve todo en <code>MessagesProvider</code> (mensajes de éxito y error). Si una pantalla se cae, se muestra <code>ErrorScreen</code> ("Algo salió mal en esta pantalla.") con un botón que recarga todo en Ventas.</p>
+
+<h2 id="c10-2">Mapa de pantallas (routes.tsx)</h2>
+<table>
+<tr><th style="width:32%">Dirección</th><th style="width:28%">Componente</th><th>Qué es</th></tr>
+<tr><td><code>/</code></td><td>—</td><td>Redirige a <code>/ventas</code>: la app abre en Ventas.</td></tr>
+<tr><td><code>/ventas</code></td><td><code>SalesScreen</code></td><td>Tarjetas del período, pestañas Fiado / Contado / Abonos, tabla.</td></tr>
+<tr><td><code>/ventas/nueva</code></td><td><code>NewSaleScreen</code> → <code>SaleForm</code></td><td>Nueva venta.</td></tr>
+<tr><td><code>/ventas/:id/editar</code></td><td><code>EditSaleScreen</code> → <code>SaleForm</code></td><td>Editar venta.</td></tr>
+<tr><td><code>/clientes</code></td><td><code>CustomersScreen</code></td><td>Lista con búsqueda y "solo los que deben".</td></tr>
+<tr><td><code>/clientes/nuevo</code></td><td><code>NewCustomerScreen</code></td><td>Cliente nuevo.</td></tr>
+<tr><td><code>/clientes/:id</code></td><td><code>CustomerStatementScreen</code></td><td>Estado de cuenta.</td></tr>
+<tr><td><code>/clientes/:id/editar</code></td><td><code>EditCustomerScreen</code></td><td>Editar cliente.</td></tr>
+<tr><td><code>/clientes/:id/abonos/nuevo</code></td><td><code>NewPaymentScreen</code></td><td>Abono suelto nuevo.</td></tr>
+<tr><td><code>/clientes/:id/abonos/:paymentId/editar</code></td><td><code>EditPaymentScreen</code></td><td>Editar abono.</td></tr>
+<tr><td><code>/gastos</code></td><td><code>ExpensesScreen</code></td><td>Gastos; nuevo y editar abren una ventana emergente.</td></tr>
+<tr><td><code>/gastos/nuevo</code>, <code>/gastos/:id/editar</code></td><td><code>ToExpenses</code></td><td>Direcciones viejas: redirigen a Gastos.</td></tr>
+<tr><td><code>/resumenes</code></td><td><code>SummariesScreen</code></td><td>Resúmenes del período.</td></tr>
+<tr><td><code>/dev/componentes</code></td><td><code>ComponentsScreen</code></td><td>Solo en <code>pnpm dev</code>: muestra los componentes base.</td></tr>
+<tr><td>cualquier otra</td><td>—</td><td>Redirige a <code>/ventas</code>.</td></tr>
+</table>
+
+<h2 id="c10-3">Las carpetas y su papel</h2>
+<table>
+<tr><th style="width:17%">Carpeta</th><th>Contenido</th></tr>
+<tr><td><code>screens/</code></td><td>Una subcarpeta por página: <code>sales/</code>, <code>customers/</code>, <code>payments/</code>, <code>expenses/</code>, <code>summaries/</code>. Además <code>PeriodBar</code> y <code>periodView</code> (el período de Ventas y Gastos) y <code>ErrorScreen</code>.</td></tr>
+<tr><td><code>services/</code></td><td>Una función por llamada a la API, con sus tipos TypeScript (que reflejan los <code>record</code> de C#). Todas usan <code>http.ts</code>.</td></tr>
+<tr><td><code>layout/</code></td><td>El esqueleto de la app (<code>AppLayout</code>, <code>Sidebar</code>, <code>Screen</code>, <code>FormFooter</code>) y los hooks comunes.</td></tr>
+<tr><td><code>components/</code></td><td>Piezas base: <code>Button</code>, <code>TextInput</code>, <code>TextArea</code>, <code>MoneyInput</code>, <code>DateInput</code>, <code>DayPicker</code>, <code>Dropdown</code>, <code>Field</code>, <code>Modal</code>, <code>ConfirmDialog</code>, <code>ConfirmationWindow</code>, mensajes.</td></tr>
+<tr><td><code>lib/</code></td><td><code>dates.ts</code> (fechas), <code>money.ts</code> (colones), <code>selectOnFocus.ts</code>.</td></tr>
+<tr><td><code>theme/</code></td><td><code>tokens.css</code>: colores, espacios, radios y tamaños.</td></tr>
+<tr><td><code>test/</code></td><td><code>setup.ts</code> y una API falsa (<code>api.tsx</code>) para probar pantallas.</td></tr>
+</table>
+
+<h2 id="c10-4">Hablar con la API: http.ts</h2>
+<p>Toda llamada pasa por <code>request&lt;T&gt;(ruta, { method, body, signal })</code>:</p>
+<ul>
+  <li>Usa <code>fetch</code> a una ruta relativa (<code>/api/…</code>): como la interfaz la sirve la misma API, no hace falta saber el puerto.</li>
+  <li>Corta el pedido a los <b>10 segundos</b>, y también si la pantalla ya no quiere la respuesta (<code>signal</code>).</li>
+  <li>Si la respuesta no es OK, lanza un <code>ApiError</code> con <code>status</code>, <code>fieldErrors</code> (el primer mensaje de cada campo de un 400) y <code>refusal</code> (el mensaje de un 409).</li>
+  <li>Un 204 devuelve <code>undefined</code>; lo demás se lee como JSON.</li>
+</ul>
+<p>En desarrollo, Vite reenvía <code>/api</code> a <code>http://localhost:5080</code> (<code>vite.config.ts</code>). Ese número tiene que coincidir con <code>launchSettings.json</code>.</p>
+
+<h2 id="c10-5">Los hooks que usan todas las pantallas</h2>
+<table>
+<tr><th style="width:24%">Hook</th><th>Para qué</th></tr>
+<tr><td><code>useLoad(key, load, goneMessage)</code></td><td>Carga lo que muestra una pantalla, una vez por <code>key</code>. Descarta respuestas que llegan tarde. Devuelve <code>loading</code>, <code>ready</code>, <code>failed</code> (para ofrecer "Intentar de nuevo") o <code>gone</code> (un 404: muestra el mensaje y la pantalla se va).</td></tr>
+<tr><td><code>useSalesPage</code>, <code>useExpenseList</code>, <code>useCustomerList</code></td><td>Lo mismo para las listas. Ventas pide en paralelo ventas, abonos y el resumen (para que las tarjetas coincidan con Resúmenes). La lista de clientes espera 300 ms después de escribir.</td></tr>
+<tr><td><code>useOneAtATime()</code></td><td>Ignora un segundo clic mientras el primero trabaja, y con <code>finish()</code> bloquea todo una vez guardado. <b>No se desactiva el botón</b>, porque eso le quitaría el foco del teclado.</td></tr>
+<tr><td><code>useUnsavedChanges(hayCambios)</code></td><td>Si hay cambios sin guardar, pregunta antes de ir a otra pantalla (con <code>useBlocker</code> de React Router) y le avisa a la ventana de Windows, que pregunta antes de cerrarse.</td></tr>
+<tr><td><code>useServerStatus()</code></td><td>Consulta <code>/api/health</code> cada 30 s: "Conectado" o "Sin conexión. Cierre y vuelva a abrir Eggs App.", y la versión.</td></tr>
+<tr><td><code>useBackupStatus()</code></td><td>Consulta el estado de los respaldos con la misma frecuencia, y <code>retry()</code> para "Intentar de nuevo".</td></tr>
+</table>
+
+<h2 id="c10-6">Componentes base y por qué existen</h2>
+<table>
+<tr><th style="width:20%">Componente</th><th>Detalle importante</th></tr>
+<tr><td><code>Button</code></td><td>Siempre un <code>&lt;button&gt;</code> de verdad (Enter, Espacio y foco funcionan). La navegación también usa botones: los enlaces ignoran la tecla Espacio. Variantes: primary, secondary, danger, dangerOutline, success.</td></tr>
+<tr><td><code>Field</code></td><td>La base de todo campo: etiqueta siempre visible, pista debajo, y el error <b>en palabras con ícono</b>, no solo en color.</td></tr>
+<tr><td><code>MoneyInput</code></td><td>Campo de texto (no <code>type="number"</code>, que acepta "e" y cambia con la rueda del ratón). Pone los puntos de miles mientras se escribe, mantiene el cursor en su lugar, el ₡ va adentro del campo, y rechaza céntimos ("12500,50" da error en vez de volverse ₡1.250.050).</td></tr>
+<tr><td><code>DateInput</code> / <code>DayPicker</code></td><td>El campo de fecha del navegador (su valor ya es local <code>YYYY-MM-DD</code>), más botones grandes "Hoy" y "Ayer", porque el calendario del navegador es pequeño y el CSS no lo alcanza.</td></tr>
+<tr><td><code>Dropdown</code></td><td>Lista desplegable hecha a mano, porque la de <code>&lt;select&gt;</code> la dibuja el navegador pequeñita. Teclado igual que un select. Se usa en "¿Cómo pagó?", "Tipo de cartón", "¿Qué tipo de gasto?".</td></tr>
+<tr><td><code>Modal</code></td><td>Un <code>&lt;dialog&gt;</code> nativo: el navegador mantiene el Tab adentro y bloquea lo de atrás. Un clic afuera no lo cierra. Ignora Enter sostenido. Las ventanas con pasos muestran cada paso en el mismo Modal, nunca un segundo diálogo encima.</td></tr>
+<tr><td><code>ConfirmDialog</code></td><td>"¿Está seguro?" con el foco en la opción segura, así un Enter perdido nunca confirma.</td></tr>
+<tr><td><code>ConfirmationWindow</code></td><td>La "Ventana de confirmación": resume lo que se va a guardar, con el foco en "Editar"; solo "Listo" guarda. Si falla, el error queda adentro.</td></tr>
+<tr><td><code>MessagesProvider</code></td><td><code>showSuccess</code> y <code>showError</code>: un Modal que queda hasta que se presiona "Aceptar".</td></tr>
+</table>
+
+<h2 id="c10-7">Fechas y dinero en JavaScript</h2>
+<div class="box rule"><span class="t">Dos trampas que el código evita a propósito</span>
+<ul>
+<li><code>new Date("2026-11-04")</code> significa medianoche <b>UTC</b>, que en Costa Rica es el 3 de noviembre. <code>lib/dates.ts</code> arma las fechas desde sus partes. Y nunca se usa <code>toISOString()</code> para mandar una fecha: a las 6 p. m. ya sería mañana. Se usa <code>todayLocal()</code>.</li>
+<li><code>Intl</code> no da "₡12.500" para <code>es-CR</code> (da "12 500"). <code>lib/money.ts</code> (<code>formatColones</code>, <code>parseColones</code>) lo hace a mano. Los días y meses cortos también están a mano ("set" para setiembre, como se dice en Costa Rica).</li>
+</ul></div>
+
+<h2 id="c10-8">El período vive en la dirección</h2>
+<p>Ventas y Gastos usan <code>PeriodBar</code>: Hoy, Ayer, Otro día, Esta semana (lunes a domingo) o Este mes, con flechas ‹ › para semanas y meses que nunca pasan del actual. El período se guarda en la dirección (<code>periodView.ts</code>): <code>?fecha=2026-11-07</code>, <code>?semana=2026-11-02</code> (su lunes) o <code>?mes=2026-11</code>; Ventas agrega <code>&amp;pestana=fiado|abonos</code> (<code>salesView.ts</code>). Resúmenes usa <code>?periodo=semana&amp;desde=…</code>. Como está en la dirección:</p>
+<ul>
+  <li>sobrevive una recarga (no se usa almacenamiento del navegador, que se vacía en cada arranque);</li>
+  <li>las pantallas que se abren desde ahí lo llevan, y al guardar vuelven a esa semana o mes si la fecha cabe, o a ese día si no;</li>
+  <li>cambiar de período reemplaza la dirección, así no se llena el historial.</li>
+</ul>
+
+<h2 id="c10-9">Las pantallas, una por una</h2>
+<h3>Ventas (SalesScreen)</h3>
+<p>Tres tarjetas: "Entró hoy" (contado + abonos, con el detalle), "Fiado hoy" y "Cartones vendidos" (de 15 y de 30). Sus números vienen de <code>GetSummary</code>, así coinciden con Resúmenes. Debajo, pestañas <b>Fiado</b>, <b>Contado</b> (la predeterminada) y <b>Abonos</b>, un buscador por nombre o teléfono (sin tildes; "88124455" encuentra "8812-4455") y la tabla. En semana o mes la tabla agrega la columna Fecha. Cada fiado muestra su estado ("Debe ₡X", "Pagado con abonos") y el botón <b>Abonar</b> (o "Ver abonos" si ya está pagado), que abre <code>AbonoDialog</code>. Borrar pregunta primero, diciendo cuánto quedará debiendo el cliente.</p>
+
+<h3>Formulario de venta (SaleForm)</h3>
+<p>Es una página con una barra fija abajo (<code>FormFooter</code>: total, Cancelar, Guardar venta, y Borrar venta aparte a la izquierda al editar). El orden con el teclado es fijo; <b>Enter avanza y nunca guarda</b>:</p>
+<pre><code>Fecha → ¿Cómo pagó? → (por línea) Tipo de cartón → Cantidad → Precio
+      → ¿Pagó algo ahora? (solo fiado) → Cliente → Guardar venta</code></pre>
+<p>La pantalla abre con el foco en "¿Cómo pagó?". Una venta al contado empieza con "Cliente sin nombre" ya elegido (y se salta el paso Cliente). Si se elige un cliente nuevo y hay uno parecido, pregunta antes. "Guardar venta" no guarda: abre la Ventana de confirmación (un fiado con pago parcial aparece ahí como "Mixto"), y solo "Listo" guarda. Si el servidor rechaza un campo, "Editar" vuelve al formulario con el foco en ese campo. El precio de cada tipo empieza con el último precio usado.</p>
+
+<h3>Abonar (AbonoDialog)</h3>
+<p>Muestra cuánto debe la venta, el monto (siempre vacío al abrir), cuánto quedará debiendo, y los abonos que la han pagado ("₡500 (de un abono de ₡2.000)" cuando solo parte de un abono fue a esa venta). Enter va a "Guardar abono", que pregunta "Sí, guardar" / "No" antes de guardar.</p>
+
+<h3>Clientes y estado de cuenta</h3>
+<p><code>CustomersScreen</code> lista clientes con su saldo ("Debe ₡8.000" o "Al día") y el total por cobrar. <code>CustomerStatementScreen</code> muestra el saldo, los movimientos (fiado +, abono −) con el saldo después de cada uno, y aparte las compras al contado. Desde ahí se registra un abono suelto (<code>PaymentForm</code>), se edita el cliente o se edita un fiado (vuelve al estado de cuenta, <code>?cliente=</code>).</p>
+
+<h3>Gastos (ExpensesScreen)</h3>
+<p>Tarjeta "Gastado hoy / esta semana…", barra con "Buscar gasto" (tipo o nota, sin tildes), "Filtrar" (ventana con una casilla por tipo; el botón dice "Filtrar (N)") y "Tipos de gasto". La búsqueda y el filtro se aplican en el navegador y se mantienen al cambiar de período; el pie dice "N de M gastos". "Nuevo gasto" y "Editar" abren <code>ExpenseDialog</code> encima de la página: Fecha → ¿Qué tipo de gasto? → ¿Qué gasto fue? (solo "Otro") → Monto → Nota → Guardar gasto, que muestra la confirmación en la misma ventana. "Tipos de gasto" (<code>ExpenseTypesDialog</code>) lista los tipos con su cantidad, permite agregar y eliminar.</p>
+
+<h3>Resúmenes (SummariesScreen)</h3>
+<p>Elige Día, Semana o Mes con flechas. Muestra Entró, Gastado y Quedó en grande (con un signo menos real si es negativo y "Se gastó más de lo que entró."), el fiado del período, el total por cobrar hoy, gastos por tipo, cartones vendidos, "Día por día" (un clic en un día cambia el resumen a ese día) y "Mejores clientes" con "Ventas sin cliente" justo debajo.</p>
+
+<h2 id="c10-10">Diseño para una persona mayor (tokens.css)</h2>
+<table>
+<tr><th style="width:34%">Token</th><th>Valor y razón</th></tr>
+<tr><td><code>--size-button</code>, <code>--size-input</code></td><td>56 px: blancos fáciles de atinar.</td></tr>
+<tr><td><code>--font-size-body</code> y todos los textos</td><td>Mínimo 18 px; títulos de 28 a 38 px.</td></tr>
+<tr><td>Colores de texto y botones</td><td>Contraste de al menos 7:1 (WCAG AAA). Donde el color del diseño no llegaba, se oscureció un poco y el comentario lo dice.</td></tr>
+<tr><td><code>--color-border</code></td><td>Bordes de campos a 4.4:1 (el diseño original de 1.5:1 era demasiado tenue para encontrar el campo).</td></tr>
+<tr><td><code>--focus-ring</code></td><td>Anillo de foco doble (blanco y oscuro), visible sobre fondos claros y sobre la barra azul marino.</td></tr>
+<tr><td><code>--size-sidebar</code></td><td>260 px. La barra lateral siempre muestra las cuatro páginas por nombre, sin submenús.</td></tr>
+</table>
+<p>Las pantallas se revisan a 1920×1080 y 1366×768 al 100 %, con la app maximizada. Los campos opcionales dicen "(opcional)" y nunca bloquean el guardado; los obligatorios no llevan marca.</p>

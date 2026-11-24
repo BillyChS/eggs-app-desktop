@@ -1,0 +1,117 @@
+
+<h1 class="chapter" id="c14"><span class="num">Capítulo 14</span>Cómo cambiar o agregar algo</h1>
+
+<h2 id="c14-1">Antes de tocar nada</h2>
+<ol>
+  <li>Leer <code>CLAUDE.md</code>: tiene todas las reglas del proyecto, en detalle, y se mantiene al día.</li>
+  <li>Correr <code>dotnet build</code>, <code>dotnet test</code>, <code>pnpm lint</code> y <code>pnpm test</code> para confirmar que todo empieza en verde.</li>
+  <li>Crear una rama de git. Nunca trabajar directo en <code>main</code>.</li>
+</ol>
+
+<h2 id="c14-2">Receta de ejemplo: agregar una nota opcional a las ventas</h2>
+<p>Es un caso inventado, pero muestra por dónde pasa casi cualquier cambio. Primero el servidor, después la interfaz.</p>
+<h3>Servidor (orden: Command → Validator → Handler → Entity → Endpoint → Migration)</h3>
+<ol class="steps">
+  <li><b>Command</b> (<code>SaleContracts.cs</code>): agregar <code>string? Note = null</code> a <code>SaleCommand</code>, <code>string? Note</code> a <code>SaleFields</code> y a <code>SaleDetail</code>.</li>
+  <li><b>Validator</b> (<code>SaleValidator.cs</code>): recortar espacios, vacío → <code>null</code>, y si pasa del máximo, error en español bajo la llave <code>"note"</code>.</li>
+  <li><b>Handler</b> (<code>CreateSale.cs</code>, <code>UpdateSale.cs</code>): asignar <code>sale.Note = fields.Note</code>. <code>SaleDetail.From</code> la incluye.</li>
+  <li><b>Entity</b> (<code>Sale.cs</code>): <code>public string? Note { get; set; }</code>, una constante <code>NoteMaxLength</code>, y en <code>SaleConfiguration</code>: <code>HasMaxLength</code>.</li>
+  <li><b>Endpoint:</b> en este caso no cambia (el endpoint ya pasa el comando completo).</li>
+  <li><b>Migración:</b> <code>dotnet ef migrations add AddSaleNote --project src/EggsApp.Api --output-dir Data/Migrations</code>. Revisar el archivo generado. Se aplicará sola al arrancar, con copia previa.</li>
+  <li><b>Pruebas:</b> en <code>SaleEndpointsTests.cs</code>, que la nota se guarde, se lea, se pueda borrar y que una muy larga dé 400.</li>
+</ol>
+<h3>Interfaz (orden: Screen → Service/Hook → State)</h3>
+<ol class="steps">
+  <li><b>Pantalla</b> (<code>SaleForm.tsx</code>): un <code>TextArea</code> con etiqueta "Nota (opcional)"; incluirla en el <code>snapshot</code> (para que cuente como cambio sin guardar), en el orden del teclado y en la Ventana de confirmación.</li>
+  <li><b>Servicio</b> (<code>services/sales.ts</code>): agregar <code>note</code> a <code>Sale</code> y <code>SaleInput</code>.</li>
+  <li><b>Estado:</b> <code>useState</code> en el formulario, iniciado con la nota de la venta que se edita. Mostrar el error de la API bajo el campo (<code>fieldErrors.note</code>).</li>
+  <li><b>Pruebas</b> en <code>saleForm.test.tsx</code> con la API falsa.</li>
+</ol>
+<h3>Para cerrar</h3>
+<ul>
+  <li>Subir <code>&lt;Version&gt;</code> (función nueva → número del medio: 1.3.0 → 1.4.0).</li>
+  <li>Actualizar <code>CLAUDE.md</code> si cambia una regla.</li>
+  <li>Commit con Conventional Commits, por ejemplo <code>feat(sales): add an optional note</code>, con <code>Refs: AB#&lt;id&gt;</code> si hay tarjeta en Azure Boards.</li>
+  <li>Pull request; esperar CI en verde; fusionar; etiqueta <code>v1.4.0</code> para crear el instalador.</li>
+</ul>
+
+<h2 id="c14-3">Lista de revisión de las reglas</h2>
+<table>
+<tr><th style="width:4%">✓</th><th>Regla</th></tr>
+<tr><td>☐</td><td>Textos que ve el usuario en español; código, comentarios, commits y documentos en inglés.</td></tr>
+<tr><td>☐</td><td>Cero advertencias al compilar.</td></tr>
+<tr><td>☐</td><td>Dinero en <code>long</code> (nunca <code>decimal</code>). Llaves <code>Guid</code> generadas en código. Toda entidad hereda <code>BaseEntity</code>.</td></tr>
+<tr><td>☐</td><td>Fechas: <code>DateTime.Now</code> en el servidor; <code>YYYY-MM-DD</code> local en la interfaz, nunca <code>toISOString()</code>, nunca <code>new Date("YYYY-MM-DD")</code>. Usar <code>lib/dates.ts</code> y <code>lib/money.ts</code>.</td></tr>
+<tr><td>☐</td><td>Nada de <code>ExecuteUpdate</code>/<code>ExecuteDelete</code> sobre entidades. Al borrar, cargar lo relacionado que también deba borrarse.</td></tr>
+<tr><td>☐</td><td>Reglas de saldo filtran por <code>IsCredit</code>, no solo por <code>CustomerId</code>. Saldos y totales nunca se guardan: se calculan.</td></tr>
+<tr><td>☐</td><td>Comparar nombres con <code>CustomerNames</code> en C#, no con SQL.</td></tr>
+<tr><td>☐</td><td>Endpoints nuevos dentro del grupo <code>/api</code> de <code>UseEggsApp()</code>.</td></tr>
+<tr><td>☐</td><td>Nada de <code>localStorage</code>, <code>sessionStorage</code>, IndexedDB ni cookies. Lo que deba durar va por la API a SQLite; el estado de pantalla, en la dirección.</td></tr>
+<tr><td>☐</td><td>Controles de 56 px, texto de 18 px o más, máximo 2–3 acciones principales por pantalla, confirmar antes de borrar. Elecciones entre pocas opciones con <code>Dropdown</code>, nunca <code>&lt;select&gt;</code>.</td></tr>
+<tr><td>☐</td><td>Formularios: <code>useUnsavedChanges</code>, <code>useOneAtATime</code>, sin <code>&lt;form&gt;</code>; Enter avanza y nunca guarda; el botón de guardar siempre a la vista en 1920×1080 y 1366×768.</td></tr>
+<tr><td>☐</td><td>Ventanas con pasos: cada paso en el mismo <code>Modal</code>, nunca un diálogo encima de otro.</td></tr>
+<tr><td>☐</td><td>Navegación: "‹ Volver" va siempre a la página padre, nunca al historial del navegador.</td></tr>
+<tr><td>☐</td><td>Datos de usuario solo bajo <code>%LocalAppData%\EggsApp</code>. Un respaldo nunca lanza errores hacia el host. Nunca subir <code>.db</code> a git.</td></tr>
+<tr><td>☐</td><td>Instalador: nunca tocar <code>%LocalAppData%\EggsApp</code>; mantener <code>AppId</code> y <code>AppMutex</code>.</td></tr>
+</table>
+
+<h1 class="chapter" id="c15"><span class="num">Capítulo 15</span>Solución de problemas</h1>
+<p>Lo primero siempre: abrir el registro del día, <code>%LocalAppData%\EggsApp\logs\eggsapp-AAAA-MM-DD.log</code>. Los mensajes de error de la app muestran esa carpeta.</p>
+<table>
+<tr><th style="width:30%">Lo que se ve</th><th style="width:30%">Causa probable</th><th>Qué hacer</th></tr>
+<tr><td>"No se pudo abrir Eggs App porque hay un problema con la instalación."</td><td>Falta <code>wwwroot\index.html</code> (<code>FrontendNotFoundException</code>).</td><td>Reinstalar con el instalador. En desarrollo: "Falta la interfaz compilada", correr <code>pnpm build</code>.</td></tr>
+<tr><td>"No se pudo abrir Eggs App. No se borró ningún dato."</td><td>La migración falló: base dañada o de una versión más nueva (<code>DatabaseMigrationException</code>).</td><td>Ver el registro. Si es más nueva, instalar esa versión. Si está dañada, restaurar un respaldo (Capítulo 12).</td></tr>
+<tr><td>"…porque falta un programa en la computadora."</td><td>Falta Microsoft Edge WebView2 Runtime.</td><td>Instalarlo desde el enlace de Microsoft (con internet).</td></tr>
+<tr><td>Windows no deja abrir ni el instalador ni la app</td><td>Smart App Control activado o en evaluación.</td><td>Desactivarlo en Seguridad de Windows.</td></tr>
+<tr><td>Se queda en "Abriendo…"</td><td>Arranque lento o bloqueado.</td><td>Esperar; si no, cerrar y ver el registro. Un candado de migración abandonado se limpia solo al arrancar.</td></tr>
+<tr><td>Abrirla otra vez no abre otra ventana</td><td>Es lo esperado: <code>SingleInstance</code> trae al frente la que ya está abierta.</td><td>Buscar la ventana existente.</td></tr>
+<tr><td>Barra lateral: "Sin conexión. Cierre y vuelva a abrir Eggs App."</td><td>La interfaz no logra hablar con la API.</td><td>Cerrar y volver a abrir. Ver el registro.</td></tr>
+<tr><td>Barra lateral: "No se pudo guardar el respaldo…"</td><td>Falló el último respaldo, o 3 días de uso sin respaldo.</td><td>"Intentar de nuevo". Ver la línea <code>[Backup]</code> del registro (disco lleno, permisos…).</td></tr>
+<tr><td>"La copia en OneDrive no se está haciendo."</td><td>OneDrive cerrado, sin sesión o la carpeta no existe; 7 días de uso sin copia.</td><td>Abrir OneDrive, iniciar sesión, confirmar la carpeta <code>Respaldos Eggs App</code>.</td></tr>
+<tr><td>"La pantalla de Eggs App dejó de responder."</td><td>El proceso de la página se colgó.</td><td>Aceptar volver a abrirla. Revisar que lo último esté guardado.</td></tr>
+<tr><td>"Algo salió mal en esta pantalla."</td><td>Un error en una pantalla de React.</td><td>"Volver a Ventas". Si se repite, es un error de código: reproducirlo con <code>pnpm dev</code>.</td></tr>
+<tr><td>No deja borrar un cliente</td><td>Todavía debe (409).</td><td>Es una regla: primero que quede al día.</td></tr>
+<tr><td>No deja editar o borrar un fiado</td><td>Quedaría con menos fiado que lo abonado, o el cliente fue borrado (409).</td><td>El mensaje dice qué abono corregir primero.</td></tr>
+<tr><td>No deja editar un abono</td><td>Se pagó al hacer un fiado (<code>SaleId</code>).</td><td>Cambiarlo desde la venta.</td></tr>
+<tr><td>Una fecha sale un día antes</td><td>Algún código nuevo usó <code>new Date("YYYY-MM-DD")</code> o <code>toISOString()</code>.</td><td>Usar <code>lib/dates.ts</code>.</td></tr>
+<tr><td>Después de actualizar se ve la interfaz vieja</td><td>No debería pasar (<code>index.html</code> va sin caché).</td><td>Confirmar la versión en la barra lateral; reinstalar.</td></tr>
+</table>
+
+<h1 class="chapter" id="c16"><span class="num">Capítulo 16</span>Glosario técnico</h1>
+<table>
+<tr><th style="width:26%">Término</th><th>Significado</th></tr>
+<tr><td><code>AbonoShare</code></td><td>La parte de un abono que fue a un fiado en particular (<code>SaleStatuses</code>).</td></tr>
+<tr><td><code>ApiError</code></td><td>Error de la interfaz cuando la API responde con un código de error; trae <code>status</code>, <code>fieldErrors</code> y <code>refusal</code>.</td></tr>
+<tr><td><code>AppDataPaths</code></td><td>Las rutas de la carpeta de datos.</td></tr>
+<tr><td><code>AuditInterceptor</code></td><td>Pone fechas de creación y cambio, y convierte borrados en borrados lógicos.</td></tr>
+<tr><td><code>BaseEntity</code></td><td>Clase base de toda entidad: <code>Id</code>, <code>CreatedAt</code>, <code>UpdatedAt</code>, <code>IsDeleted</code>.</td></tr>
+<tr><td>Command / Fields</td><td>Lo que manda la interfaz (sin revisar) / lo mismo ya revisado y con tipos seguros.</td></tr>
+<tr><td><code>CustomerRef</code></td><td>Referencia a un cliente para mostrar en una venta o abono, aunque esté borrado.</td></tr>
+<tr><td><code>DateOnly</code></td><td>Tipo de .NET para una fecha sin hora.</td></tr>
+<tr><td><code>EmbeddedApiHost</code></td><td>La API corriendo dentro del proceso de la ventana.</td></tr>
+<tr><td>Endpoint</td><td>Una ruta de la API con su código.</td></tr>
+<tr><td><code>FailureLog</code></td><td>El registro de fallas por día.</td></tr>
+<tr><td><code>ForSaleId</code> / <code>SaleId</code></td><td>En un abono: la venta desde cuyo botón Abonar se pagó / la venta con la que se pagó al hacerla.</td></tr>
+<tr><td>Handler</td><td>La clase que ejecuta una acción contra la base de datos.</td></tr>
+<tr><td>Kestrel</td><td>El servidor web de ASP.NET Core.</td></tr>
+<tr><td>Migración</td><td>Cambio versionado de la estructura de la base de datos.</td></tr>
+<tr><td>Mutex</td><td>Objeto de Windows que solo un proceso puede tener a la vez; se usa para una sola copia de la app.</td></tr>
+<tr><td><code>Outcome&lt;T&gt;</code></td><td>Resultado de una acción: hecho, inválido (400), rechazado (409) o no encontrado (404).</td></tr>
+<tr><td><code>Owed</code></td><td>Lo que todavía debe un fiado, calculado al vuelo.</td></tr>
+<tr><td><code>PeriodBar</code></td><td>La barra Hoy / Ayer / Otro día / Esta semana / Este mes.</td></tr>
+<tr><td><code>Refusal</code></td><td>El cuerpo de un 409: un mensaje en español para mostrar tal cual.</td></tr>
+<tr><td>Self-contained</td><td>Publicación que incluye .NET, sin necesidad de instalarlo.</td></tr>
+<tr><td>Slice (rebanada vertical)</td><td>Todo el código de una acción, de la ruta a la base, junto en una carpeta.</td></tr>
+<tr><td>Soft delete</td><td>Borrado lógico: marcar <code>IsDeleted</code> en vez de borrar.</td></tr>
+<tr><td>SQLite / WAL</td><td>Base de datos en un archivo / su modo de escritura con un archivo de bitácora (<code>-wal</code>).</td></tr>
+<tr><td>Swagger / OpenAPI</td><td>Página que documenta y permite probar la API en desarrollo.</td></tr>
+<tr><td>Token de diseño</td><td>Variable CSS con un color, tamaño o espacio (<code>tokens.css</code>).</td></tr>
+<tr><td>WebView2</td><td>El motor de Edge incrustado en una ventana de Windows.</td></tr>
+<tr><td>WPF</td><td>Tecnología de Microsoft para ventanas de escritorio.</td></tr>
+</table>
+
+<div class="box idea" style="margin-top:10mm"><span class="t">Dónde seguir leyendo</span>
+<p><code>CLAUDE.md</code> (reglas completas), <code>README.md</code> (operación, instalación, respaldos), los comentarios <code>/// &lt;summary&gt;</code> de cada clase de C# y los <code>/** … */</code> de cada función de TypeScript, que explican el "por qué" de cada decisión, y las pruebas, que muestran con ejemplos qué debe hacer cada regla.</p></div>
+
+</body>
+</html>

@@ -1,0 +1,86 @@
+
+<h1 class="chapter" id="c9"><span class="num">Capítulo 9</span>Referencia de la API</h1>
+<p>Todas las rutas empiezan con <code>/api</code>. Las fechas siempre son texto local <code>YYYY-MM-DD</code>. El dinero siempre es un número entero de colones. Para probarlas a mano, corra la API sola y abra <code>http://localhost:5080/swagger</code>.</p>
+
+<h2 id="c9-1">Formato de los errores</h2>
+<div class="two">
+<div><p><b>400 — datos con errores</b> (un mensaje en español por campo):</p>
+<pre><code>{ "errors": {
+    "date": ["La fecha no puede ser futura."],
+    "items[0].unitPrice": ["Escriba el precio por cartón."]
+} }</code></pre></div>
+<div><p><b>409 — rechazado por una regla</b> (mensaje para mostrar tal cual):</p>
+<pre><code>{ "message": "María todavía debe ₡8.000.
+  Solo se puede borrar un cliente que
+  esté al día." }</code></pre></div>
+</div>
+<p><b>404</b> no tiene cuerpo: no hay nada activo con ese id.</p>
+
+<h2 id="c9-2">Ventas — /api/sales</h2>
+<table>
+<tr><th style="width:11%">Método</th><th style="width:28%">Ruta</th><th>Qué hace</th><th style="width:18%">Respuestas</th></tr>
+<tr><td>GET</td><td><code>/sales?from=&amp;to=</code></td><td>Ventas entre dos fechas (incluidas), más nuevas primero, con <code>cashTotal</code> y <code>creditTotal</code>.</td><td>200, 400</td></tr>
+<tr><td>GET</td><td><code>/sales/last-prices</code></td><td>Último precio por tipo de cartón: <code>{ "A": 2500, "B": 4800 }</code>.</td><td>200</td></tr>
+<tr><td>GET</td><td><code>/sales/{id}</code></td><td>Una venta con líneas, cliente, <code>paidNow</code> y <code>owed</code>.</td><td>200, 404</td></tr>
+<tr><td>POST</td><td><code>/sales</code></td><td>Crea una venta (cuerpo: <code>SaleCommand</code>).</td><td>201, 400</td></tr>
+<tr><td>PUT</td><td><code>/sales/{id}</code></td><td>Edita una venta (mismo cuerpo).</td><td>200, 400, 404, 409</td></tr>
+<tr><td>DELETE</td><td><code>/sales/{id}</code></td><td>Borra la venta, sus líneas y su abono "pagado al vender".</td><td>204, 404, 409</td></tr>
+</table>
+<p>Cuerpo de <code>POST</code>/<code>PUT</code>:</p>
+<pre><code>{
+  "date": "2026-11-23",
+  "isCredit": true,
+  "customerId": "…guid…",           <span class="c">// o null; o en su lugar:</span>
+  "newCustomer": { "name": "Rosa Mora", "phone": "8888-1234" },
+  "paidNow": 2000,                   <span class="c">// solo fiado; menor que el total; 0 = nada</span>
+  "items": [ { "cartonType": "A", "quantity": 2, "unitPrice": 2500 },
+             { "cartonType": "B", "quantity": 1, "unitPrice": 4800 } ]
+}</code></pre>
+
+<h2 id="c9-3">Abonos</h2>
+<table>
+<tr><th style="width:11%">Método</th><th style="width:33%">Ruta</th><th>Qué hace</th><th style="width:16%">Respuestas</th></tr>
+<tr><td>POST</td><td><code>/customers/{customerId}/payments</code></td><td>Abono suelto. Cuerpo: <code>{ date, amount, note }</code>.</td><td>201, 400, 404</td></tr>
+<tr><td>POST</td><td><code>/sales/{saleId}/payments</code></td><td>Abono desde "Abonar": hoy, hacia esa venta. Cuerpo: <code>{ amount }</code>.</td><td>201, 400, 404, 409</td></tr>
+<tr><td>GET</td><td><code>/sales/{saleId}/payments</code></td><td>La venta, cuánto se le ha pagado (<code>paid</code>) y qué parte de qué abono la pagó, más nuevos primero.</td><td>200, 404</td></tr>
+<tr><td>GET</td><td><code>/payments?from=&amp;to=</code></td><td>Abonos del período y su <code>total</code>. Incluye <code>forSaleDate</code> para "Abono a la venta del…".</td><td>200, 400</td></tr>
+<tr><td>GET</td><td><code>/payments/{id}</code></td><td>Un abono.</td><td>200, 404</td></tr>
+<tr><td>PUT</td><td><code>/payments/{id}</code></td><td>Cambia fecha, monto y nota (nunca el cliente).</td><td>200, 400, 404, 409</td></tr>
+<tr><td>DELETE</td><td><code>/payments/{id}</code></td><td>Borra un abono (el cliente vuelve a deber eso).</td><td>204, 404, 409</td></tr>
+</table>
+<p>409 en <code>PUT</code>/<code>DELETE</code>: el abono se pagó al hacer un fiado (se cambia desde la venta) o es de un cliente borrado.</p>
+
+<h2 id="c9-4">Clientes — /api/customers</h2>
+<table>
+<tr><th style="width:11%">Método</th><th style="width:30%">Ruta</th><th>Qué hace</th><th style="width:16%">Respuestas</th></tr>
+<tr><td>GET</td><td><code>/customers?search=</code></td><td>Clientes activos que coinciden, en orden alfabético, con su saldo, y <code>owedTotal</code> de todos.</td><td>200</td></tr>
+<tr><td>GET</td><td><code>/customers/similar?name=&amp;excludeId=</code></td><td>Hasta 3 clientes con nombre parecido.</td><td>200</td></tr>
+<tr><td>GET</td><td><code>/customers/{id}</code></td><td>Un cliente con su saldo.</td><td>200, 404</td></tr>
+<tr><td>GET</td><td><code>/customers/{id}/statement</code></td><td>Estado de cuenta: movimientos con saldo, y compras al contado aparte.</td><td>200, 404</td></tr>
+<tr><td>POST</td><td><code>/customers</code></td><td>Crea. Cuerpo: <code>{ name, phone, notes }</code>.</td><td>201, 400</td></tr>
+<tr><td>PUT</td><td><code>/customers/{id}</code></td><td>Edita.</td><td>200, 400, 404</td></tr>
+<tr><td>DELETE</td><td><code>/customers/{id}</code></td><td>Borra (solo si no debe).</td><td>204, 404, 409</td></tr>
+</table>
+
+<h2 id="c9-5">Gastos y tipos de gasto</h2>
+<table>
+<tr><th style="width:11%">Método</th><th style="width:34%">Ruta</th><th>Qué hace</th><th style="width:15%">Respuestas</th></tr>
+<tr><td>GET</td><td><code>/expense-categories?includeRetired=</code></td><td>Tipos con cuántos gastos usan cada uno, alfabético, "Otro" al final.</td><td>200</td></tr>
+<tr><td>POST</td><td><code>/expense-categories</code></td><td>"Agregar tipo": <code>{ name }</code>. 201 si es nuevo; 200 si ya existía o se reactivó.</td><td>201, 200, 400</td></tr>
+<tr><td>DELETE</td><td><code>/expense-categories/{id}</code></td><td>Retira un tipo.</td><td>204, 404, 409</td></tr>
+<tr><td>GET</td><td><code>/expenses?from=&amp;to=</code></td><td>Gastos del período, <code>total</code> y <code>byCategory</code>.</td><td>200, 400</td></tr>
+<tr><td>GET</td><td><code>/expenses/{id}</code></td><td>Un gasto.</td><td>200, 404</td></tr>
+<tr><td>POST</td><td><code>/expenses</code></td><td>Crea: <code>{ date, categoryId | newCategory, amount, note }</code>.</td><td>201, 400</td></tr>
+<tr><td>PUT</td><td><code>/expenses/{id}</code></td><td>Edita.</td><td>200, 400, 404</td></tr>
+<tr><td>DELETE</td><td><code>/expenses/{id}</code></td><td>Borra.</td><td>204, 404</td></tr>
+</table>
+
+<h2 id="c9-6">Resúmenes, respaldos y estado</h2>
+<table>
+<tr><th style="width:11%">Método</th><th style="width:30%">Ruta</th><th>Qué hace</th><th style="width:15%">Respuestas</th></tr>
+<tr><td>GET</td><td><code>/reports/summary?from=&amp;to=</code></td><td>El resumen del período (máximo 366 días). Ver Capítulo 8.</td><td>200, 400</td></tr>
+<tr><td>GET</td><td><code>/backups/status</code></td><td>Último respaldo bueno, si hay advertencia, y estado de la segunda copia.</td><td>200</td></tr>
+<tr><td>POST</td><td><code>/backups</code></td><td>"Intentar de nuevo": hace un respaldo ya. Devuelve el estado nuevo.</td><td>200, 404*</td></tr>
+<tr><td>GET</td><td><code>/health</code></td><td><code>{ status: "ok", time, version }</code>. La barra lateral lo consulta cada 30 s.</td><td>200</td></tr>
+</table>
+<p class="small">* 404 cuando los respaldos están apagados (la API corriendo sola).</p>

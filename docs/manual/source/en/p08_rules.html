@@ -1,0 +1,147 @@
+
+<h1 class="chapter" id="c8"><span class="num">Chapter 8</span>The business rules</h1>
+<p>This is the most important chapter. It holds the logic that keeps the numbers balanced. Almost all of it lives on the server, in <code>Features/</code>.</p>
+
+<h2 id="c8-1">Cash-basis accounting: what counts as income</h2>
+<p>The app uses <b>cash-basis</b> accounting: money counts as income on the day it actually comes in.</p>
+<table>
+<tr><th style="width:30%">Movement</th><th style="width:22%">Income?</th><th>Which day does it count?</th></tr>
+<tr><td>Cash sale</td><td>Yes</td><td>The sale date (<code>SaleDate</code>).</td></tr>
+<tr><td>Credit sale (fiado)</td><td><b>No</b></td><td>It is money owed ("receivable"). It is shown apart, as "Fiado".</td></tr>
+<tr><td>Payment (abono)</td><td>Yes</td><td>The payment date (<code>PaymentDate</code>).</td></tr>
+<tr><td>Expense</td><td>Money out</td><td>The expense date (<code>ExpenseDate</code>).</td></tr>
+</table>
+<div class="box idea"><span class="t">The three formulas</span>
+<p><b>Came in ("Entró")</b> = cash sales + payments &nbsp;·&nbsp; <b>Spent ("Gastado")</b> = expenses &nbsp;·&nbsp; <b>Left over ("Quedó")</b> = Came in − Spent (can be negative).</p>
+<p>In the code: <code>ListSales</code> returns <code>CashTotal</code> (cash only) and <code>CreditTotal</code> (credit only, apart); <code>ListPayments</code> returns the payments' <code>Total</code>.</p></div>
+
+<h2 id="c8-2">Sales</h2>
+<ul>
+  <li>A sale (<code>Sale</code>) is one purchase, like an invoice, with lines (<code>SaleItem</code>). Each line: carton type (A = 15 eggs, B = 30), whole quantity and price per carton. A sale can mix types, or have the same type at different prices.</li>
+  <li><b>The server calculates the total</b> (<code>SaleLines.Add</code>: <code>LineTotal = Quantity × UnitPrice</code>, <code>Total = Σ LineTotal</code>). There is no way to force a total.</li>
+  <li><b>Editing</b> a sale keeps its id and <b>replaces all of its lines</b>: the old ones are soft-deleted and new ones written (<code>UpdateSale</code>).</li>
+  <li><b>Deleting</b> a sale also soft-deletes its lines and the payment made with it, if any (<code>DeleteSale</code>).</li>
+  <li>Every new sale must explicitly say "Al contado" (cash) or "Fiado" (credit): there is no default, so a forgotten "Fiado" can't become a debt nobody wrote down.</li>
+</ul>
+
+<h3>Who is the sale for?</h3>
+<table>
+<tr><th style="width:26%">Option in the form</th><th>What is stored</th><th style="width:24%">Allowed on a credit sale?</th></tr>
+<tr><td>"Cliente sin nombre"</td><td><code>CustomerId = null</code>. Summaries count it as "Ventas sin cliente" (sales with no customer).</td><td>No: "Para fiar hay que elegir un cliente con nombre." (to sell on credit you must choose a named customer)</td></tr>
+<tr><td>An existing customer</td><td>The customer's <code>CustomerId</code>.</td><td>Yes</td></tr>
+<tr><td>A new customer</td><td><code>newCustomer</code> (name and phone) is sent instead of <code>customerId</code>. The customer and the sale are created in the same save (<code>SaleCredit.ResolveCustomer</code>).</td><td>Yes</td></tr>
+</table>
+<div class="box rule"><span class="t">Key rule: a cash sale's customer never touches any balance</span>
+<p>On a cash sale, the customer is only "who bought" (to know who buys the most). That's why <b>every balance rule filters on <code>IsCredit</code>, never on <code>CustomerId</code> alone</b>. The database also requires every credit sale to have a customer: <code>CHECK ("IsCredit" = 0 OR "CustomerId" IS NOT NULL)</code>.</p></div>
+
+<h3>Last prices</h3>
+<p>The form starts each carton type with the last price used (<code>FindLastPrices</code>, <code>GET /api/sales/last-prices</code>). "Last" is decided by the <b>sale date</b> (and then by when it was entered), not by when it was typed: that way, entering an old sale at its old price doesn't change the current price.</p>
+
+<h2 id="c8-3">A customer's balance</h2>
+<p>Each customer has <b>one running account</b>:</p>
+<pre><code>Balance = (sum of the totals of their CREDIT sales) − (sum of their payments)</code></pre>
+<p>It is calculated by <code>CustomerAccounts.ReadAsync</code> (one customer) or <code>ReadAllBalancesAsync</code> (all) <b>on every read</b>. It is never stored in a column, so it can't drift.</p>
+<div class="box rule"><span class="t">The balance never goes below zero</span>
+<p>Below zero would mean the business owes the customer money. To prevent it:</p>
+<ul>
+<li><b>A payment can't be more than what is owed</b> (<code>PaymentRules.CheckAmountAsync</code>): "María debe ₡8.000. El abono no puede ser mayor." (María owes ₡8,000. The payment can't be more.)</li>
+<li><b>Editing, moving to another customer, switching to cash or deleting a credit sale is refused (409)</b> if it would leave the customer with credit sales adding up to less than they've already paid (<code>SaleCredit.CheckChangeAsync</code>).</li>
+</ul></div>
+<p>The calculation <code>CheckChangeAsync</code> does is:</p>
+<pre><code>creditAfter  = creditNow − thisSaleTotal + whatTheyWouldStillOweForIt
+paidAfter    = paidNow − paymentMadeWithTheSale + paymentMadeWithTheSaleAfter
+if creditAfter &lt; paidAfter → refused:
+  "María ya abonó ₡10.000, y con este cambio sus fiados sumarían ₡6.000.
+   Primero corrija o borre un abono de María."
+  (María already paid ₡10,000, and with this change her credit sales would add
+   up to ₡6,000. First fix or delete one of María's payments.)</code></pre>
+
+<h2 id="c8-4">The three kinds of payment</h2>
+<p>Every payment lowers the customer's balance. What differs is <b>which credit sale it goes to first</b> and how it is edited.</p>
+<table>
+<tr><th style="width:22%">Kind</th><th style="width:26%">How it is created</th><th style="width:16%">Field</th><th>How it behaves</th></tr>
+<tr><td><b>Standalone payment</b></td><td>From the customer's statement: <code>POST /api/customers/{id}/payments</code></td><td>none</td><td>Not tied to any sale. Freely edited and deleted. Pays the oldest credit sales first.</td></tr>
+<tr><td><b>Paid with the sale</b> ("¿Pagó algo ahora?" — did they pay something now?)</td><td>Together with a new or edited credit sale, in the same save</td><td><code>SaleId</code></td><td><b>Follows its sale</b> (<code>SaleCredit.ApplyPaidNow</code>): editing the sale changes it; moving the sale to another customer replaces it; switching to cash or deleting the sale deletes it. Its own <code>PUT</code>/<code>DELETE</code> answer 409. Must be less than the total ("Si pagó todo, es una venta al contado." — if they paid it all, it's a cash sale).</td></tr>
+<tr><td><b>From Abonar</b></td><td>A credit sale's "Abonar" button in Ventas: <code>POST /api/sales/{id}/payments</code></td><td><code>ForSaleId</code></td><td>Dated today. At most what that sale still owes. Pays that sale first, but <b>doesn't follow it</b>: edited and deleted like a standalone one. If the sale is lowered, moved or deleted, what no longer fits pays the other credit sales.</td></tr>
+</table>
+
+<h2 id="c8-5">What each credit sale owes (SaleStatuses)</h2>
+<p>In Ventas, each credit sale shows "Debe ₡X" (owes ₡X), "Pagado con abonos" (paid with payments) or, for cash, "Pagado" (paid). That number is <code>SaleDetail.Owed</code>, computed by <code>SaleStatuses.ReadSharesAsync</code>, which shares the customer's payments out among their credit sales. It uses <b>the customer's whole history</b>, whatever period is being viewed, and is never stored. So what their sales owe always adds up to their balance.</p>
+
+<h3>The algorithm, per customer</h3>
+<ol class="steps">
+  <li>Sorts their active credit sales from oldest to newest (sale date, then <code>CreatedAt</code>, then <code>Id</code> so the order is always the same). Each starts owing its total.</li>
+  <li><b>First pass — targeted payments.</b> Goes through their payments (the <code>SaleId</code> ones first, then the rest, oldest to newest). If a payment points at an active credit sale of this customer (<code>SaleId</code>, otherwise <code>ForSaleId</code>), it applies whatever fits.</li>
+  <li>What's left of each payment, plus payments with no target, go into a "pool", ordered oldest to newest.</li>
+  <li><b>Second pass — the pool pays the oldest.</b> Goes through the credit sales oldest to newest and pays them from the pool until it runs out.</li>
+  <li>Whatever is unpaid on each credit sale is its <code>Owed</code>. Along the way it records which part of which payment paid each credit sale (for the "Ver abonos" window).</li>
+</ol>
+
+<h3>A worked example</h3>
+<div class="two">
+<div>
+<table>
+<tr><th>Ana's credit sale</th><th>Date</th><th>Total</th></tr>
+<tr><td>S1</td><td>Nov 1</td><td>₡10,000</td></tr>
+<tr><td>S2</td><td>Nov 3</td><td>₡8,000</td></tr>
+<tr><td>S3</td><td>Nov 5</td><td>₡6,000</td></tr>
+<tr><td colspan="2"><b>Total on credit</b></td><td><b>₡24,000</b></td></tr>
+</table>
+</div>
+<div>
+<table>
+<tr><th>Payment</th><th>Date</th><th>Amount</th><th>Points at</th></tr>
+<tr><td>P1</td><td>Nov 3</td><td>₡3,000</td><td>S2 (<code>SaleId</code>)</td></tr>
+<tr><td>P2</td><td>Nov 6</td><td>₡4,000</td><td>S3 (<code>ForSaleId</code>)</td></tr>
+<tr><td>P3</td><td>Nov 10</td><td>₡12,000</td><td>—</td></tr>
+<tr><td colspan="2"><b>Total paid</b></td><td colspan="2"><b>₡19,000</b></td></tr>
+</table>
+</div>
+</div>
+<table>
+<tr><th style="width:36%">Step</th><th>S1</th><th>S2</th><th>S3</th><th>Pool</th></tr>
+<tr><td>Start</td><td>10,000</td><td>8,000</td><td>6,000</td><td>—</td></tr>
+<tr><td>P1 → S2 (3,000 fits)</td><td>10,000</td><td>5,000</td><td>6,000</td><td>—</td></tr>
+<tr><td>P2 → S3 (4,000 fits)</td><td>10,000</td><td>5,000</td><td>2,000</td><td>—</td></tr>
+<tr><td>P3 points at nothing</td><td>10,000</td><td>5,000</td><td>2,000</td><td>P3: 12,000</td></tr>
+<tr><td>Pool pays S1 (10,000)</td><td>0</td><td>5,000</td><td>2,000</td><td>P3: 2,000</td></tr>
+<tr><td>Pool pays S2 (2,000)</td><td>0</td><td>3,000</td><td>2,000</td><td>empty</td></tr>
+<tr><td><b>Result (Owed)</b></td><td><b>Paid with payments</b></td><td><b>Owes ₡3,000</b></td><td><b>Owes ₡2,000</b></td><td></td></tr>
+</table>
+<p>Check: ₡3,000 + ₡2,000 = ₡5,000, and Ana's balance is ₡24,000 − ₡19,000 = <b>₡5,000</b>. It always balances.</p>
+<div class="box warn"><span class="t">Consequence</span><p>Because it's always recalculated, editing or deleting an old credit sale or a payment can change the status of newer credit sales. That is correct and expected.</p></div>
+
+<h2 id="c8-6">Customers</h2>
+<ul>
+  <li><b>Names are not unique.</b> Before saving, the interface calls <code>GET /api/customers/similar</code> and, if there's someone similar, asks "¿Es otra persona?" (Is it a different person?). Similar (<code>CustomerNames.AreSimilar</code>) means: the same name, all the words of one inside the other, or a small typo (Levenshtein distance of 0, 1 or 2 depending on the name's length).</li>
+  <li><b>Names are compared in C#</b>, not SQL, with <code>CustomerNames</code>: <code>ForComparison</code> removes accents, case and extra spaces ("ñ" counts as "n"); <code>SpanishOrder</code> sorts alphabetically in Spanish. SQLite's <code>LIKE</code> and <code>ORDER BY</code> get accents wrong ("MARÍA" wouldn't find "María", and "Ángela" would sort after "Zoila").</li>
+  <li><b>Search</b> (<code>MatchesSearch</code>): every searched word must appear in the name, in any order, even partially.</li>
+  <li><b>Only a customer who owes nothing can be deleted</b> (<code>DeleteCustomer.FindBlockerAsync</code>, 409): "María todavía debe ₡8.000. Solo se puede borrar un cliente que esté al día." (María still owes ₡8,000. Only an up-to-date customer can be deleted.) A deleted customer disappears from lists, searches and the similar-name check, and their <code>GET</code>, <code>PUT</code> and <code>DELETE</code> answer 404. Their credit sales and payments stay and can no longer change. A cash sale in their name can still be edited (it moves no balance) and keeps the name, but nothing new can be assigned to them.</li>
+  <li><b>Statement</b> (<code>GetStatement</code>): credit sales and payments only, ordered by date and then by when they were entered, with the balance after each movement; returned newest first, so the first entry shows the current balance. Cash purchases are listed apart (<code>CashPurchases</code>).</li>
+</ul>
+
+<h2 id="c8-7">Expenses and expense types</h2>
+<ul>
+  <li>An expense counts on its <code>ExpenseDate</code>. It has a type and an optional note.</li>
+  <li><b>Types are data</b>, not code: they are added with "Agregar tipo" (add type, <code>POST /api/expense-categories</code>) or from the form by choosing "Otro", which asks "¿Qué gasto fue?" (what was the expense?) and sends that text as <code>newCategory</code>. The expense and the new type are saved together.</li>
+  <li>Both paths go through <code>ExpenseCategories.ResolveAsync</code> and <code>CategoryNames</code>: spaces are cleaned up, the first letter capitalized, 1 to 40 letters, and never "otro". They're compared without case or accents: if a type with that name exists it is reused (200), if a retired one exists it is reactivated (200), otherwise it is created (201).</li>
+  <li>"Otro" itself is never saved on an expense any more, and can't be retired (409).</li>
+  <li><b>A type is never deleted, only retired</b> ("Eliminar", <code>DELETE /api/expense-categories/{id}</code>, a soft delete): its old expenses keep showing its name and can keep it when edited, but it is no longer offered for new expenses.</li>
+  <li>Type lists are in Spanish alphabetical order with "Otro" last, and say how many expenses use each.</li>
+  <li>Old expenses saved under "Otro" (before this system) have what they were in their note: Gastos shows it as their type, and editing one pre-fills "¿Qué gasto fue?" with it, so saving moves it to that type.</li>
+</ul>
+
+<h2 id="c8-8">Summaries</h2>
+<p><code>GetSummary</code> (<code>GET /api/reports/summary</code>) <b>adds nothing up on its own</b>: it calls <code>ListSales</code>, <code>ListPayments</code>, <code>ListExpenses</code> and <code>ListCustomers</code> and combines their results. So the numbers in Resúmenes can't differ from those in Ventas, Gastos or Clientes. It returns:</p>
+<table>
+<tr><th style="width:30%">Figure</th><th>How it's obtained</th></tr>
+<tr><td>Came in (cash + payments)</td><td><code>sales.CashTotal</code> + <code>payments.Total</code></td></tr>
+<tr><td>Spent, by type</td><td><code>expenses.Total</code> and <code>expenses.ByCategory</code> (grouped once, in <code>ListExpenses</code>)</td></tr>
+<tr><td>Left over</td><td>Came in − Spent</td></tr>
+<tr><td>Credit sold in the period</td><td><code>sales.CreditTotal</code> (apart; not income)</td></tr>
+<tr><td>Total receivable ("Por cobrar en total")</td><td>What all customers owe <b>today</b>, whatever the period</td></tr>
+<tr><td>Cartons sold</td><td>By type, cash and credit together: what left the farm</td></tr>
+<tr><td>Day by day</td><td>Every day with any movement, with what came in and what was spent (a day with only a credit sale shows ₡0)</td></tr>
+<tr><td>Best customers</td><td>The top 10 by total (then cartons, then name), the "others" added up in one line, and "Ventas sin cliente" apart. Always: top + others + no customer = cash + credit of the period.</td></tr>
+</table>
+<p>Limit: a summary can't span more than 366 days ("El período no puede ser de más de un año."). Weeks start on Monday, and the current week or month runs only up to today.</p>

@@ -1,0 +1,117 @@
+
+<h1 class="chapter" id="c14"><span class="num">Chapter 14</span>How to change or add something</h1>
+
+<h2 id="c14-1">Before touching anything</h2>
+<ol>
+  <li>Read <code>CLAUDE.md</code>: it has all the project's rules, in detail, and it is kept up to date.</li>
+  <li>Run <code>dotnet build</code>, <code>dotnet test</code>, <code>pnpm lint</code> and <code>pnpm test</code> to confirm everything starts green.</li>
+  <li>Create a git branch. Never work directly on <code>main</code>.</li>
+</ol>
+
+<h2 id="c14-2">Example recipe: adding an optional note to sales</h2>
+<p>It's a made-up case, but it shows where almost any change goes. Server first, then the interface.</p>
+<h3>Server (order: Command → Validator → Handler → Entity → Endpoint → Migration)</h3>
+<ol class="steps">
+  <li><b>Command</b> (<code>SaleContracts.cs</code>): add <code>string? Note = null</code> to <code>SaleCommand</code>, and <code>string? Note</code> to <code>SaleFields</code> and <code>SaleDetail</code>.</li>
+  <li><b>Validator</b> (<code>SaleValidator.cs</code>): trim it, empty → <code>null</code>, and if it's over the maximum, a Spanish error under the <code>"note"</code> key.</li>
+  <li><b>Handler</b> (<code>CreateSale.cs</code>, <code>UpdateSale.cs</code>): assign <code>sale.Note = fields.Note</code>. <code>SaleDetail.From</code> includes it.</li>
+  <li><b>Entity</b> (<code>Sale.cs</code>): <code>public string? Note { get; set; }</code>, a <code>NoteMaxLength</code> constant, and in <code>SaleConfiguration</code>: <code>HasMaxLength</code>.</li>
+  <li><b>Endpoint:</b> no change in this case (it already passes the whole command).</li>
+  <li><b>Migration:</b> <code>dotnet ef migrations add AddSaleNote --project src/EggsApp.Api --output-dir Data/Migrations</code>. Review the generated file. It applies itself at startup, with a copy first.</li>
+  <li><b>Tests:</b> in <code>SaleEndpointsTests.cs</code>, that the note is saved, read, can be cleared, and that a very long one gives 400.</li>
+</ol>
+<h3>Interface (order: Screen → Service/Hook → State)</h3>
+<ol class="steps">
+  <li><b>Screen</b> (<code>SaleForm.tsx</code>): a <code>TextArea</code> labeled "Nota (opcional)"; include it in the <code>snapshot</code> (so it counts as an unsaved change), in the keyboard order and in the confirmation window.</li>
+  <li><b>Service</b> (<code>services/sales.ts</code>): add <code>note</code> to <code>Sale</code> and <code>SaleInput</code>.</li>
+  <li><b>State:</b> a <code>useState</code> in the form, initialized with the note of the sale being edited. Show the API's error under the field (<code>fieldErrors.note</code>).</li>
+  <li><b>Tests</b> in <code>saleForm.test.tsx</code> with the fake API.</li>
+</ol>
+<h3>To finish</h3>
+<ul>
+  <li>Bump <code>&lt;Version&gt;</code> (new feature → middle number: 1.3.0 → 1.4.0).</li>
+  <li>Update <code>CLAUDE.md</code> if a rule changes.</li>
+  <li>Commit with Conventional Commits, for example <code>feat(sales): add an optional note</code>, with <code>Refs: AB#&lt;id&gt;</code> if there's an Azure Boards item.</li>
+  <li>Pull request; wait for green CI; merge; tag <code>v1.4.0</code> to build the installer.</li>
+</ul>
+
+<h2 id="c14-3">Rules checklist</h2>
+<table>
+<tr><th style="width:4%">✓</th><th>Rule</th></tr>
+<tr><td>☐</td><td>Text the user sees in Spanish; code, comments, commits and docs in English.</td></tr>
+<tr><td>☐</td><td>Zero warnings when building.</td></tr>
+<tr><td>☐</td><td>Money as <code>long</code> (never <code>decimal</code>). <code>Guid</code> keys generated in code. Every entity inherits <code>BaseEntity</code>.</td></tr>
+<tr><td>☐</td><td>Dates: <code>DateTime.Now</code> on the server; local <code>YYYY-MM-DD</code> in the interface, never <code>toISOString()</code>, never <code>new Date("YYYY-MM-DD")</code>. Use <code>lib/dates.ts</code> and <code>lib/money.ts</code>.</td></tr>
+<tr><td>☐</td><td>No <code>ExecuteUpdate</code>/<code>ExecuteDelete</code> on entities. When deleting, load the related rows that must be deleted too.</td></tr>
+<tr><td>☐</td><td>Balance rules filter on <code>IsCredit</code>, not on <code>CustomerId</code> alone. Balances and totals are never stored: they are calculated.</td></tr>
+<tr><td>☐</td><td>Compare names with <code>CustomerNames</code> in C#, not in SQL.</td></tr>
+<tr><td>☐</td><td>New endpoints go inside the <code>/api</code> group of <code>UseEggsApp()</code>.</td></tr>
+<tr><td>☐</td><td>No <code>localStorage</code>, <code>sessionStorage</code>, IndexedDB or cookies. What must last goes through the API to SQLite; screen state goes in the address.</td></tr>
+<tr><td>☐</td><td>56 px controls, 18 px+ text, at most 2–3 main actions per screen, confirm before deleting. Choices among a few options use <code>Dropdown</code>, never <code>&lt;select&gt;</code>.</td></tr>
+<tr><td>☐</td><td>Forms: <code>useUnsavedChanges</code>, <code>useOneAtATime</code>, no <code>&lt;form&gt;</code>; Enter moves on and never saves; the save button always in sight at 1920×1080 and 1366×768.</td></tr>
+<tr><td>☐</td><td>Multi-step popups: each step in the same <code>Modal</code>, never one dialog on top of another.</td></tr>
+<tr><td>☐</td><td>Navigation: "‹ Volver" always goes to the parent page, never browser history.</td></tr>
+<tr><td>☐</td><td>User data only under <code>%LocalAppData%\EggsApp</code>. A backup never throws into the host. Never commit <code>.db</code> files.</td></tr>
+<tr><td>☐</td><td>Installer: never touch <code>%LocalAppData%\EggsApp</code>; keep <code>AppId</code> and <code>AppMutex</code>.</td></tr>
+</table>
+
+<h1 class="chapter" id="c15"><span class="num">Chapter 15</span>Troubleshooting</h1>
+<p>Always first: open the day's log, <code>%LocalAppData%\EggsApp\logs\eggsapp-YYYY-MM-DD.log</code>. The app's error messages show that folder.</p>
+<table>
+<tr><th style="width:30%">What you see</th><th style="width:30%">Likely cause</th><th>What to do</th></tr>
+<tr><td>"No se pudo abrir Eggs App porque hay un problema con la instalación." (installation problem)</td><td><code>wwwroot\index.html</code> is missing (<code>FrontendNotFoundException</code>).</td><td>Reinstall with the installer. In development: "Falta la interfaz compilada", run <code>pnpm build</code>.</td></tr>
+<tr><td>"No se pudo abrir Eggs App. No se borró ningún dato." (couldn't open; no data deleted)</td><td>The migration failed: the database is damaged or from a newer version (<code>DatabaseMigrationException</code>).</td><td>Check the log. If it's newer, install that version. If it's damaged, restore a backup (Chapter 12).</td></tr>
+<tr><td>"…porque falta un programa en la computadora." (a program is missing)</td><td>Microsoft Edge WebView2 Runtime is missing.</td><td>Install it from Microsoft's link (needs internet).</td></tr>
+<tr><td>Windows won't open the installer or the app</td><td>Smart App Control is On or in Evaluation.</td><td>Turn it off in Windows Security.</td></tr>
+<tr><td>Stuck on "Abriendo…"</td><td>Slow or blocked startup.</td><td>Wait; otherwise close it and check the log. An abandoned migration lock is cleared automatically at startup.</td></tr>
+<tr><td>Opening it again doesn't open a new window</td><td>Expected: <code>SingleInstance</code> brings the open one forward.</td><td>Find the existing window.</td></tr>
+<tr><td>Sidebar: "Sin conexión. Cierre y vuelva a abrir Eggs App."</td><td>The interface can't reach the API.</td><td>Close and reopen. Check the log.</td></tr>
+<tr><td>Sidebar: "No se pudo guardar el respaldo…"</td><td>The last backup failed, or 3 days of use with no backup.</td><td>"Intentar de nuevo". Look at the <code>[Backup]</code> line in the log (disk full, permissions…).</td></tr>
+<tr><td>"La copia en OneDrive no se está haciendo."</td><td>OneDrive closed, signed out, or the folder doesn't exist; 7 days of use with no copy.</td><td>Open OneDrive, sign in, confirm the <code>Respaldos Eggs App</code> folder.</td></tr>
+<tr><td>"La pantalla de Eggs App dejó de responder." (the screen stopped responding)</td><td>The page's process hung.</td><td>Accept reopening it. Check the last entry was saved.</td></tr>
+<tr><td>"Algo salió mal en esta pantalla."</td><td>An error in a React screen.</td><td>"Volver a Ventas". If it repeats, it's a code bug: reproduce it with <code>pnpm dev</code>.</td></tr>
+<tr><td>Won't let you delete a customer</td><td>They still owe money (409).</td><td>It's a rule: they must be up to date first.</td></tr>
+<tr><td>Won't let you edit or delete a credit sale</td><td>Credit would fall below what was paid, or the customer was deleted (409).</td><td>The message says which payment to fix first.</td></tr>
+<tr><td>Won't let you edit a payment</td><td>It was paid when a credit sale was made (<code>SaleId</code>).</td><td>Change it from the sale.</td></tr>
+<tr><td>A date shows one day earlier</td><td>Some new code used <code>new Date("YYYY-MM-DD")</code> or <code>toISOString()</code>.</td><td>Use <code>lib/dates.ts</code>.</td></tr>
+<tr><td>After updating, the old interface shows</td><td>Shouldn't happen (<code>index.html</code> is served with no-cache).</td><td>Confirm the version in the sidebar; reinstall.</td></tr>
+</table>
+
+<h1 class="chapter" id="c16"><span class="num">Chapter 16</span>Technical glossary</h1>
+<table>
+<tr><th style="width:26%">Term</th><th>Meaning</th></tr>
+<tr><td><code>AbonoShare</code></td><td>The part of a payment that went to one particular credit sale (<code>SaleStatuses</code>).</td></tr>
+<tr><td><code>ApiError</code></td><td>The interface's error when the API answers with an error code; carries <code>status</code>, <code>fieldErrors</code> and <code>refusal</code>.</td></tr>
+<tr><td><code>AppDataPaths</code></td><td>The paths of the data folder.</td></tr>
+<tr><td><code>AuditInterceptor</code></td><td>Sets the created/updated timestamps and turns deletes into soft deletes.</td></tr>
+<tr><td><code>BaseEntity</code></td><td>Base class of every entity: <code>Id</code>, <code>CreatedAt</code>, <code>UpdatedAt</code>, <code>IsDeleted</code>.</td></tr>
+<tr><td>Command / Fields</td><td>What the interface sends (unchecked) / the same, checked and with safe types.</td></tr>
+<tr><td><code>CustomerRef</code></td><td>A reference to a customer to show on a sale or payment, even if deleted.</td></tr>
+<tr><td><code>DateOnly</code></td><td>.NET type for a date with no time.</td></tr>
+<tr><td><code>EmbeddedApiHost</code></td><td>The API running inside the window's process.</td></tr>
+<tr><td>Endpoint</td><td>One API route with its code.</td></tr>
+<tr><td><code>FailureLog</code></td><td>The per-day failure log.</td></tr>
+<tr><td><code>ForSaleId</code> / <code>SaleId</code></td><td>On a payment: the sale whose Abonar button it was paid from / the sale it was paid with when made.</td></tr>
+<tr><td>Handler</td><td>The class that runs one action against the database.</td></tr>
+<tr><td>Kestrel</td><td>ASP.NET Core's web server.</td></tr>
+<tr><td>Migration</td><td>A versioned change to the database structure.</td></tr>
+<tr><td>Mutex</td><td>A Windows object only one process can hold at a time; used to allow one copy of the app.</td></tr>
+<tr><td><code>Outcome&lt;T&gt;</code></td><td>An action's result: done, invalid (400), refused (409) or not found (404).</td></tr>
+<tr><td><code>Owed</code></td><td>What a credit sale still owes, calculated on the fly.</td></tr>
+<tr><td><code>PeriodBar</code></td><td>The Hoy / Ayer / Otro día / Esta semana / Este mes bar.</td></tr>
+<tr><td><code>Refusal</code></td><td>The body of a 409: a Spanish message to show as-is.</td></tr>
+<tr><td>Self-contained</td><td>A publish that includes .NET, so it needn't be installed.</td></tr>
+<tr><td>Slice (vertical slice)</td><td>All the code of one action, from route to database, kept together.</td></tr>
+<tr><td>Soft delete</td><td>Marking <code>IsDeleted</code> instead of deleting.</td></tr>
+<tr><td>SQLite / WAL</td><td>A database in one file / its write mode with a log file (<code>-wal</code>).</td></tr>
+<tr><td>Swagger / OpenAPI</td><td>A page that documents the API and lets you try it in development.</td></tr>
+<tr><td>Design token</td><td>A CSS variable holding a color, size or spacing (<code>tokens.css</code>).</td></tr>
+<tr><td>WebView2</td><td>The Edge engine embedded in a Windows window.</td></tr>
+<tr><td>WPF</td><td>Microsoft's technology for desktop windows.</td></tr>
+</table>
+
+<div class="box idea" style="margin-top:10mm"><span class="t">Where to read further</span>
+<p><code>CLAUDE.md</code> (the full rules), <code>README.md</code> (operations, install, backups), the <code>/// &lt;summary&gt;</code> comments on every C# class and the <code>/** … */</code> comments on every TypeScript function, which explain the "why" of each decision, and the tests, which show with examples what each rule must do.</p></div>
+
+</body>
+</html>

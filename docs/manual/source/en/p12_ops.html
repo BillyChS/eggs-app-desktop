@@ -1,0 +1,77 @@
+
+<h1 class="chapter" id="c12"><span class="num">Chapter 12</span>Backups, logs and restoring</h1>
+
+<h2 id="c12-1">Where the application writes</h2>
+<p>Everything goes under <code>%LocalAppData%\EggsApp</code> (<code>AppDataPaths</code>), never next to the program:</p>
+<table>
+<tr><th style="width:28%">Path</th><th>Contents</th></tr>
+<tr><td><code>eggs.db</code></td><td>The data. While the app is open, <code>eggs.db-wal</code> and <code>eggs.db-shm</code> exist too.</td></tr>
+<tr><td><code>eggs.dev.db</code></td><td>Development data (standalone API and <code>dotnet ef</code>).</td></tr>
+<tr><td><code>backups\daily\</code></td><td>Automatic backups, one per day: <code>eggs-YYYY-MM-DD.db</code>.</td></tr>
+<tr><td><code>backups\</code></td><td>Copies made before each migration (<code>eggs-YYYY-MM-DD_HH-mm-ss-fff.db</code>, the 5 newest) and <code>backup-state.json</code>.</td></tr>
+<tr><td><code>settings.json</code></td><td>Optional, written by hand: the backups' second location.</td></tr>
+<tr><td><code>WebView2\</code></td><td>The embedded browser's internal data.</td></tr>
+<tr><td><code>logs\</code></td><td><code>eggsapp-YYYY-MM-DD.log</code>, one per day, kept 7 days.</td></tr>
+</table>
+<p>The one exception is the backups' second copy: by default <code>%OneDrive%\Respaldos Eggs App</code>.</p>
+
+<h2 id="c12-2">How backups work</h2>
+<figure>
+<svg viewBox="0 0 760 210" xmlns="http://www.w3.org/2000/svg" font-family="Inter, sans-serif" font-size="11">
+  <defs><marker id="a12" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1e40af"/></marker></defs>
+  <g text-anchor="middle">
+  <rect x="5" y="10" width="140" height="80" rx="8" fill="#e6ecfb" stroke="#1e40af"/><text x="75" y="32" font-weight="700" fill="#1e40af">When</text><text x="75" y="50">at startup (if none</text><text x="75" y="64">today) · every hour ·</text><text x="75" y="78">on close · "Intentar"</text>
+  <rect x="170" y="10" width="140" height="80" rx="8" fill="#fff" stroke="#14632b"/><text x="240" y="32" font-weight="700" fill="#14632b">1. Copy</text><text x="240" y="50">SQLite backup API</text><text x="240" y="64">→ eggs-date.db.partial</text><text x="240" y="78">(DELETE mode, 1 file)</text>
+  <rect x="335" y="10" width="130" height="80" rx="8" fill="#fff" stroke="#14632b"/><text x="400" y="32" font-weight="700" fill="#14632b">2. Verify</text><text x="400" y="50">PRAGMA</text><text x="400" y="64">integrity_check</text><text x="400" y="78">= "ok"</text>
+  <rect x="490" y="10" width="120" height="80" rx="8" fill="#fff" stroke="#14632b"/><text x="550" y="32" font-weight="700" fill="#14632b">3. Rename</text><text x="550" y="50">drop .partial</text><text x="550" y="64">(real name =</text><text x="550" y="78">complete copy)</text>
+  <rect x="635" y="10" width="120" height="80" rx="8" fill="#fff" stroke="#14632b"/><text x="695" y="32" font-weight="700" fill="#14632b">4. Prune</text><text x="695" y="50">14 daily +</text><text x="695" y="64">1 per month × 12</text><text x="695" y="78">+ 5 pre-migration</text>
+  <rect x="335" y="120" width="420" height="80" rx="8" fill="#fff4e3" stroke="#7a3a00"/><text x="545" y="142" font-weight="700" fill="#7a3a00">5. Second copy (OneDrive or the settings.json folder)</text><text x="545" y="160">Copies the verified file, verifies it again, renames.</text><text x="545" y="176">Up to 3 attempts (OneDrive may hold the file). Same pruning.</text><text x="545" y="192">If the folder is missing (USB unplugged): skipped and logged.</text>
+  <rect x="5" y="120" width="305" height="80" rx="8" fill="#fbecec" stroke="#a31515"/><text x="157" y="142" font-weight="700" fill="#a31515">If something fails</text><text x="157" y="160">Never stops the app or touches eggs.db.</text><text x="157" y="176">Logged in logs\ and in backup-state.json;</text><text x="157" y="192">the sidebar warns; the next check retries.</text>
+  </g>
+  <g stroke="#1e40af" stroke-width="1.5"><line x1="145" y1="50" x2="166" y2="50" marker-end="url(#a12)"/><line x1="310" y1="50" x2="331" y2="50" marker-end="url(#a12)"/><line x1="465" y1="50" x2="486" y2="50" marker-end="url(#a12)"/><line x1="610" y1="50" x2="631" y2="50" marker-end="url(#a12)"/><line x1="695" y1="90" x2="695" y2="116" marker-end="url(#a12)"/></g>
+</svg>
+<figcaption>Figure 12.1 — <code>DatabaseBackups.BackUpAsync</code> and <code>SqliteBackup.CopyDatabase</code>.</figcaption>
+</figure>
+<ul>
+  <li><b>Who:</b> <code>BackupWorker</code> (a background task: checks at startup and every hour) and <code>EmbeddedApiHost.DisposeAsync</code> (on close). Desktop app only: <code>Backup:Enabled</code> is set only by <code>EmbeddedApiHost</code>, so the standalone API and the tests never back up.</li>
+  <li><b>Why the file isn't simply copied:</b> part of what was saved can still be in <code>eggs.db-wal</code>. SQLite's backup API copies the complete state.</li>
+  <li><b>One backup at a time</b> (<code>SemaphoreSlim</code>). Nothing in <code>DatabaseBackups</code> throws errors outward.</li>
+  <li><b>Pruning only deletes</b> files whose names match the <code>BackupFiles</code> patterns exactly, so it can never delete other files in the OneDrive folder. It also deletes abandoned <code>.partial</code> files older than one day.</li>
+  <li><b>Backups are counted, not calendar days:</b> if the app isn't used for weeks, the old backups aren't lost.</li>
+</ul>
+
+<h3>When the sidebar warns</h3>
+<p>Normally it says "Último respaldo: hoy 8:15 a. m." (last backup: today 8:15 a.m.). It warns ("No se pudo guardar el respaldo… Por favor llame a Billy.", with the "Intentar de nuevo" button) only if:</p>
+<ul>
+  <li>the last attempt failed (remembered across restarts in <code>backup-state.json</code>), or</li>
+  <li>the app was used on <b>3 days</b> with no good backup since (days of use, not calendar days: a long weekend never causes a warning).</li>
+</ul>
+<p>For the second copy the threshold is <b>7 days of use</b> ("La copia en OneDrive no se está haciendo." — the OneDrive copy isn't being made). A skipped copy counts as a day without a copy, not as a failure.</p>
+
+<h3>Setting up the second location</h3>
+<pre><code><span class="c">// %LocalAppData%\EggsApp\settings.json</span>
+{ "Backup": { "SecondFolder": "E:\\Respaldos Eggs App" } }    <span class="c">// another folder, e.g. a USB drive</span>
+{ "Backup": { "SecondFolder": "off" } }                       <span class="c">// no second copy</span></code></pre>
+<p>Without <code>settings.json</code>, if OneDrive is set up in Windows (the <code>OneDrive</code> environment variable), <code>%OneDrive%\Respaldos Eggs App</code> is used. The app only sees the local folder: check now and then at onedrive.live.com that it has recent files.</p>
+
+<h2 id="c12-3">The failure log</h2>
+<p><code>FailureLog</code> writes to <code>logs\eggsapp-YYYY-MM-DD.log</code>:</p>
+<ul>
+  <li>one line at startup: <code>[Desktop] Started. Version 1.3.0+…, port 51234.</code></li>
+  <li>the migrations applied and the path of the copy made before them;</li>
+  <li>every backup: where, size, what was pruned, how the second copy went;</li>
+  <li>every error: from the window, from API requests (Error or Critical level), uncaught exceptions;</li>
+  <li>one line on a clean close: <code>[Desktop] Closed cleanly.</code></li>
+</ul>
+<p>Limits: 7 days of files and 5 MB per file (if something fails in a loop, the rest of that day is dropped). Writing the log never throws. The window's error messages show this folder's path.</p>
+
+<h2 id="c12-4">Restoring a backup</h2>
+<div class="box warn"><span class="t">This is done by Billy, not by the person who uses the app. Nothing is deleted until the end.</span></div>
+<ol class="steps">
+  <li><b>Close Eggs App.</b> In Task Manager, confirm no <code>EggsApp.Desktop</code> process is left.</li>
+  <li><b>Choose the backup.</b> The newest is in <code>backups\daily</code>, with the date in the name. If the disk died, take one from <code>Respaldos Eggs App</code> in OneDrive (download it first). To go back to the state before a migration, use one of <code>backups\eggs-…_HH-mm-ss-fff.db</code>.</li>
+  <li><b>Move the current database aside.</b> In <code>%LocalAppData%\EggsApp</code>, create a folder like <code>before-restore-2026-11-23</code> and move <code>eggs.db</code> into it, <b>together with <code>eggs.db-wal</code> and <code>eggs.db-shm</code> if they exist</b>. A leftover <code>-wal</code> next to the restored file would be applied to it and corrupt it.</li>
+  <li><b>Put the backup in place.</b> Copy (don't move) the chosen backup into <code>%LocalAppData%\EggsApp</code> and rename the copy to <code>eggs.db</code>.</li>
+  <li><b>Open Eggs App</b> and check the latest sales, payments and expenses. A backup from an older version is migrated at startup (with a copy first). One from a newer version is refused without changing anything.</li>
+  <li><b>If everything is right</b>, delete the <code>before-restore-…</code> folder. If not, close the app and put those files back.</li>
+</ol>

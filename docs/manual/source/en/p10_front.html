@@ -1,0 +1,125 @@
+
+<h1 class="chapter" id="c10"><span class="num">Chapter 10</span>The user interface (src/web)</h1>
+
+<h2 id="c10-1">How the interface starts</h2>
+<p><code>index.html</code> has an empty <code>&lt;div id="root"&gt;</code>. <code>main.tsx</code> creates the router with the routes from <code>routes.tsx</code> and renders it there:</p>
+<pre><code><span class="k">const</span> router = createBrowserRouter(routes)
+createRoot(document.getElementById(<span class="s">'root'</span>)!).render(&lt;StrictMode&gt;&lt;RouterProvider router={router} /&gt;&lt;/StrictMode&gt;)</code></pre>
+<p>Every route sits inside <code>AppLayout</code>, which puts the sidebar (<code>Sidebar</code>) on the left and the current screen on the right, and wraps everything in <code>MessagesProvider</code> (success and error messages). If a screen crashes, <code>ErrorScreen</code> is shown ("Algo salió mal en esta pantalla." — something went wrong on this screen) with a button that reloads everything on Ventas.</p>
+
+<h2 id="c10-2">Screen map (routes.tsx)</h2>
+<p class="small">The addresses are in Spanish: ventas = sales, clientes = customers, abonos = payments, gastos = expenses, resúmenes = summaries, nueva/nuevo = new, editar = edit.</p>
+<table>
+<tr><th style="width:32%">Address</th><th style="width:28%">Component</th><th>What it is</th></tr>
+<tr><td><code>/</code></td><td>—</td><td>Redirects to <code>/ventas</code>: the app opens on Ventas.</td></tr>
+<tr><td><code>/ventas</code></td><td><code>SalesScreen</code></td><td>Period cards, Fiado / Contado / Abonos tabs, table.</td></tr>
+<tr><td><code>/ventas/nueva</code></td><td><code>NewSaleScreen</code> → <code>SaleForm</code></td><td>New sale.</td></tr>
+<tr><td><code>/ventas/:id/editar</code></td><td><code>EditSaleScreen</code> → <code>SaleForm</code></td><td>Edit sale.</td></tr>
+<tr><td><code>/clientes</code></td><td><code>CustomersScreen</code></td><td>List with search and "only those who owe".</td></tr>
+<tr><td><code>/clientes/nuevo</code></td><td><code>NewCustomerScreen</code></td><td>New customer.</td></tr>
+<tr><td><code>/clientes/:id</code></td><td><code>CustomerStatementScreen</code></td><td>Account statement.</td></tr>
+<tr><td><code>/clientes/:id/editar</code></td><td><code>EditCustomerScreen</code></td><td>Edit customer.</td></tr>
+<tr><td><code>/clientes/:id/abonos/nuevo</code></td><td><code>NewPaymentScreen</code></td><td>New standalone payment.</td></tr>
+<tr><td><code>/clientes/:id/abonos/:paymentId/editar</code></td><td><code>EditPaymentScreen</code></td><td>Edit payment.</td></tr>
+<tr><td><code>/gastos</code></td><td><code>ExpensesScreen</code></td><td>Expenses; new and edit open a popup.</td></tr>
+<tr><td><code>/gastos/nuevo</code>, <code>/gastos/:id/editar</code></td><td><code>ToExpenses</code></td><td>Old addresses: redirect to Gastos.</td></tr>
+<tr><td><code>/resumenes</code></td><td><code>SummariesScreen</code></td><td>The period's summaries.</td></tr>
+<tr><td><code>/dev/componentes</code></td><td><code>ComponentsScreen</code></td><td>Only in <code>pnpm dev</code>: shows the base components.</td></tr>
+<tr><td>anything else</td><td>—</td><td>Redirects to <code>/ventas</code>.</td></tr>
+</table>
+
+<h2 id="c10-3">The folders and their roles</h2>
+<table>
+<tr><th style="width:17%">Folder</th><th>Contents</th></tr>
+<tr><td><code>screens/</code></td><td>One subfolder per page: <code>sales/</code>, <code>customers/</code>, <code>payments/</code>, <code>expenses/</code>, <code>summaries/</code>. Plus <code>PeriodBar</code> and <code>periodView</code> (the period of Ventas and Gastos) and <code>ErrorScreen</code>.</td></tr>
+<tr><td><code>services/</code></td><td>One function per API call, with its TypeScript types (which mirror the C# records). All use <code>http.ts</code>.</td></tr>
+<tr><td><code>layout/</code></td><td>The app's skeleton (<code>AppLayout</code>, <code>Sidebar</code>, <code>Screen</code>, <code>FormFooter</code>) and the shared hooks.</td></tr>
+<tr><td><code>components/</code></td><td>Base pieces: <code>Button</code>, <code>TextInput</code>, <code>TextArea</code>, <code>MoneyInput</code>, <code>DateInput</code>, <code>DayPicker</code>, <code>Dropdown</code>, <code>Field</code>, <code>Modal</code>, <code>ConfirmDialog</code>, <code>ConfirmationWindow</code>, messages.</td></tr>
+<tr><td><code>lib/</code></td><td><code>dates.ts</code> (dates), <code>money.ts</code> (colones), <code>selectOnFocus.ts</code>.</td></tr>
+<tr><td><code>theme/</code></td><td><code>tokens.css</code>: colors, spacing, radii and sizes.</td></tr>
+<tr><td><code>test/</code></td><td><code>setup.ts</code> and a fake API (<code>api.tsx</code>) for screen tests.</td></tr>
+</table>
+
+<h2 id="c10-4">Talking to the API: http.ts</h2>
+<p>Every call goes through <code>request&lt;T&gt;(path, { method, body, signal })</code>:</p>
+<ul>
+  <li>It uses <code>fetch</code> with a relative path (<code>/api/…</code>): since the interface is served by the same API, the port doesn't need to be known.</li>
+  <li>It cancels the request after <b>10 seconds</b>, and also if the screen no longer wants the answer (<code>signal</code>).</li>
+  <li>If the response isn't OK, it throws an <code>ApiError</code> with <code>status</code>, <code>fieldErrors</code> (the first message of each field of a 400) and <code>refusal</code> (the message of a 409).</li>
+  <li>A 204 returns <code>undefined</code>; anything else is read as JSON.</li>
+</ul>
+<p>In development, Vite forwards <code>/api</code> to <code>http://localhost:5080</code> (<code>vite.config.ts</code>). That number must match <code>launchSettings.json</code>.</p>
+
+<h2 id="c10-5">The hooks every screen uses</h2>
+<table>
+<tr><th style="width:24%">Hook</th><th>What for</th></tr>
+<tr><td><code>useLoad(key, load, goneMessage)</code></td><td>Loads what a screen shows, once per <code>key</code>. Drops answers that arrive late. Returns <code>loading</code>, <code>ready</code>, <code>failed</code> (to offer "Intentar de nuevo") or <code>gone</code> (a 404: shows the message and the screen leaves).</td></tr>
+<tr><td><code>useSalesPage</code>, <code>useExpenseList</code>, <code>useCustomerList</code></td><td>The same for lists. Ventas requests sales, payments and the summary in parallel (so the cards match Resúmenes). The customer list waits 300 ms after typing stops.</td></tr>
+<tr><td><code>useOneAtATime()</code></td><td>Ignores a second click while the first is working, and with <code>finish()</code> blocks everything once saved. <b>The button is not disabled</b>, because that would take away keyboard focus.</td></tr>
+<tr><td><code>useUnsavedChanges(hasChanges)</code></td><td>If there are unsaved changes, asks before going to another screen (with React Router's <code>useBlocker</code>) and tells the Windows window, which asks before closing.</td></tr>
+<tr><td><code>useServerStatus()</code></td><td>Checks <code>/api/health</code> every 30 s: "Conectado" (connected) or "Sin conexión. Cierre y vuelva a abrir Eggs App." (no connection, close and reopen), and the version.</td></tr>
+<tr><td><code>useBackupStatus()</code></td><td>Checks the backup status as often, and <code>retry()</code> for "Intentar de nuevo".</td></tr>
+</table>
+
+<h2 id="c10-6">Base components and why they exist</h2>
+<table>
+<tr><th style="width:20%">Component</th><th>Important detail</th></tr>
+<tr><td><code>Button</code></td><td>Always a real <code>&lt;button&gt;</code> (Enter, Space and focus just work). Navigation uses buttons too: links ignore the Space key. Variants: primary, secondary, danger, dangerOutline, success.</td></tr>
+<tr><td><code>Field</code></td><td>The base of every input: an always-visible label, a hint underneath, and the error <b>in words with an icon</b>, not just in color.</td></tr>
+<tr><td><code>MoneyInput</code></td><td>A text field (not <code>type="number"</code>, which accepts "e" and changes with the mouse wheel). Adds thousands dots while typing, keeps the caret in place, puts the ₡ inside the field, and refuses cents ("12500,50" gives an error instead of becoming ₡1,250,050).</td></tr>
+<tr><td><code>DateInput</code> / <code>DayPicker</code></td><td>The browser's date field (its value is already local <code>YYYY-MM-DD</code>), plus large "Hoy" (today) and "Ayer" (yesterday) buttons, because the browser's calendar is small and CSS can't reach it.</td></tr>
+<tr><td><code>Dropdown</code></td><td>A hand-built dropdown, because a <code>&lt;select&gt;</code>'s list is drawn tiny by the browser. Keyboard works like a select. Used for "¿Cómo pagó?" (how did they pay?), "Tipo de cartón", "¿Qué tipo de gasto?".</td></tr>
+<tr><td><code>Modal</code></td><td>A native <code>&lt;dialog&gt;</code>: the browser keeps Tab inside it and blocks what's behind. A click outside doesn't close it. Ignores a held-down Enter. Multi-step popups show each step in the same Modal, never a second dialog on top.</td></tr>
+<tr><td><code>ConfirmDialog</code></td><td>"¿Está seguro?" (are you sure?) with focus on the safe choice, so a stray Enter never confirms.</td></tr>
+<tr><td><code>ConfirmationWindow</code></td><td>The "Ventana de confirmación": summarizes what is about to be saved, with focus on "Editar"; only "Listo" (done) saves. If it fails, the error stays inside it.</td></tr>
+<tr><td><code>MessagesProvider</code></td><td><code>showSuccess</code> and <code>showError</code>: a Modal that stays until "Aceptar" (OK) is pressed.</td></tr>
+</table>
+
+<h2 id="c10-7">Dates and money in JavaScript</h2>
+<div class="box rule"><span class="t">Two traps the code avoids on purpose</span>
+<ul>
+<li><code>new Date("2026-11-04")</code> means midnight <b>UTC</b>, which in Costa Rica is November 3. <code>lib/dates.ts</code> builds dates from their parts. And <code>toISOString()</code> is never used to send a date: at 6 p.m. it would already be tomorrow. <code>todayLocal()</code> is used instead.</li>
+<li><code>Intl</code> doesn't produce "₡12.500" for <code>es-CR</code> (it gives "12 500"). <code>lib/money.ts</code> (<code>formatColones</code>, <code>parseColones</code>) does it by hand. Short weekday and month names are hand-made too ("set" for September, as it's said in Costa Rica).</li>
+</ul></div>
+
+<h2 id="c10-8">The period lives in the address</h2>
+<p>Ventas and Gastos use <code>PeriodBar</code>: Hoy (today), Ayer (yesterday), Otro día (another day), Esta semana (this week, Monday to Sunday) or Este mes (this month), with ‹ › arrows for weeks and months that never go past the current one. The period is kept in the address (<code>periodView.ts</code>): <code>?fecha=2026-11-07</code>, <code>?semana=2026-11-02</code> (its Monday) or <code>?mes=2026-11</code>; Ventas adds <code>&amp;pestana=fiado|abonos</code> (<code>salesView.ts</code>). Resúmenes uses <code>?periodo=semana&amp;desde=…</code>. Because it's in the address:</p>
+<ul>
+  <li>it survives a reload (browser storage isn't used, since it's empty on every launch);</li>
+  <li>screens opened from there carry it, and after saving they return to that week or month if the date fits, or to that day if not;</li>
+  <li>changing the period replaces the address, so the history doesn't fill up.</li>
+</ul>
+
+<h2 id="c10-9">The screens, one by one</h2>
+<h3>Ventas — Sales (SalesScreen)</h3>
+<p>Three cards: "Entró hoy" (came in today: cash + payments, with the breakdown), "Fiado hoy" (on credit today) and "Cartones vendidos" (cartons sold, of 15 and of 30). Their numbers come from <code>GetSummary</code>, so they match Resúmenes. Below: <b>Fiado</b>, <b>Contado</b> (the default) and <b>Abonos</b> tabs, a search by name or phone (accent-insensitive; "88124455" finds "8812-4455") and the table. For a week or month, the table adds a Date column. Each credit sale shows its status ("Debe ₡X", "Pagado con abonos") and an <b>Abonar</b> button (or "Ver abonos" if already paid), which opens <code>AbonoDialog</code>. Deleting asks first, saying what the customer will owe afterwards.</p>
+
+<h3>The sale form (SaleForm)</h3>
+<p>A page with a fixed bar at the bottom (<code>FormFooter</code>: total, Cancelar, Guardar venta, and Borrar venta apart on the left when editing). The keyboard order is fixed; <b>Enter moves on and never saves</b>:</p>
+<pre><code>Date → How did they pay? → (per line) Carton type → Quantity → Price
+     → Did they pay something now? (credit only) → Customer → Guardar venta</code></pre>
+<p>The screen opens with focus on "¿Cómo pagó?". A cash sale starts with "Cliente sin nombre" already chosen (and the Customer step is skipped). If a new customer is chosen and there's a similar one, it asks first. "Guardar venta" doesn't save: it opens the confirmation window (a credit sale with a partial payment appears there as "Mixto"), and only "Listo" saves. If the server rejects a field, "Editar" returns to the form with focus on that field. Each carton type's price starts at the last price used.</p>
+
+<h3>Abonar — the pay-toward-a-sale dialog (AbonoDialog)</h3>
+<p>Shows what the sale owes, the amount (always empty when it opens), what it will owe afterwards, and the payments that have paid it ("₡500 (de un abono de ₡2.000)" when only part of a payment went to that sale). Enter goes to "Guardar abono", which asks "Sí, guardar" / "No" before saving.</p>
+
+<h3>Clientes — Customers and statement</h3>
+<p><code>CustomersScreen</code> lists customers with their balance ("Debe ₡8.000" or "Al día" — up to date) and the total receivable. <code>CustomerStatementScreen</code> shows the balance, the movements (credit sale +, payment −) with the balance after each, and cash purchases apart. From there you record a standalone payment (<code>PaymentForm</code>), edit the customer, or edit a credit sale (which returns to the statement, <code>?cliente=</code>).</p>
+
+<h3>Gastos — Expenses (ExpensesScreen)</h3>
+<p>A "Gastado hoy / esta semana…" card, a toolbar with "Buscar gasto" (search by type or note, accent-insensitive), "Filtrar" (a popup with a checkbox per type; the button says "Filtrar (N)") and "Tipos de gasto". Search and filter are applied in the browser and kept when the period changes; the footer says "N de M gastos". "Nuevo gasto" and "Editar" open <code>ExpenseDialog</code> over the page: Date → ¿Qué tipo de gasto? → ¿Qué gasto fue? ("Otro" only) → Amount → Note → Guardar gasto, which shows the confirmation in the same popup. "Tipos de gasto" (<code>ExpenseTypesDialog</code>) lists the types with their count and lets you add and remove them.</p>
+
+<h3>Resúmenes — Summaries (SummariesScreen)</h3>
+<p>Choose Day, Week or Month with arrows. It shows Came in, Spent and Left over in large type (with a real minus sign when negative, and "Se gastó más de lo que entró." — more was spent than came in), the period's credit sales, the total receivable today, spending by type, cartons sold, "Día por día" (day by day; clicking a day switches the summary to that day) and "Mejores clientes" (best customers) with "Ventas sin cliente" right below.</p>
+
+<h2 id="c10-10">Design for an elderly user (tokens.css)</h2>
+<table>
+<tr><th style="width:34%">Token</th><th>Value and reason</th></tr>
+<tr><td><code>--size-button</code>, <code>--size-input</code></td><td>56 px: targets that are easy to hit.</td></tr>
+<tr><td><code>--font-size-body</code> and all text</td><td>At least 18 px; headings 28 to 38 px.</td></tr>
+<tr><td>Text and button colors</td><td>Contrast of at least 7:1 (WCAG AAA). Where the design's color fell short, it was darkened slightly and the comment says so.</td></tr>
+<tr><td><code>--color-border</code></td><td>Input edges at 4.4:1 (the original design's 1.5:1 was too faint to find the field).</td></tr>
+<tr><td><code>--focus-ring</code></td><td>A double focus ring (white and dark), visible on light backgrounds and on the navy sidebar.</td></tr>
+<tr><td><code>--size-sidebar</code></td><td>260 px. The sidebar always shows the four pages by name, with no submenus.</td></tr>
+</table>
+<p>Screens are checked at 1920×1080 and 1366×768 at 100%, with the app maximized. Optional fields say "(opcional)" and never block saving; required ones have no mark.</p>
